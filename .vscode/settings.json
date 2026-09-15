@@ -1,3 +1,4 @@
 {
     "cmake.sourceDirectory": "C:/Users/hossa/HAN-S7Minor-EmbeddedVision-AI/IPO/HelloVision"
+     "cmake.buildDirectory": "${sourceDir}/build"
 }
