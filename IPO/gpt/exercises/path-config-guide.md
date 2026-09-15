@@ -12,7 +12,7 @@ set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
 ```
 before `find_package(OpenCV REQUIRED)`.
 
-Root `.vscode/settings.json`:
+Per-exercise Root `.vscode/settings.json`:
 ```json
 "cmake.sourceDirectory": "${workspaceFolder}/IPO/[EX]",
 "cmake.buildDirectory": "${sourceDir}/build"
