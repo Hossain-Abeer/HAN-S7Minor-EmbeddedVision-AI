@@ -4,6 +4,7 @@ project(HelloVision2 VERSION 0.0.1)
 include(CTest)
 enable_testing()
 
+set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
 find_package( OpenCV REQUIRED )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
 

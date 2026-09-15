@@ -8,7 +8,7 @@ OpenCV: built from source at `C:\dev\opencv-build\opencv-install\x64\mingw\lib` 
 
 Per-exercise `CMakeLists.txt`:
 ```cmake
-set(OpenCV_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../dev/opencv-build/opencv-install/x64/mingw/lib")
+set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
 ```
 before `find_package(OpenCV REQUIRED)`.
 
