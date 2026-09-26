@@ -1,22 +1,56 @@
-CONFIG PATH PER EXERCISE + BUILD WORKFLOW
-==========================================
+============================================================
+ GUIDE: Per-Exercise Path Config + Build Workflow
+============================================================
 
-1. EDIT SOURCE DIRECTORY (per exercise)
-   .vscode/settings.json:
-   "cmake.sourceDirectory": "D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/IPO/[YourExercise]"
+1. PER-EXERCISE: settings.json
+------------------------------------------------------------
+File: .vscode/settings.json
 
-   Change [YourExercise] each time you switch exercises.
-   Only this variable changes; everything else stays.
+Update ONLY this line per exercise:
 
-2. BUILD
-   Ctrl+Shift+P → CMake: Delete Cache and Reconfigure
-   Then F7 (CMake: Build)
+  "cmake.sourceDirectory": "${workspaceFolder}/IPO/[YourExercise]"
 
-   This activates CMake Tools → CMake icon appears in sidebar + status bar.
+Example:
+  "cmake.sourceDirectory": "${workspaceFolder}/IPO/HelloVision2"
 
-3. RUN
-   IPO/[YourExercise]/build/[YourExercise].exe
+Do NOT use absolute paths (e.g. D:/HAN/...) — breaks on
+other laptops. Always use ${workspaceFolder}.
 
-NOTE
-   Sidebar CMake buttons only appear after configure runs.
-   Delete Cache & Reconfigure forces this on every reboot.
+
+2. PER-EXERCISE: CMakeLists.txt
+------------------------------------------------------------
+Each exercise folder has its own CMakeLists.txt.
+
+This line is CONSTANT (same for every exercise):
+
+  set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
+
+Only add_executable(...) name changes to match the exercise,
+e.g.:
+
+  add_executable([YourExercise] main.cpp)
+  target_link_libraries([YourExercise] ${OpenCV_LIBS})
+
+
+3. BUILD WORKFLOW (per exercise)
+------------------------------------------------------------
+a. Ctrl+Shift+P  ->  CMake: Delete Cache and Reconfigure
+b. Ctrl+Shift+P  ->  CMake: Build   (or press F7)
+c. Sidebar CMake icon now appears (extension activates).
+d. Run: IPO/[YourExercise]/build/[YourExercise].exe
+
+
+4. COMMIT
+------------------------------------------------------------
+git add .
+git commit -m "config: point cmake.sourceDirectory to [YourExercise]"
+git push
+
+
+5. NOTES
+------------------------------------------------------------
+- CMake sidebar may be hidden after reboot until a CMake
+  command is run — this is normal.
+- "cmake.configureOnOpen": true helps show it earlier.
+- Keep OpenCV and opencv_contrib versions identical.
+============================================================
