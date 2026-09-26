@@ -1,0 +1,22 @@
+CONFIG PATH PER EXERCISE + BUILD WORKFLOW
+==========================================
+
+1. EDIT SOURCE DIRECTORY (per exercise)
+   .vscode/settings.json:
+   "cmake.sourceDirectory": "D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/IPO/[YourExercise]"
+
+   Change [YourExercise] each time you switch exercises.
+   Only this variable changes; everything else stays.
+
+2. BUILD
+   Ctrl+Shift+P → CMake: Delete Cache and Reconfigure
+   Then F7 (CMake: Build)
+
+   This activates CMake Tools → CMake icon appears in sidebar + status bar.
+
+3. RUN
+   IPO/[YourExercise]/build/[YourExercise].exe
+
+NOTE
+   Sidebar CMake buttons only appear after configure runs.
+   Delete Cache & Reconfigure forces this on every reboot.
