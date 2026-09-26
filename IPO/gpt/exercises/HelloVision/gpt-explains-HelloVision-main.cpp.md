@@ -120,3 +120,96 @@ Think of it as a smart box containing:
     - The pixel data (a grid of numbers, like a 2D array).
     - Metadata: size (rows, cols), data type (e.g. CV_8UC1),
       number of channels, and memory layout.
+
+
+
+
+
+      
+
+
+
+==================================================
+HELLOVISION - main.cpp WALKTHROUGH
+==================================================
+
+INPUT
+-----
+File: circles.bmp
+Loaded as: src (grayscale, CV_8UC1)
+
+
+STEP 1 - LOAD
+-------------
+Code:   src = imread("../circles.bmp", IMREAD_GRAYSCALE);
+Check:  if(!src.data) -> "Could not open image!"
+Result: src = pixel data, or empty
+
+
+STEP 2 - DIMENSIONS
+-------------------
+Code:   height = src.rows;  width = src.cols;
+Result: dimensions stored for later
+
+
+STEP 3 - SHOW ORIGINAL
+----------------------
+Code:   namedWindow("Original image", WINDOW_AUTOSIZE);
+        moveWindow("Original image", 100, 100);
+        imshow("Original image", src);
+
+Result: window at (100,100)
+        shows dark circle + X/lines
+              light circle
+              faint background
+
+
+STEP 4 - CREATE DESTINATION
+---------------------------
+Code:   Mat dst(width, height, CV_8UC1);
+Note:   (width,height) swapped -> harmless (square image)
+Result: empty 1-channel 8-bit Mat
+
+
+STEP 5 - THRESHOLD
+------------------
+Code:   threshold(src, dst, 120, 255, THRESH_BINARY);
+
+Rule:   pixel > 120  -> 255 (white)
+        pixel <= 120 -> 0   (black)
+
+Result: dark pixels  -> black
+        light pixels -> white
+
+
+STEP 6 - SHOW THRESHOLD
+-----------------------
+Code:   namedWindow("Threshold", WINDOW_AUTOSIZE);
+        moveWindow("Threshold", 450, 100);
+        imshow("Threshold", dst);
+
+Result: window at (450,100)
+        dark circle + X/lines -> black
+        light circle + bg     -> white
+
+
+STEP 7 - HOLD
+-------------
+Code:   while (waitKey(10) != 27);
+
+Effect: waits 10 ms per loop
+        runs until ESC (key code 27)
+        also pumps GUI event loop
+        (without waitKey, windows won't render)
+
+
+SEQUENCE
+--------
+load -> show original -> threshold -> show binary -> wait ESC
+
+
+FINAL OUTPUT
+------------
+Window 1: original grayscale image
+Window 2: binary image, dark shapes isolated on white
+==================================================

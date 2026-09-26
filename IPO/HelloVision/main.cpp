@@ -14,20 +14,21 @@ int main()
     }
     else {
 
-       int height = src.rows, width = src.cols;
+       int height = src.rows; 
+       int width = src.cols;
 
        // Create a window
        namedWindow("Original image", WINDOW_AUTOSIZE);
        moveWindow("Original image", 100, 100);
 
        // Show the image
-       imshow("Original image",src);
+       imshow("Original image", src);
 
 
        // Create bit image
-       Mat dst(width,height,CV_8UC1);
+       Mat dst(width, height, CV_8UC1);
        //new mat container named 'dst' created, memory allocated
-       //assigned dimesnsions: widht, height CV_8UC1
+       //assigned dimesnsions: widht, height, CV_8UC1
        //'width' and 'height' were previously defined
        //CV_8UC1 → a label representing greyscale (8-bit, 1 channel) 
 
