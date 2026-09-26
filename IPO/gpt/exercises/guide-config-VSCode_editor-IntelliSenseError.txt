@@ -1,0 +1,28 @@
+IntelliSense error only. Build may still work via CMake. Fix `includePath` for the C/C++ extension.
+
+**Fix:**
+`.vscode/c_cpp_properties.json`:
+```json
+{
+  "configurations": [{
+    "name": "Win32",
+    "includePath": [
+      "${workspaceFolder}/**",
+      "C:/dev/opencv-build/opencv-install/include",
+      "C:/dev/opencv-build/opencv-install/include/opencv2"
+    ],
+    "compilerPath": "C:/msys64/ucrt64/bin/g++.exe",
+    "cppStandard": "c++17",
+    "intelliSenseMode": "windows-gcc-x64"
+  }],
+  "version": 4
+}
+```
+
+**Steps:**
+1. Create/edit that file in repo root.
+2. `Ctrl+Shift+P` → **C/C++: Edit Configurations (UI)** or directly edit JSON.
+3. Reload window.
+4. Verify path exists: `C:\dev\opencv-build\opencv-install\include\opencv2\opencv.hpp`.
+
+**Note:** IntelliSense error ≠ build failure. Try `F7` first. If build succeeds and runs, only squiggles remain — cosmetic.
