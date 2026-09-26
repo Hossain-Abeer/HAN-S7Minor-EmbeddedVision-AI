@@ -1,0 +1,415 @@
+WEEK 2 — LESSON NOTES
+Minor Embedded Vision Design / EVD1
+Instructor: Peter Bijl
+====================================================
+
+PART 0 — WHERE THIS FITS
+====================================================
+Week 1: what vision is, install OpenCV, first program.
+Week 2: how images get INTO the computer (acquisition),
+        how they are STORED (Mat class),
+        how they are TRANSFORMED (math, color, filters).
+This is the foundation for everything after: threshold,
+morphology, edges, features, classification.
+
+====================================================
+PART 1 — INTRODUCTION TO OPENCV
+====================================================
+
+WHAT OPENCV IS
+--------------
+A library of building blocks for image processing and
+computer vision. You don't write pixel loops from scratch;
+you call primitives.
+
+WHAT IT GIVES YOU
+-----------------
+1) Data structures
+   - Image / Matrix container (Mat)
+   - Points, Rectangles, Scalars, Sizes
+
+2) Input/Output
+   - Read/write images from disk
+   - Capture from camera / video
+   - GUI: windows, buttons, sliders
+
+3) Image processing operations
+   - Filtering, morphology, geometric transforms
+   - Color conversion, drawing, feature detection
+
+4) Video analysis
+   - Motion between frames
+   - Stabilization
+
+5) 3D reconstruction
+   - Camera calibration
+   - 2D -> 3D
+
+6) Feature extraction
+   - SIFT, SURF, FAST  (scale/rotation invariant features)
+
+7) Object detection
+   - Blob detector, template matching
+
+8) Machine learning
+   - Bayes, KNN, SVM, decision trees, neural nets
+   - Deep learning (TensorFlow, Caffe, etc.)
+
+9) More
+   - Shape analysis, face recognition, text detection
+
+STRUCTURE
+---------
+OpenCV is split into modules. Each handles one domain:
+   core        -> Mat, basic math
+   imgproc     -> filters, transforms, morphology
+   highgui     -> windows, imshow, waitKey
+   video       -> video I/O, motion
+   calib3d     -> camera calibration
+   features2d  -> keypoints, descriptors, matching
+   objdetect   -> cascades, blob, template
+   ml          -> classic ML
+   photo, xphoto, shape, face, text, tensorflow, caffe...
+The "x..." modules (ximgproc, xfeatures2d) live in
+opencv_contrib — that's why you had to build contrib.
+
+====================================================
+PART 2 — BASICS OF OPENCV
+====================================================
+
+IMAGES ARE MATRICES
+-------------------
+A grayscale image  = 2D matrix of intensity values.
+A color image      = 2D matrix of pixels, each pixel = 3 values.
+
+Two pictures, same idea:
+    [ 0  0  0 ]
+    [ 0 255 0 ]      -> 3x3 grayscale
+    [ 0  0  0 ]
+
+Color:
+    each cell holds (B, G, R) triple.
+
+FREQUENTLY USED TYPES
+---------------------
+Scalar(v1,v2,v3)
+    A 3- or 4-value tuple. Used to pass/read pixel values.
+    Scalar(255,255,255) = white in RGB.
+
+Point(x,y)
+    X,Y coordinates. Point(50,100).
+
+Size(w,h)
+    Width and height. Size s(100,100).
+    Has .width, .height, .area().
+
+Rect(x,y,w,h)
+    Rectangle: upper-left corner (x,y), then width, height.
+    Rect roi(10,10,100,100)
+        -> 100x100 box, top-left at (10,10)
+
+CREATING A MATRIX
+-----------------
+Mat a = Mat(Size(150,150), CV_8UC1);
+
+TYPE NAMING: CV_<bits><type>C<channels>
+    CV_8UC1  -> 8-bit unsigned, 1 channel  (grayscale)
+    CV_8UC3  -> 8-bit unsigned, 3 channels (color)
+    CV_32FC1 -> 32-bit float, 1 channel
+    CV_32FC3 -> 32-bit float, 3 channels
+
+8U  = 0..255        (standard image)
+32F = float         (math, gradients, accumulators)
+
+====================================================
+PART 3 — ACQUISITION
+====================================================
+
+This is "how the image becomes digital."
+
+CAMERAS
+-------
+Classes:
+    Webcams       -> cheap, low quality
+    Medium tech   -> industrial
+    High tech     -> Peltier cooling, image amplifiers
+
+Sensor types:
+    CCD, CMOS            (common)
+    Infra red, X-ray,    (special)
+    Vidicon, radar,
+    sound, MRI, radio telescope
+
+Sensor specs to know:
+    Resolution         -> pixels width x height
+                          640x480, 800x600, 1280x1024
+    Frames per second  -> 10 .. 50 typical
+    Chip diagonal      -> 1/3", 1/2", 2/3", 1" (lens choice!)
+    Fill factor        -> sensitivity; microlenses
+    Pixel size         -> 3 .. 12 um; square matters
+    Pixel depth        -> bits per value
+                          8 bit  = 256 levels
+                         10 bit  = 1024
+                         12 bit  = 4096
+    Gain and offset    -> pixel = offset + light * gain
+                          high gain -> more noise
+
+LENSES
+------
+    Mount          -> C, CS, F, ...
+    Focal length   -> mm, fixed or zoom
+    Aperture (F)   -> diaphragm
+    Depth of field
+    Min focal dist
+    Geometric distortion -> telecentric lenses fix this
+    Field of view  -> depends on chip size, focal length,
+                      distance to object
+
+LIGHTING
+--------
+Goals:
+    Homogeneous over field of view
+    Maximum contrast for what you CARE about
+    Minimum contrast for what you DON'T
+    Minimum sensitivity to environment and feature variation
+
+Techniques:
+    Ambient (natural)
+    Direct   -> shadows, reflections
+    Diffuse  -> minimizes shadows/reflections
+    Backlit  -> high contrast silhouettes
+    Dark field
+    Strobed  -> freeze motion
+    Structured -> measurement
+    Polarised  -> kill reflections
+
+OPENCV I/O
+----------
+Read:
+    Mat src = imread("img.bmp");                    // color
+    Mat g   = imread("img.bmp", IMREAD_GRAYSCALE);  // gray
+
+Write:
+    imwrite("GrayImage1.bmp", g);
+
+Camera:
+    VideoCapture img;
+    img.open(0);
+    if (img.isOpened()) { img >> frame; }
+
+(Same pattern you saw in HelloVision2.)
+
+====================================================
+PART 4 — IMAGES
+====================================================
+
+SAMPLING
+--------
+Discretizing space. How many pixels do we need?
+    - Too few -> lost detail
+    - Too many -> wasted memory and time
+Rule: enough for the OBJECTS OF INTEREST. Nothing more.
+
+QUANTIZATION
+------------
+Discretizing intensity. Each pixel becomes a digital value.
+    Example: 8, 6, 4, 2 bits -> 256, 64, 16, 4 gray levels.
+Fewer bits = visible banding.
+
+COLOR
+-----
+RGB (Red-Green-Blue)
+    Most common.
+    Channels roughly correspond to wavelengths:
+        R ~ 700 nm
+        G ~ 546 nm
+        B ~ 436 nm
+    Display combines them -> all colors.
+    Think of it as a color cube.
+
+HSV (Hue-Saturation-Value)
+    Hue        -> dominant color (the "which color")
+    Saturation -> purity / amount of white mixed in
+    Value      -> brightness (max of R,G,B)
+    Think of it as a color cone.
+
+HSV vs RGB:
+    + More intuitive
+    + More uniform under lighting changes
+    - Extra conversion cost
+Use HSV when you want to isolate a color regardless of shade.
+
+NOISE
+-----
+What it is: random unwanted variation in pixel values.
+Effects: degrades image, breaks processing.
+Causes: sensor, low light, high gain, transmission.
+
+Types:
+    Gaussian
+        - Good approximation to real noise
+        - Described by mean and standard deviation
+        - Small deviations everywhere
+
+    Salt and Pepper
+        - Impulse noise
+        - Pixels become max (white) or min (black)
+        - Isolated extreme dots
+
+SMOOTHING (denoising)
+---------------------
+Linear:
+    Image averaging  -> average many frames
+    Local averaging  -> average over a neighborhood
+    Gaussian         -> weighted average, center weighted more
+
+Non-linear:
+    Rotating mask
+    Median filter    -> replace pixel with median of neighborhood
+                        excellent for salt & pepper
+
+HISTOGRAM
+---------
+A bar chart: for each intensity (0..255), how many pixels?
+Reading a histogram tells you:
+    - Is the image dark, bright, or balanced?
+    - Is there a clear separation (bimodal) -> good for threshold?
+
+Contrast stretch:
+    Rescale so intensities spread over full 0..255.
+
+Equalization:
+    Redistribute intensities so the histogram is flat.
+    Use when image has insufficient contrast.
+    Human can distinguish ~700-900 gray levels.
+    Result: some gray levels get merged (missing values).
+    Usually applied to luminance only, not per-channel.
+
+MANIPULATION
+------------
+Image math (element-wise array ops):
+    Add constant      -> brighten
+    Subtract constant -> darken
+    Add images        -> longer exposure, average out noise
+    Subtract images   -> background removal, motion detection
+    Multiply by const -> brighten
+    Divide by const   -> darken
+    Multiply images   -> mask selection
+    Divide images     -> background elimination
+
+Geometric:
+    Rotate, translate
+    Scale (resize)
+    Warping (arbitrary transform)
+    Morphing (blend of warp + interpolation)
+
+Miscellaneous:
+    Copy, Convert (type)
+    ROI (region of interest -> submatrix view)
+
+====================================================
+PART 5 — THE cv::Mat CLASS
+====================================================
+
+WHAT IT IS
+----------
+OpenCV's universal container for images and matrices.
+Every imread, imshow, filter, and math op produces or
+consumes a Mat.
+
+WHAT IT HOLDS
+-------------
+    - Pointer to pixel data
+    - rows, cols (dimensions)
+    - type (e.g. CV_8UC3)
+    - step (bytes per row)
+    - reference count
+
+WHY REFERENCE COUNTING MATTERS
+------------------------------
+Mat copies are SHALLOW by default: they share the same
+pixel buffer. When the last Mat referring to a buffer
+goes out of scope, the buffer is freed.
+This is why `Mat dst = src;` does NOT duplicate pixels.
+
+TO GET A DEEP COPY
+------------------
+    Mat dst = src.clone();
+    src.copyTo(dst);
+
+SHAPES
+------
+Grayscale:
+    rows x cols, 1 channel.
+
+Color:
+    rows x cols, 3 (or 4) channels.
+
+A "pixel" in color is a Vec3b (3 unsigned bytes).
+
+ACCESS (informal)
+-----------------
+    src.at<uchar>(y,x)     -> grayscale pixel
+    src.at<Vec3b>(y,x)     -> color pixel
+
+ROI
+---
+    Mat roi = src(Rect(x,y,w,h));
+    roi is a VIEW into src, not a copy.
+
+====================================================
+PART 6 — IMAGE MATH
+====================================================
+
+ADD / SUBTRACT (per pixel)
+--------------------------
+    dst = src + Scalar(b,b,b);   brighten
+    dst = src - Scalar(b,b,b);   darken
+    dst = a + b;                 exposure stack / denoise
+    dst = a - b;                 background removal
+
+MULTIPLY / DIVIDE
+-----------------
+    dst = src * k;               brighten
+    dst = src / k;               darken
+    dst = a.mul(b);              elementwise product (masking)
+    dst = a / b;                 elementwise divide
+
+NOTE
+----
+Plain + and - on Mat are SATURATED in OpenCV:
+    >255 clamps to 255;  <0 clamps to 0.
+If you want wrap-around, use add() with no saturation flag,
+or convert to float first.
+
+WHY THIS MATTERS
+----------------
+Background subtraction = subtraction of two frames.
+Motion detection = absolute difference of frames.
+Noise reduction = averaging (addition + division).
+Contrast adjustment = scalar add/sub/mul/div.
+Masking = multiply by 0/1 mask.
+
+====================================================
+PART 7 — WHAT COMES NEXT (WEEK 3)
+====================================================
+    Binary vision
+    Thresholding
+    Connectivity
+    Morphology: dilation, erosion, opening, closing
+    Binary math: AND, OR, XOR, NOT
+
+====================================================
+QUICK CHEAT SHEET
+====================================================
+    imread(path[, IMREAD_GRAYSCALE])   -> Mat
+    imwrite(path, mat)                 -> file
+    VideoCapture.open(idx)             -> camera
+    cap >> frame                       -> snapshot
+    Mat(Size(w,h), CV_8UC1)            -> new image
+    src.rows, src.cols                 -> height, width
+    src.clone()                        -> deep copy
+    src(Rect(x,y,w,h))                 -> ROI view
+    +, -, *, /                         -> saturated math
+    cvtColor(src,dst, COLOR_BGR2GRAY)  -> gray
+    cvtColor(src,dst, COLOR_BGR2HSV)   -> HSV
