@@ -1,0 +1,156 @@
+=========================================================
+HelloVision2 — main.cpp codeblock walkthrough
+=========================================================
+
+---------------------------------------------------------
+HEADERS
+---------------------------------------------------------
+iostream        -> cout (console output)
+opencv.hpp      -> all OpenCV (core, imgproc, highgui, etc.)
+thread          -> this_thread::sleep_for, chrono::milliseconds
+
+
+---------------------------------------------------------
+NAMESPACES
+---------------------------------------------------------
+using namespace std;   -> drop "std::" prefix
+using namespace cv;    -> drop "cv::" prefix
+
+
+---------------------------------------------------------
+SETUP BLOCK
+---------------------------------------------------------
+VideoCapture Img;
+    - Object representing a video source (camera or file).
+    - Not opened yet.
+
+Img.open(0);
+    - Opens device index 0 (default webcam).
+    - Produces: live stream handle.
+
+if (!Img.isOpened())
+    - Check if open succeeded.
+    - Fail  -> print error, program falls through (no else).
+    - Success -> enter else block.
+
+
+---------------------------------------------------------
+FIRST SNAPSHOT BLOCK
+---------------------------------------------------------
+Mat Cam;
+    - Container for raw color frame.
+    - Used twice: first snapshot + every loop frame.
+
+Img >> Cam;   (outer, first)
+    - ">>" operator grabs one frame from Img, stores in Cam.
+    - Produces: Cam = BGR color frame.
+    - Needed BEFORE Cam.data check.
+
+if (!Cam.data)
+    - Check if first frame has pixels.
+    - Fail  -> error message.
+    - Success -> enter inner else (main loop).
+
+
+---------------------------------------------------------
+MAIN LOOP GATE
+---------------------------------------------------------
+while (waitKey(10) != 27)
+    - waitKey(10) -> waits 10 ms, returns key code or -1.
+    - 27 = ESC.
+    - Also pumps GUI events so windows render.
+    - Loop = keep grabbing frames until ESC.
+
+
+---------------------------------------------------------
+PER-ITERATION SEQUENCE (inside loop)
+---------------------------------------------------------
+[1] Mat src, dst, Edge;
+        - Declared EVERY iteration.
+        - Fresh empty Mats each frame.
+        - Nothing persists between frames.
+
+[2] Img >> Cam;
+        - Grab new frame -> overwrite Cam.
+        - Same operator as outer, now feeding loop.
+
+[3] this_thread::sleep_for(chrono::milliseconds(5));
+        - Pauses main thread 5 ms.
+        - Throttles loop rate.
+        - Slows frame grab, frees CPU.
+
+[4] cvtColor(Cam, src, COLOR_BGR2GRAY);
+        - Input  : Cam (BGR, 3-channel).
+        - Output : src (1-channel gray).
+        - Consumes Cam, produces src.
+
+[5] threshold(src, dst, 130, 255, THRESH_BINARY);
+        - Input  : src (gray).
+        - Rule   : pixel > 130 -> 255, else -> 0.
+        - Output : dst (binary).
+        - Depends on src from [4].
+
+[6] Canny(src, Edge, 150, 255, 3);
+        - Input  : src (gray, same as threshold).
+        - Params : low 150, high 255, aperture 3.
+        - Output : Edge = binary edge map.
+        - BRANCHES OFF src. Sibling of threshold, not sequential.
+
+[7] 4x namedWindow + moveWindow
+        - Create + place GUI windows.
+        - Snapshot (100, 5), GrayScale (650, 5),
+          Threshold (100, 500), Edge (650, 500).
+        - Independent of Mats; just registration.
+        - NOTE: recreated EVERY iteration -> redundant.
+
+[8] 4x imshow
+        - Cam  -> "Snapshot"
+        - src  -> "GrayScale"
+        - dst  -> "Threshold"
+        - Edge -> "Edge"
+        - Consumes all four Mats produced above.
+
+[9] Loop repeats.
+        - Back to waitKey(10).
+        - New frame overwrites Cam.
+        - src/dst/Edge re-declared empty, then refilled.
+        - Continuous live view.
+
+[10] Exit
+        - ESC -> loop ends -> main returns -> program ends.
+
+
+---------------------------------------------------------
+DATA FLOW DIAGRAM (per iteration)
+---------------------------------------------------------
+                 Img
+                  |
+                  v
+                 Cam ------------------------> "Snapshot"
+                  |
+                  v
+              cvtColor
+                  |
+                  v
+                 src ----------------> "GrayScale"
+                /   \
+               /     \
+     threshold       Canny
+        |              |
+        v              v
+       dst            Edge
+        |              |
+        v              v
+  "Threshold"       "Edge"
+
+
+---------------------------------------------------------
+INTERACTION SUMMARY
+---------------------------------------------------------
+Img >> Cam      : producer (frame source)
+cvtColor        : consumer of Cam, producer of src
+threshold       : consumer of src, producer of dst
+Canny           : consumer of src, producer of Edge
+imshow (x4)     : consumers of all four Mats
+waitKey         : gatekeeper of loop + render pump
+=========================================================
