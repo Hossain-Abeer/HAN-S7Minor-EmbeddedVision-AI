@@ -1,4 +1,5 @@
 {
     "cmake.sourceDirectory": "C:/Users/hossa/HAN-S7Minor-EmbeddedVision-AI/IPO/HelloVision2",
-     "cmake.buildDirectory": "${sourceDir}/build"
+    "cmake.buildDirectory": "${sourceDir}/build",
+    "cmake.options.statusBarVisibility": "visible"
 }
