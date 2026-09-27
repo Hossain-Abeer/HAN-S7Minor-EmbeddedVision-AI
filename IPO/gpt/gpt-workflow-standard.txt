@@ -1,0 +1,148 @@
+
+STANDARD WORKFLOW — SOLVING AN EVD1 EXERCISE
+============================================
+
+(Observed pattern from Ex2_1; reusable for every exercise.)
+
+
+PHASE 0 — PREPARE
+-----------------
+1. Locate exercise in course manual / slides.
+   - Read theory (Week N lesson PDF) FIRST.
+   - Then read exercise brief.
+
+2. Create folder:
+   IPO/[Exercise_name]/
+
+3. Populate with:
+   - CMakeLists.txt  (from template, rename project + exe)
+   - main.cpp        (empty for now)
+   - required input assets (images / videos)
+
+
+PHASE 1 — UNDERSTAND
+--------------------
+4. Brief the exercise:
+   - INPUT  : what asset(s)?
+   - TASK   : what must be done?
+   - OUTPUT : what is shown / measured?
+   - CONCEPTS: which OpenCV calls are involved?
+
+5. Write a syntax-only skeleton of main.cpp:
+   - headers, namespaces, main()
+   - placeholders [param] instead of real values
+   - no logic filled in yet
+
+6. Explain each codeblock as .txt:
+   - what it is
+   - how it functions
+   - parameters it takes
+   - sequence of events
+   - data flow diagram
+   - key gotchas
+
+7. Step-by-step parameter fill:
+   - one parameter at a time
+   - with reason for each value
+   - walk from skeleton -> final program
+
+
+PHASE 2 — BUILD
+---------------
+8. Confirm input asset is in IPO/[Exercise_name]/.
+
+9. CMake panel: "Delete Cache & Reconfigure"
+   - expect: "Found OpenCV ... Configuring done / Generating done"
+   - ignore ctest folder warning.
+
+10. Press F7 to build.
+    - on success: IPO/[Exercise_name]/build/[Exercise_name].exe
+    - on error: read compiler output, fix, re-F7.
+
+11. Run the exe.
+    - exe runs from build/, so ../ reaches the exercise folder.
+    - ESC to exit (standard exit key = 27).
+
+
+PHASE 3 — INTERPRET
+-------------------
+12. Observe output windows.
+
+13. Map code -> output:
+    - for EACH window, name the codeblock that produced it.
+    - explain WHY the visual looks the way it does
+      (channel values, thresholds, conversions).
+
+14. Confirm task is fulfilled:
+    - does output match the brief?
+    - any missing windows / artefacts?
+
+
+PHASE 4 — COMMIT
+----------------
+15. VS Code Source Control -> Commit -> Sync/Push.
+    - .gitignore excludes build/, *.exe, CMakeCache, etc.
+16. On other laptop: git pull, rebuild, verify.
+
+
+====================================================
+CHECKLISTS
+====================================================
+
+BEFORE CONFIGURING:
+[ ] Folder exists at IPO/[Ex]/
+[ ] CMakeLists.txt present (correct project + exe name)
+[ ] main.cpp present
+[ ] Input asset(s) present
+
+BEFORE BUILDING:
+[ ] Syntax valid
+[ ] All [params] replaced with real values
+[ ] Paths relative to build/ (use "../asset")
+
+AFTER RUNNING:
+[ ] Expected number of windows visible
+[ ] No crash / no all-black output
+[ ] ESC closes cleanly
+[ ] Output matches brief
+
+BEFORE COMMIT:
+[ ] build/ not staged
+[ ] No .exe staged
+[ ] Commit message descriptive
+
+
+====================================================
+CONVENTIONS (from HelloVision / Ex2_1)
+====================================================
+- Exit key              : 27 (ESC)
+- waitKey refresh       : 10 ms
+- Window flag           : WINDOW_AUTOSIZE
+- Path to asset         : "../asset.ext"
+- Position windows      : non-overlapping (moveWindow)
+- Split order in BGR    : channels[0]=B, [1]=G, [2]=R
+- HSV ranges in OpenCV  : H 0..179, S 0..255, V 0..255
+- Gray display          : CV_8UC1 imshows as grayscale
+- Color display         : CV_8UC3 imshows as BGR
+
+
+====================================================
+TEMPLATE CMakeLists.txt (per exercise)
+====================================================
+cmake_minimum_required(VERSION 3.10)
+project([Exercise_name] VERSION 0.0.1)
+
+include(CTest)
+enable_testing()
+
+set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+
+add_executable([Exercise_name] main.cpp)
+
+target_link_libraries([Exercise_name] ${OpenCV_LIBS})
+
+set(CPACK_PROJECT_NAME ${PROJECT_NAME})
+set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+include(CPack)
