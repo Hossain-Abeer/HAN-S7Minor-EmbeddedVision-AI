@@ -24,38 +24,38 @@ you call primitives.
 
 WHAT IT GIVES YOU
 -----------------
-1) Data structures
+1. Data structures
    - Image / Matrix container (Mat)
    - Points, Rectangles, Scalars, Sizes
 
-2) Input/Output
+2. Input/Output
    - Read/write images from disk
    - Capture from camera / video
    - GUI: windows, buttons, sliders
 
-3) Image processing operations
+3. Image processing operations
    - Filtering, morphology, geometric transforms
    - Color conversion, drawing, feature detection
 
-4) Video analysis
+4. Video analysis
    - Motion between frames
    - Stabilization
 
-5) 3D reconstruction
+5. 3D reconstruction
    - Camera calibration
    - 2D -> 3D
 
-6) Feature extraction
+6. Feature extraction
    - SIFT, SURF, FAST  (scale/rotation invariant features)
 
-7) Object detection
+7. Object detection
    - Blob detector, template matching
 
-8) Machine learning
+8. Machine learning
    - Bayes, KNN, SVM, decision trees, neural nets
    - Deep learning (TensorFlow, Caffe, etc.)
 
-9) More
+9. More
    - Shape analysis, face recognition, text detection
 
 STRUCTURE
@@ -147,8 +147,8 @@ Sensor specs to know:
     Chip diagonal      -> 1/3", 1/2", 2/3", 1" (lens choice!)
     Fill factor        -> sensitivity; microlenses
     Pixel size         -> 3 .. 12 um; square matters
-    Pixel depth        -> bits per value
-                          8 bit  = 256 levels
+    Pixel depth        -> bit data per pixel, more bits gives higher intensity (saturation) 
+                          8 bit  = 256 levels (most popular)
                          10 bit  = 1024
                          12 bit  = 4096
     Gain and offset    -> pixel = offset + light * gain
@@ -186,16 +186,18 @@ Techniques:
 OPENCV I/O
 ----------
 Read:
-    Mat src = imread("img.bmp");                    // color
-    Mat g   = imread("img.bmp", IMREAD_GRAYSCALE);  // gray
+    Mat src = imread("img.bmp");                    // parses colored image
+    Mat g   = imread("img.bmp", IMREAD_GRAYSCALE);  // parses grayscale image
 
 Write:
     imwrite("GrayImage1.bmp", g);
 
 Camera:
-    VideoCapture img;
-    img.open(0);
-    if (img.isOpened()) { img >> frame; }
+    VideoCapture img;                               //creates 'img' container/variable to capture video stream (not image) 
+    img.open(0);                                    //opens camera connected, 0 means the position of system's integrated camera, and starts video stream  
+    if (img.isOpened())                             //check that open() succeeded (camera ready) 
+        { img >> frame; }                           //transfer ONE frame/snapshot from stream in 'img' and store it in 'frame' 
+                                                // repeat inside a loop for continuous frames, essentially forming a video
 
 (Same pattern you saw in HelloVision2.)
 
