@@ -1,0 +1,68 @@
+EXERCISE 2_1 — OUTPUT INTERPRETATION
+====================================
+
+WINDOW "Original"
+-----------------
+Code:   Mat src = imread("../dark_flower.bmp", IMREAD_COLOR);
+        imshow("Original", src);
+Result: Raw BGR color image. No processing applied.
+        Yellow petals, dark background, visible greenery.
+
+WINDOW "Blue"
+-------------
+Code:   split(src, channels);
+        imshow("Blue", channels[0]);
+Result: Dark image. Yellow petals are nearly black.
+Why:    Yellow = high R + high G + low B.
+        channels[0] = Blue. Blue values are low -> dark pixels.
+
+WINDOW "Green"
+--------------
+Code:   imshow("Green", channels[1]);
+Result: Bright petals, dark background.
+Why:    Yellow contains high green -> bright.
+        channels[1] = Green.
+
+WINDOW "Red"
+------------
+Code:   imshow("Red", channels[2]);
+Result: Brightest petals of the three.
+Why:    Yellow leans strongly red -> high pixel values.
+        channels[2] = Red.
+
+WINDOW "Hue"
+------------
+Code:   cvtColor(src, hsv, COLOR_BGR2HSV);
+        split(hsv, hsvCh);
+        imshow("Hue", hsvCh[0]);
+Result: Mostly dark / low contrast.
+Why:    Hue encodes COLOR TYPE, not brightness.
+        Flowers are all similar yellow hue -> narrow value range.
+        Dark = low hue value (yellow sits low in 0..179).
+
+WINDOW "Saturation"
+-------------------
+Code:   imshow("Saturation", hsvCh[1]);
+Result: Very high contrast. Petals white, background black.
+Why:    Saturation = purity / amount of color.
+        Pure yellow petals -> high S -> bright.
+        Gray background -> low S -> dark.
+
+WINDOW "Value"
+--------------
+Code:   imshow("Value", hsvCh[2]);
+Result: Looks like a normal grayscale photo.
+Why:    Value = brightness (max of R,G,B).
+        Essentially the grayscale version of the image.
+
+====================================================
+CODE -> OUTPUT MAP (one line each)
+====================================================
+
+imread + imshow("Original")       -> raw BGR photo
+split -> channels[0] -> "Blue"    -> dark petals
+split -> channels[1] -> "Green"   -> bright petals
+split -> channels[2] -> "Red"     -> brightest petals
+cvtColor(BGR2HSV) -> hsvCh[0]     -> low-contrast hue map
+cvtColor(BGR2HSV) -> hsvCh[1]     -> high-contrast purity map
+cvtColor(BGR2HSV) -> hsvCh[2]     -> grayscale-like brightness
