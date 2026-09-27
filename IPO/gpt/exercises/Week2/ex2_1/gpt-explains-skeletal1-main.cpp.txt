@@ -1,0 +1,178 @@
+EXERCISE 2_1 — CODEBLOCK EXPLANATION
+====================================
+
+HEADERS
+-------
+iostream        -> cout (console output)
+opencv.hpp      -> Mat, imread, split, cvtColor, imshow, waitKey
+
+NAMESPACES
+----------
+std, cv         -> drop prefixes
+
+
+LOAD IMAGE
+==========
+
+Mat src = imread("[path]", [flag]);
+    Reads color image from disk into src.
+    Default flag = IMREAD_COLOR -> forces 3-channel BGR.
+    [path] = "../dark_flower.bmp"   (exe runs from build/, ../ = Ex2_1/)
+    [flag] optional -> omit for color.
+    Produces: src = 3-channel BGR Mat.
+
+if (!src.data)
+    Guard: if src has no pixel data (file missing / bad path).
+    return -1 -> exit early, nothing to process.
+
+
+SPLIT RGB (BGR)
+===============
+
+vector<Mat> channels;
+    Container for the split results. Will hold 3 Mats.
+
+split(src, channels);
+    Splits a multi-channel Mat into single-channel Mats.
+    Input : src (3-channel BGR)
+    Output: channels[0]=B, [1]=G, [2]=R   (OpenCV = BGR!)
+    Each output is 1-channel, CV_8UC1 -> displays as grayscale.
+    So  channels[2] = red as gray, 
+        channels[1] = green as gray,
+        channels[0] = blue as gray.
+
+
+CONVERT TO HSV
+==============
+
+Mat hsv;
+    Empty Mat to receive HSV image.
+
+cvtColor(src, hsv, [code]);
+    Converts color space.
+    [code] = COLOR_BGR2HSV
+    Input : src (BGR)
+    Output: hsv (3-channel: H, S, V)
+    H range 0..179 in OpenCV (NOT 0..360!)
+    S range 0..255
+    V range 0..255
+
+
+SPLIT HSV
+=========
+
+vector<Mat> hsvCh;
+split(hsv, hsvCh);
+    hsvCh[0]=Hue, [1]=Saturation, [2]=Value.
+    Same mechanism as RGB split. Each -> 1-channel gray.
+
+
+WINDOWS
+=======
+namedWindow("[name]", [flag]);
+    Registers a GUI window under a unique name.
+    [flag] = WINDOW_AUTOSIZE -> window fits image, no resize.
+    If a window with that name exists, call is a no-op.
+
+moveWindow("[name]", [x], [y]);
+    Moves window to screen coordinate (x, y).
+    Top-left of the window goes to that pixel.
+    Purely cosmetic — no effect on data.
+
+Why 7 windows?
+    original + B + G + R + H + S + V = 7 images to show.
+
+Placement suggestion (avoid overlap):
+    Original  (  0,  0)
+    Blue      (320,  0)
+    Green     (640,  0)
+    Red       (960,  0)
+    Hue       (  0,420)
+    Sat       (320,420)
+    Value     (640,420)
+
+
+SHOW
+====
+imshow("[name]", [mat]);
+    Renders Mat into the named window.
+    Rules:
+        - Mat must be CV_8U (8-bit) or CV_32F/CV_16U in a few cases.
+          All our Mats are CV_8UC1 -> fine.
+        - 1-channel Mat -> shown as grayscale.
+        - 3-channel Mat -> shown as BGR color.
+    Does NOT block. Just queues a paint event.
+
+IMPORTANT: imshow alone does nothing visible without waitKey
+    — see next block.
+
+
+EVENT LOOP / HOLD
+=================
+while (waitKey([ms]) != [key]);
+    waitKey(ms) -> waits ms milliseconds for a keypress.
+        Returns key code if pressed, else -1.
+    [ms]  = 10 (refresh every 10 ms)
+    [key] = 27 (ESC)
+    Loop runs until ESC.
+    Side effects:
+        - pumps GUI event loop -> windows render/refresh
+        - keeps program alive so imshow output stays on screen
+    Without this, main returns instantly and windows close.
+
+
+RETURN
+======
+return 0;
+    Normal termination. Windows destroyed automatically.
+
+
+SEQUENCE OF EVENTS
+==================
+1. imread loads dark_flower.bmp into src.
+2. Guard checks src.data.
+3. split(src, channels) -> B, G, R.
+4. cvtColor(src, hsv, COLOR_BGR2HSV).
+5. split(hsv, hsvCh) -> H, S, V.
+6. 7x (namedWindow + moveWindow) -> register + place.
+7. 7x imshow -> queue paints.
+8. waitKey loop -> render + hold until ESC.
+9. return 0.
+
+
+DATA FLOW
+=========
+                 src (BGR)
+                 |    \
+        split ---/      \--- cvtColor
+          |                   |
+      [B,G,R]               hsv
+          |                   |
+          |                split
+          |                   |
+          |               [H,S,V]
+          \                   /
+           \                 /
+            \-> 7 imshow <--/
+
+
+KEY GOTCHAS
+===========
+- OpenCV loads color as BGR, not RGB.
+  channels[0]=Blue, [1]=Green, [2]=Red.
+- Hue in OpenCV: 0..179, not 0..360.
+- Wait — but every Mat here is CV_8UC1, so display is fine.
+- Windows created inside or outside a loop make no difference here
+  (no loop), so placed once.
+- If ESC not pressed, program runs forever -> must press ESC to exit.
+
+PARAMETERS TO FILL
+==================
+[path]  "../dark_flower.bmp"
+[flag]  (omit)                          -> default color
+[code]  COLOR_BGR2HSV
+[ms]    10
+[key]   27
+Window names: "Original", "Blue", "Green", "Red",
+              "Hue", "Saturation", "Value"
+Coordinates: pick non-overlapping pairs.

@@ -1,0 +1,41 @@
+CMakeLists.txt first.
+
+Why
+
+It's the build contract: tells CMake what to compile, where OpenCV lives, what to link.
+
+Without it, main.cpp is just a text file — no exe.
+
+It's near-identical to HelloVision/2 → fastest win, zero logic risk.
+
+Once it's valid, every subsequent main.cpp edit just needs F7.
+
+Only change from template
+
+project(HelloVision ...) → project(Ex2_1 ...)
+
+add_executable(HelloVision main.cpp) → add_executable(Ex2_1 main.cpp)
+
+
+
+
+template:
+<<
+cmake_minimum_required(VERSION 3.10)
+project([Exercise_name] VERSION 0.0.1)
+
+include(CTest)
+enable_testing()
+
+set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+
+add_executable([Exercise_name] main.cpp)
+
+target_link_libraries([Exercise_name] ${OpenCV_LIBS})
+
+set(CPACK_PROJECT_NAME ${PROJECT_NAME})
+set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+include(CPack)
+>>

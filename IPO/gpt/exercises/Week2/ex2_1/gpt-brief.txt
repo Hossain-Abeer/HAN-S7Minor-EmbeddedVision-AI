@@ -1,0 +1,35 @@
+EXERCISE 2_1 — BRIEF
+====================
+
+INPUT: dark_flower.bmp (RGB color image)
+
+TASK a
+------
+Read RGB image.
+Split into 3 separate grayscale images:
+    - R channel -> gray image
+    - G channel -> gray image
+    - B channel -> gray image
+Show all.
+
+TASK b
+------
+Convert RGB -> HSV.
+Split into 3 grayscale images:
+    - Hue        -> gray image
+    - Saturation -> gray image
+    - Value      -> gray image
+Show all.
+
+CONCEPTS INVOLVED
+-----------------
+- imread (color, default)
+- split()     -> separate channels into vector<Mat>
+- cvtColor(COLOR_BGR2HSV)
+- imshow x6 (or x7 with original)
+- waitKey
+
+NOTE
+----
+OpenCV loads color as BGR, not RGB.
+So channel order from split() = [B, G, R], not [R, G, B].

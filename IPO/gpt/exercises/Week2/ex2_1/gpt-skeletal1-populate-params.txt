@@ -1,0 +1,147 @@
+EXERCISE 2_1 — STEP-BY-STEP PARAMETER FILL
+==========================================
+
+STEP 1 — Fill [path]
+--------------------
+Code:      Mat src = imread("../dark_flower.bmp", [flag]);
+Value:     "../dark_flower.bmp"
+Reason:    exe runs from IPO/Ex2_1/build/, so ../ = IPO/Ex2_1/.
+
+
+STEP 2 — Fill [flag] in imread
+------------------------------
+Code:      Mat src = imread("../dark_flower.bmp", IMREAD_COLOR);
+Value:     IMREAD_COLOR
+Reason:    explicit is safer than relying on default.
+           IMREAD_COLOR = 3-channel BGR.
+
+
+STEP 3 — Fill error message [err]
+---------------------------------
+Code:      if (!src.data) { cout << "Could not open image!"; return -1; }
+Value:     "Could not open image!"
+Reason:    user-facing text; matches course style.
+
+
+STEP 4 — Fill [code] for cvtColor
+---------------------------------
+Code:      cvtColor(src, hsv, COLOR_BGR2HSV);
+Value:     COLOR_BGR2HSV
+Reason:    converts BGR (imread output) to HSV 3-channel.
+
+
+STEP 5 — Fill window names [w1..w7] + coordinates
+-------------------------------------------------
+Code:      namedWindow("[w]", WINDOW_AUTOSIZE);
+           moveWindow("[w]", [x], [y]);
+
+Values:
+    "Original"    0,   0
+    "Blue"      320,   0
+    "Green"     640,   0
+    "Red"       960,   0
+    "Hue"         0, 420
+    "Saturation" 320, 420
+    "Value"      640, 420
+
+Reason:    7 unique names; non-overlapping coordinates.
+
+
+STEP 6 — Fill window flag [flag]
+-------------------------------
+Code:      namedWindow("[w]", WINDOW_AUTOSIZE);
+Value:     WINDOW_AUTOSIZE
+Reason:    window sizes to image; no manual resize needed.
+
+
+STEP 7 — Add the 7 imshow calls
+-------------------------------
+Code:
+    imshow("Original",   src);
+    imshow("Blue",       channels[0]);
+    imshow("Green",      channels[1]);
+    imshow("Red",        channels[2]);
+    imshow("Hue",        hsvCh[0]);
+    imshow("Saturation", hsvCh[1]);
+    imshow("Value",      hsvCh[2]);
+
+Reason:    3 BGR splits + 3 HSV splits + 1 original = 7.
+           Index order from split() = memory order in BGR = B, G, R.
+
+
+STEP 8 — Fill [ms] in waitKey
+-----------------------------
+Code:      while (waitKey(10) != [key]);
+Value:     10
+Reason:    refresh every 10 ms; standard from HelloVision.
+
+
+STEP 9 — Fill [key] in waitKey
+------------------------------
+Code:      while (waitKey(10) != 27);
+Value:     27
+Reason:    27 = ESC; consistent with earlier exercises.
+
+
+====================================================
+FINAL PROGRAM (main.cpp)
+====================================================
+
+#include <iostream>
+#include <opencv2/opencv.hpp>
+
+using namespace std;
+using namespace cv;
+
+int main()
+{
+    Mat src = imread("../dark_flower.bmp", IMREAD_COLOR);
+    if (!src.data) { cout << "Could not open image!"; return -1; }
+
+    vector<Mat> channels;
+    split(src, channels);
+
+    Mat hsv;
+    cvtColor(src, hsv, COLOR_BGR2HSV);
+
+    vector<Mat> hsvCh;
+    split(hsv, hsvCh);
+
+    namedWindow("Original",   WINDOW_AUTOSIZE); moveWindow("Original",     0,  0);
+    namedWindow("Blue",       WINDOW_AUTOSIZE); moveWindow("Blue",       320,  0);
+    namedWindow("Green",      WINDOW_AUTOSIZE); moveWindow("Green",      640,  0);
+    namedWindow("Red",        WINDOW_AUTOSIZE); moveWindow("Red",        960,  0);
+    namedWindow("Hue",        WINDOW_AUTOSIZE); moveWindow("Hue",          0,420);
+    namedWindow("Saturation", WINDOW_AUTOSIZE); moveWindow("Saturation", 320,420);
+    namedWindow("Value",      WINDOW_AUTOSIZE); moveWindow("Value",      640,420);
+
+    imshow("Original",   src);
+    imshow("Blue",       channels[0]);
+    imshow("Green",      channels[1]);
+    imshow("Red",        channels[2]);
+    imshow("Hue",        hsvCh[0]);
+    imshow("Saturation", hsvCh[1]);
+    imshow("Value",      hsvCh[2]);
+
+    while (waitKey(10) != 27);
+
+    return 0;
+}
+
+
+====================================================
+DELTA SUMMARY TABLE
+====================================================
+
+ Step | Filled                 | Value
+------+------------------------+-----------------------------------------
+  1   | path                   | ../dark_flower.bmp
+  2   | imread flag            | IMREAD_COLOR
+  3   | error message          | "Could not open image!"
+  4   | cvtColor code          | COLOR_BGR2HSV
+  5   | window names + coords  | 7 pairs, non-overlap
+  6   | window flag            | WINDOW_AUTOSIZE
+  7   | imshow sources         | src + channels[0..2]
+                                + hsvCh[0..2]
+  8   | waitKey ms             | 10
+  9   | exit key               | 27 (ESC)

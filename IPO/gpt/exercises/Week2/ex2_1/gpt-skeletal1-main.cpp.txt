@@ -1,0 +1,44 @@
+#include <iostream>
+#include <opencv2/opencv.hpp>
+
+using namespace std;
+using namespace cv;
+
+int main()
+{
+    Mat src = imread("[path]", [flag]);
+    if (!src.data)
+    {
+        cout << "[error message]";
+        return -1;
+    }
+
+    vector<Mat> channels;
+    split(src, channels);
+
+    Mat hsv;
+    cvtColor(src, hsv, [code]);
+
+    vector<Mat> hsvCh;
+    split(hsv, hsvCh);
+
+    namedWindow("[win1]", [flag]); moveWindow("[win1]", [x], [y]);
+    namedWindow("[win2]", [flag]); moveWindow("[win2]", [x], [y]);
+    namedWindow("[win3]", [flag]); moveWindow("[win3]", [x], [y]);
+    namedWindow("[win4]", [flag]); moveWindow("[win4]", [x], [y]);
+    namedWindow("[win5]", [flag]); moveWindow("[win5]", [x], [y]);
+    namedWindow("[win6]", [flag]); moveWindow("[win6]", [x], [y]);
+    namedWindow("[win7]", [flag]); moveWindow("[win7]", [x], [y]);
+
+    imshow("[win1]", [mat1]);
+    imshow("[win2]", [mat2]);
+    imshow("[win3]", [mat3]);
+    imshow("[win4]", [mat4]);
+    imshow("[win5]", [mat5]);
+    imshow("[win6]", [mat6]);
+    imshow("[win7]", [mat7]);
+
+    while (waitKey([ms]) != [key]);
+
+    return 0;
+}
