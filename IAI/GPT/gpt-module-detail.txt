@@ -1,0 +1,281 @@
+IAI / EVML-EVD3 - MODULE UNDERSTANDING
+
+================================================================================
+1. OVERVIEW
+================================================================================
+
+IAI (EVML-EVD3) is a hands-on workshop-style module teaching machine learning and
+deep learning for (embedded) computer vision. It is part of the minor Embedded
+System & Vision with Deep & Machine Learning.
+
+Core philosophy:
+- No single algorithm works for every problem -> you try multiple approaches.
+- Data matters more than algorithms (but good features/algorithms still matter).
+- Iterative workflow: collect -> explore -> engineer -> train -> validate ->
+  deploy -> test -> reflect.
+
+Structure: Two mini-projects (ML in Term 1, DL in Term 2), each 80% report + 20%
+quizzes. Teams of 2-3. Final deliverables: report (Word), code (zip), deployment
+video.
+
+Tools: Python 3.11, OpenCV, scikit-learn, TensorFlow/Keras, PyTorch (ViT), Git,
+VS Code / Colab.
+
+Books: Geron (3rd ed.), Kaehler & Bradski (Learning OpenCV 3).
+
+================================================================================
+2. WEEK-BY-WEEK SUMMARY
+================================================================================
+
+Wk  | Topic                          | Key Content
+----|--------------------------------|------------------------------------------
+36  | 1.1 Basic principles           | Course org, why ML, ML approaches,
+    |                                | assignment kick-off.
+37  | 1.2 Feature extraction         | OpenCV basics, colour segmentation (HSV),
+    |                                | contours, shape/colour features, ORB peek.
+38  | 1.3 Feature data exploration   | Segmentation, feature engineering, train/test
+    |                                | split, EDA (histograms, scatter, box,
+    |                                | correlation).
+39  | 1.4 Supervised ML              | k-NN, SVM, decision trees, random forests,
+    |                                | bagging, boosting, pipelines, hyperparameter
+    |                                | tuning.
+40  | 1.5 ML performance             | Confusion matrix, precision/recall/F1,
+    |                                | ROC/AUC, cross-validation, learning curves,
+    |                                | bias/variance.
+41  | 1.6 Unsupervised ML            | K-means, GMM/EM, DBSCAN, PCA, t-SNE, anomaly
+    |                                | detection.
+42  | 1.7 Regression                 | Linear, polynomial, Ridge/Lasso/Elastic Net,
+    |                                | logistic regression, softmax.
+43  | Holiday                        | -
+44  | 1.8 No class                   | -
+45  | 1.9 No class (resits)          | Full ML report due
+46  | 2.1 ANN                        | Biological neuron -> perceptron -> MLP ->
+    |                                | backprop, activation functions, TensorFlow/
+    |                                | Keras intro.
+47  | 2.2 DNN                        | Vanishing/exploding gradients, transfer
+    |                                | learning, optimizers, LR scheduling,
+    |                                | regularization, augmentation.
+48  | 2.3 CNN                        | Visual cortex inspiration, convolution,
+    |                                | pooling, batch norm, dropout, LeNet/AlexNet/
+    |                                | ResNet.
+49  | 2.4 Advanced CNN               | Object detection (YOLO, Faster R-CNN),
+    |                                | tracking, semantic segmentation,
+    |                                | autoencoders, edge computing.
+50  | 2.5 Vision Transformers        | Attention, self-attention, ViT architecture,
+    |                                | training, ViT vs CNN.
+51  | 2.6 Mind & Machine             | Cognitive science, mental representations,
+    |                                | reasoning, visual perception, memory, strong
+    |                                | vs weak AI, RL.
+52-53| Holiday                       | -
+1   | 2.7 Wrap-up                    | -
+2   | 2.8 No class                   | -
+3   | 2.9 No class                   | DL report due
+4   | 2.10 No class (resits)         | -
+
+================================================================================
+3. OBJECTIVES OF THE EXERCISES
+================================================================================
+
+Exercise Type                 | Objective
+------------------------------|-----------------------------------------------
+OpenCV tutorials              | Master image I/O, colour spaces, transforms,
+                              | drawing, contours.
+Segmentation & feature        | Convert images -> numerical feature vectors
+extraction                    | (shape, colour, texture, Hu moments, ORB).
+EDA scripts                   | Visualise class balance, feature distributions,
+                              | correlations; assess feature quality.
+Classification scripts        | Train SVM, k-NN, decision trees; use pipelines;
+                              | grid search; cross-validate.
+Performance scripts           | Build confusion matrices, classification
+                              | reports, learning curves; diagnose bias/
+                              | variance.
+Unsupervised scripts          | Cluster with K-means, GMM, DBSCAN; reduce
+                              | dimensions with PCA/t-SNE; detect anomalies.
+Regression scripts            | Fit linear/polynomial/logistic models;
+                              | regularise; evaluate with MSE/R2.
+DL quickstart                 | Build, compile, train, evaluate a shallow
+                              | neural net on Fashion-MNIST.
+CNN demos                     | Visualise convolution, pooling, feature maps;
+                              | understand kernel effects.
+TensorBoard                   | Monitor training, compare runs, visualise
+                              | graphs.
+Augmentation                  | Artificially expand dataset; understand
+                              | geometric + photometric transforms.
+Transfer learning             | Fine-tune pretrained models (MobileNet,
+                              | ResNet, ViT) on your own data.
+Hyperparameter tuning         | Use Keras Tuner / GridSearchCV to optimise
+                              | architecture and LR.
+Deployment                    | Export to TFLite, benchmark inference, deploy
+                              | to edge/web/Docker.
+
+================================================================================
+4. ASSESSMENT - ROOT STRUCTURE
+================================================================================
+
+Period 1 (Term 1): ML Project
+------------------------------
+
+Component               | Weight      | Details
+------------------------|-------------|------------------------------------------
+Quizzes 1-3             | 20%         | Individual, MCQ, Socrative room 1PTGB6PY,
+                        |             | 10 min at class start, open book, HAN
+                        |             | student number.
+Preliminary ML report   | part of 80% | Sections 1-3 (Intro, Problem Statement,
+                        |             | Data Acquisition & Exploration). ~40% of
+                        |             | final report content. Peer-reviewed by
+                        |             | another team (Excel template).
+Full ML report          | 80%         | Sections 1-9 + code appendix. Includes
+                        |             | feedback from/to another team.
+
+ML report sections:
+1. Introduction
+2. Problem statement (SMART, functional + technical requirements, prioritised)
+3. Data acquisition & exploration
+4. Feedback FROM another team
+5. Feedback TO another team
+6. Model selection, training, validation
+7. Deploy & test
+8. Conclusion
+9. References
++ Code appendices
+
+Period 2 (Term 2): DL Project
+------------------------------
+
+Component               | Weight      | Details
+------------------------|-------------|------------------------------------------
+Quizzes 4-5             | 20%         | Same format.
+DL report               | 80%         | Sections 1-7 + code appendix.
+
+DL report sections:
+1. Introduction
+2. Problem statement (updated from ML)
+3. Data augmentation & preprocessing
+4. CNN architecture, training, validation (custom CNN and transfer learning)
+5. Deploy & test
+6. Conclusion
+7. References
++ Code appendices
+
+Grading: Meeting all acceptance criteria = pass. Higher marks for depth of
+analysis, justified choices, critical reflection, technical rigour, initiative.
+
+================================================================================
+5. CLASS SCHEDULE
+================================================================================
+
+- Weekly: One class per week (see table above).
+- Quiz: First 10 min of class, Socrative room 1PTGB6PY.
+- Deadlines:
+  - Preliminary ML report: Week 40
+  - Peer review: Week 41
+  - Full ML report: Week 45
+  - DL report: Week 2.9 (Week 3 of Period 2)
+- Resits: Weeks 45 (1,2,3) and 2.10 (4,5).
+
+================================================================================
+6. PHASES
+================================================================================
+
+Phase | Name                  | Focus
+------|-----------------------|-----------------------------------------------
+0     | Software installation | Python 3.11, venv, pip install requirements.txt,
+      |                       | Git, IDE, verify OpenCV/sklearn/TF, GPU setup
+      |                       | (Colab or local CUDA).
+1     | Fundamentals          | ML basics, workflow, Python/NumPy/OpenCV
+      |                       | primer.
+2     | Data acquisition      | Controlled capture, labelling, folder
+      |                       | structure, EVML_DATA env var.
+3     | Feature engineering   | Segmentation, contour/shape/colour features,
+      |                       | Hu moments, ORB.
+4     | EDA                   | Histograms, scatter, box, correlation, class
+      |                       | balance.
+5     | Supervised ML         | k-NN, SVM, trees, forests, pipelines, grid
+      |                       | search.
+6     | Performance           | Confusion matrix, precision/recall/F1, ROC/
+      |                       | AUC, learning curves.
+7     | Unsupervised ML       | Clustering, dimensionality reduction,
+      |                       | anomaly detection.
+8     | Regression            | Linear, polynomial, regularised, logistic.
+9     | ML report             | Preliminary (wk 40) -> peer review (wk 41)
+      |                       | -> full (wk 45).
+10    | ANN/DNN               | Perceptron, MLP, backprop, optimisers,
+      |                       | regularisation.
+11    | CNN                   | Convolution, pooling, architectures,
+      |                       | transfer learning.
+12    | Advanced DL           | Object detection, segmentation, ViT, edge
+      |                       | deployment.
+13    | DL report             | Custom CNN + transfer learning + comparison.
+
+================================================================================
+7. PROPOSED ROADMAP FOR YOU
+================================================================================
+
+Sequence of Events
+------------------
+
+1. Phase 0 - Setup (now):
+   - Install Python 3.11, create evml_env, pip install -r requirements.txt.
+   - Set EVML_DATA env var.
+   - Verify: import cv2, sklearn, tensorflow.
+   - Git clone repo, set up .gitignore.
+   - Form team (2-3), choose project path (gesture / object / EVML integration).
+
+2. Weeks 36-38 - Learn & collect:
+   - Attend all classes, take quizzes.
+   - Run all example scripts (opencv_tutorial_01/02, acquire.py, segment.py,
+     extract.py, fetch_data.py, explore.py).
+   - Start data collection early with a protocol (vary angle, distance,
+     lighting, subject).
+   - Build feature extraction pipeline; explore features.
+
+3. Weeks 39-40 - Model & preliminary report:
+   - Run supervised_01-06, performance_01-03.
+   - Compare classifiers (SVM, k-NN, trees, forests).
+   - Write preliminary report (sections 1-3); submit week 40.
+   - Collect peer feedback; review another team's report.
+
+4. Weeks 41-45 - Full ML report:
+   - Finalise model, tune hyperparameters, cross-validate.
+   - Deploy (Flask/Docker/edge) and test against requirements.
+   - Write full report; submit week 45.
+
+5. Weeks 46-51 - DL project:
+   - Run tf_quickstart, tf_tensor_board, convolution_demo, pooling_demo.
+   - Build custom CNN + transfer learning model (MobileNet/ResNet/ViT).
+   - Augment data (augmentor_example, tf_data_generators).
+   - Tune with Keras Tuner / GridSearchCV.
+   - Deploy (TFLite), benchmark, document.
+
+6. Weeks 1-2.9 - DL report:
+   - Compare custom CNN vs transfer learning vs ML baseline.
+   - Visualise layers (Grad-CAM, feature maps).
+   - Submit DL report week 2.9.
+
+Additional Advice
+-----------------
+
+- Start data collection in week 36-37. It is the biggest bottleneck.
+- Use Git from day 1. Commit often.
+- Document decisions (why SVM over k-NN, why this LR, etc.) - this is what
+  separates 7s from 9s.
+- Run every script in scripts/ - they are your reference implementations.
+- Use the guides (support material/guides/) - especially
+  3_ml_classical_cv.md and 4_dl_cnn.md.
+- Take quizzes seriously - 20% of each grade.
+- Peer review is valuable - give sharp, constructive feedback; learn from
+  others.
+- Deploy early - don't leave deployment to the last week.
+- Compare ML vs DL - the DL report requires this.
+- Set random seeds - reproducibility.
+- Watch for data leakage - split before scaling.
+- Use pipelines - sklearn Pipeline prevents leakage and simplifies code.
+- Read the templates carefully - acceptance criteria are your checklist.
+- Attend all classes - quizzes are at the start; no re-entry.
+- Use Colab if your laptop lacks GPU.
+- Keep a log - experiments, results, decisions.
+- Ask for help early - stuck >3 days? Ask instructor/peers.
+
+================================================================================
+END OF DOCUMENT
+================================================================================
