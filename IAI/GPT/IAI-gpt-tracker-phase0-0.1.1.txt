@@ -1,0 +1,209 @@
+================================================================================
+0.1.1 INSTALL PYTHON 3.11 - ISSUES & STEPS LOG
+================================================================================
+
+CONTEXT
+-------
+- User runs 2 Windows laptops in sync.
+- Preference: constant, username-independent paths across both laptops.
+- Target base Python path: C:\dev\python311\
+- Target venv path:       C:\dev\envs\evml_env\
+- Use case: IAI module (requires Python 3.11 for TensorFlow 2.15 / torch 2.2
+  wheel compatibility). Python 3.14 is NOT supported by requirements.txt.
+- Python install manager (py) already present as version 26.3.
+
+--------------------------------------------------------------------------------
+STEP-BY-STEP LOG
+--------------------------------------------------------------------------------
+
+[1] FIRST ATTEMPT - Python 3.14.8 auto-installed
+    Command:  python3 --version (or python --version)
+    Result:   Auto-triggered download and install of Python 3.14.8.
+    Problem:  3.14 is incompatible with course requirements (no wheels for
+              tensorflow~=2.15.0, torch~=2.2.0).
+    Also:     Prompt appeared about long paths > 260 chars. Answered y.
+              Prompt about global shortcuts directory. Answered y.
+
+[2] REBOOT REQUIRED
+    Reason:   Long path support only takes effect after reboot.
+    Action:   Rebooted the system.
+
+[3] UNINSTALL 3.14
+    Command:  py uninstall 3.14
+    Result:   Removed Python 3.14.8.
+    Problem:  Immediately after, running python --version re-triggered a
+              fresh download of 3.14.8. This happened TWICE.
+    Cause:    The python.exe shim was still registered to 3.14. Invoking the
+              shim triggered the manager's "auto-install on demand" behaviour.
+
+[4] INSTALL 3.11 (default location) - worked, but not what user wanted
+    Command:  py install 3.11
+    Result:   Python 3.11.9 installed to
+              C:\Users\hossa\AppData\Local\Python\pythoncore-3.11-64\
+    Problem:  Path contains username "hossa". Will break if second laptop
+              uses a different Windows username. Defeats the constant-path
+              goal.
+
+[5] UNINSTALL 3.11, RETRY TO CUSTOM PATH - failed
+    Command:  py uninstall 3.11
+              py install 3.11 C:/dev/Python311
+    Result:   [ERROR] Failed to find a suitable install for 'C:\dev\Python311'.
+    Cause:    py install treats positional arguments as version identifiers,
+              not install paths. It tried to find a Python "version" named
+              "C:\dev\Python311".
+
+[6] CREATED TARGET FOLDER MANUALLY, RETRY - still failed
+    Command:  mkdir C:\dev\python311
+              py install 3.11 C:\dev\python311
+    Result:   Same [ERROR] as before.
+    Cause:    Same misunderstanding: path must be passed via flag, not
+              positionally.
+
+[7] CORRECT SYNTAX - SUCCESS
+    Command:  py install 3.11 --target C:\dev\python311
+    Result:   Python 3.11.9 extracted to C:\dev\python311\.
+    Verified: C:\dev\python311\python.exe --version  ->  Python 3.11.9
+
+[8] POST-INSTALL CHECKS - two problems found
+    Test:     python --version
+    Result:   "Python was not found; run without arguments to install from
+              the Microsoft Store..."
+    Cause:    Microsoft Store alias stubs in
+              %LOCALAPPDATA%\Microsoft\WindowsApps\ intercept python.exe and
+              python3.exe before PATH resolution.
+
+    Test:     py -0p
+    Result:   Only listed uv's 3.14.7 at
+              C:\Users\hossa\AppData\Roaming\uv\python\...
+    Cause:    py install --target does NOT register the install with the py
+              launcher. Custom targets are treated as standalone bundles.
+
+[9] DISABLED MICROSOFT STORE ALIASES
+    Location: Settings -> Apps -> Advanced app settings -> App execution
+              aliases.
+    Disabled: Python (default)              -> python.exe
+              Python (default)              -> python3.exe
+              Python (default) windowed     -> pythonw.exe
+    Kept ON:  Python install manager        -> pymanager.exe
+              Python install manager        -> py.exe
+              Python install manager (win)  -> pywmanager.exe / pyw.exe
+              (All non-Python entries untouched.)
+    Why:      The three "default" entries are Windows Store stubs. The three
+              "install manager" entries are the real launcher and manager.
+
+[10] ADDED C:\dev\python311 TO USER PATH
+    Command:  [Environment]::SetEnvironmentVariable(
+                "Path",
+                [Environment]::GetEnvironmentVariable("Path","User")
+                  + ";C:\dev\python311;C:\dev\python311\Scripts",
+                "User"
+              )
+    Note:     No admin rights needed (User scope).
+    Note:     New terminal required for change to take effect.
+    Issue:    C:\dev\python311\Scripts does NOT exist after py install
+              --target. The --target install is a minimal bundle:
+                 - python.exe  (present)
+                 - Scripts\    (absent)
+                 - pip.exe     (absent, not bundled)
+              Nonexistent PATH entries are silently ignored by Windows, so
+              the extra entry is harmless but unnecessary.
+    Fix:      Trim PATH to only include the existing folder.
+
+[11] TRIMMED PATH (optional cleanup)
+    Command:  [Environment]::SetEnvironmentVariable(
+                "Path",
+                [Environment]::GetEnvironmentVariable("Path","User")
+                  -replace ";C:\\dev\\python311\\Scripts","",
+                "User"
+              )
+    Effect:   PATH now contains only C:\dev\python311 (which exists).
+    Note:     No functional change; Scripts entry was inert.
+
+[12] FINAL VERIFICATION
+    Command:  python --version
+    Result:   Python 3.11.9
+    Status:   SUCCESS
+
+    Command:  py -0p
+    Result:   Only uv's 3.14.7 listed.
+    Decision: Ignore py launcher for this course. Use `python` directly.
+              py is not required by any course workflow; python -m venv works
+              with PATH-resolved python.
+
+--------------------------------------------------------------------------------
+KEY LESSONS / GOTCHAS
+--------------------------------------------------------------------------------
+
+1. py install syntax:
+   - WRONG:  py install 3.11 C:\dev\python311
+   - RIGHT:  py install 3.11 --target C:\dev\python311
+
+2. py install --target does NOT register with the py launcher:
+   - py -0p will not show it.
+   - py -3.11 will not work.
+   - Use `python` directly instead.
+
+3. py install --target is a MINIMAL bundle:
+   - Provides python.exe only.
+   - Does NOT provide Scripts\ folder.
+   - Does NOT provide pip.exe.
+   - This is fine for our use case: pip comes bundled inside the venv
+     (created via `python -m venv`), not needed at the base level.
+
+4. Microsoft Store Python stubs:
+   - Ship with Windows, live in %LOCALAPPDATA%\Microsoft\WindowsApps\.
+   - Sit high on PATH, intercept python/python3/pythonw.
+   - Must be disabled via App Execution Aliases, not deleted.
+
+5. py uninstall auto-reinstall quirk:
+   - After uninstalling a version, the python shim may re-trigger the
+     manager's auto-download on next invocation.
+   - Mitigation: install the replacement version promptly, or run
+     `py uninstall --purge <version>` to remove shims.
+
+6. Long path support (>260 chars):
+   - Needed for TensorFlow, PyTorch, and deep nested package trees.
+   - Enable via py manager prompt or Group Policy.
+   - Requires reboot to take effect.
+
+7. Username in paths breaks cross-laptop sync:
+   - Default py install location: C:\Users\<username>\AppData\Local\Python\
+   - Fix: use --target to install to a username-free path like
+     C:\dev\python311\.
+
+8. Custom target vs py launcher registry:
+   - py launcher uses its own registry config.
+   - Custom targets are not registered automatically.
+   - Workaround: rely on PATH instead of py.
+
+9. uv-managed Python:
+   - uv (Astral) maintains its own Python installs under
+     C:\Users\<user>\AppData\Roaming\uv\python\.
+   - These are not the same as py-managed installs.
+   - Safe to leave alone if unused by course.
+
+--------------------------------------------------------------------------------
+FINAL STATE (as of end of 0.1.1)
+--------------------------------------------------------------------------------
+
+Base Python:      C:\dev\python311\python.exe   (3.11.9)
+Contents:         python.exe only. No Scripts\, no pip.
+PATH entries:     C:\dev\python311
+py launcher:      Not aware of 3.11 custom install.
+                  Only knows uv's 3.14.7.
+python command:   Resolves to 3.11.9 (via PATH).
+Store aliases:    python.exe, python3.exe, pythonw.exe  DISABLED.
+Course tool:      Use `python` directly. Ignore `py`.
+
+Implication:      pip is NOT globally available in this install.
+                  It WILL be available inside the venv (once created),
+                  because `python -m venv` bootstraps pip into the venv's
+                  Scripts\ folder.
+
+Next:             0.1.2 Create virtual environment
+                  Target: C:\dev\envs\evml_env\
+                  Command: python -m venv C:\dev\envs\evml_env
+
+================================================================================
+END OF LOG
+================================================================================

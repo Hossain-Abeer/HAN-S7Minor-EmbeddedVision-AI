@@ -124,62 +124,63 @@ Phase | Milestone                          | IAI Assessment Link
 
 Phase 0 - Setup & Scope
 -----------------------
-- Install Python 3.11, venv, pip install -r requirements.txt.
-- Set EVML_DATA, verify OpenCV/sklearn/TF.
-- Git repo, IDE, Colab if needed.
-- Define OCR subcomponent: classify ball numbers 1-15 + cue ball. Snooker  excluded.
-- Form team (if IAI requires 2-3; solo still possible but check).
+0.1 Install Python 3.11, venv, pip install -r requirements.txt.
+0.2 Set EVML_DATA, verify OpenCV/sklearn/TF.
+0.3 Git repo, IDE, Colab if needed.
+0.4 Define OCR subcomponent: classify ball numbers 1-15 + cue ball. Snooker excluded.
+0.5 Form team (if IAI requires 2-3; solo still possible but check).
 
 Phase 1 - Data Acquisition & Feature Engineering
 ------------------------------------------------
-- Build controlled capture setup: overhead camera, stable lighting, fixed  distance.
-- Capture images of billiard balls with visible numbers. Vary angle, distance,  lighting, background.
-- Label each ball crop with number (1-15) or cue.
-- Split data: train/validation/test, stratified.
-- Extract classical features: colour histograms, Hu moments, contour, ORB.
-- EDA: class balance, feature distributions, correlations.
-- Preprocessing: cleaning, scaling, pipeline.
-- Deliverable: Preliminary ML report Sections 1-3 (wk 40).
+1.1 Build controlled capture setup: overhead camera, stable lighting, fixed distance.
+1.2 Capture images of billiard balls with visible numbers. Vary angle, distance, lighting, background.
+1.3 Label each ball crop with number (1-15) or cue.
+1.4 Split data: train/validation/test, stratified.
+1.5 Extract classical features: colour histograms, Hu moments, contour, ORB.
+1.6 EDA: class balance, feature distributions, correlations.
+1.7 Preprocessing: cleaning, scaling, pipeline.
+1.8 Deliverable: Preliminary ML report Sections 1-3 (wk 40).
 
 Phase 2 - Classical ML Model & Preliminary Report
 -------------------------------------------------
-- Train SVM, k-NN, random forest on features.
-- Cross-validate, grid search hyperparameters.
-- Evaluate: confusion matrix, precision/recall/F1 per digit.
-- Write preliminary report, submit wk 40.
-- Peer review another team (wk 41).
-- Incorporate feedback.
+2.1 Train SVM, k-NN, random forest on features.
+2.2 Cross-validate, grid search hyperparameters.
+2.3 Evaluate: confusion matrix, precision/recall/F1 per digit.
+2.4 Write preliminary report, submit wk 40.
+2.5 Peer review another team (wk 41).
+2.6 Incorporate feedback.
 
 Phase 3 - Full ML Model & Report
 --------------------------------
-- Finalise best classical model.
-- Deploy pipeline (Flask/Docker/edge) on SBC or training machine.
-- Test against SMART requirements (accuracy, speed, lighting, distance).
-- Write full ML report Sections 1-9 (wk 45).
-- Include feedback sheets from/to another team.
+3.1 Finalise best classical model.
+3.2 Deploy pipeline (Flask/Docker/edge) on SBC or training machine.
+3.3 Test against SMART requirements (accuracy, speed, lighting, distance).
+3.4 Write full ML report Sections 1-9 (wk 45).
+3.5 Include feedback sheets from/to another team.
 
 Phase 4 - Custom CNN & Transfer Learning
 ----------------------------------------
-- Build custom CNN for OCR on ball crops.
-- Augment data: rotation, blur, perspective, lighting, noise.
-- Train, validate, tune (Keras Tuner / GridSearchCV).
-- Transfer learning: MobileNet, ResNet, ViT. Freeze layers, fine-tune.
-- Compare custom CNN vs transfer learning.
+4.1 Build custom CNN for OCR on ball crops.
+4.2 Augment data: rotation, blur, perspective, lighting, noise.
+4.3 Train, validate, tune (Keras Tuner / GridSearchCV).
+4.4 Transfer learning: MobileNet, ResNet, ViT. Freeze layers, fine-tune.
+4.5 Compare custom CNN vs transfer learning.
 
 Phase 5 - DL Deployment & Comparison
 ------------------------------------
-- Convert to TFLite, quantize, prune if needed.
-- Deploy on SBC. Benchmark inference speed, accuracy.
-- Test plan: accuracy, FPS, lighting, distance.
-- Compare DL vs ML approach.
+5.1 Convert to TFLite, quantize, prune if needed.
+5.2 Deploy on SBC. Benchmark inference speed, accuracy.
+5.3 Test plan: accuracy, FPS, lighting, distance.
+5.4 Compare DL vs ML approach.
 
 Phase 6 - Final DL Report & Integration
 ---------------------------------------
-- Write DL report Sections 1-7 (wk 2.9).
-- Include custom CNN + transfer learning, augmentation, training, deployment,  comparison with ML.
-- Visualise layers (feature maps, Grad-CAM).
-- Integrate OCR subcomponent into project's rule logic (optional, if time).
-- Submit DL report.
+6.1 Write DL report Sections 1-7 (wk 2.9).
+6.2 Include custom CNN + transfer learning, augmentation, training, deployment, comparison with ML.
+6.3 Visualise layers (feature maps, Grad-CAM).
+6.4 Integrate OCR subcomponent into project's rule logic (optional, if time).
+6.5 Submit DL report.
+
 
 KEY REMINDERS:
 - Scope all IAI work to OCR subcomponent only.
