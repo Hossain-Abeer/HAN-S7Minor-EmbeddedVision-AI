@@ -1,0 +1,321 @@
+================================================================================
+0.1.2 & 0.1.3 - VENV CREATION & REQUIREMENTS INSTALL - ISSUES & STEPS LOG
+================================================================================
+
+CONTEXT
+-------
+- Continuation of Phase 0 setup, following successful 0.1.1 (Python 3.11.9 at
+  C:\dev\python311\).
+- User preference: username-independent venv path across two laptops.
+- Target venv path: C:\dev\envs\IAI-env\
+- Base Python:     C:\dev\python311\python.exe  (3.11.9, minimal bundle, no
+                   global pip).
+- Shell:           PowerShell.
+- requirements.txt sourced from course repo, saved locally at:
+                   D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI\
+
+================================================================================
+PART A - 0.1.2 CREATE VIRTUAL ENVIRONMENT
+================================================================================
+
+STEP-BY-STEP LOG
+----------------
+
+[1] USER-REDEFINED TARGET PATH
+    Original plan:     C:\dev\envs\evml_env\
+    User preference:   C:\dev\envs\IAI-env\
+    Rationale:         More descriptive of the actual module (IAI/EVML).
+    Action:            Adopted C:\dev\envs\IAI-env\ throughout.
+
+[2] MANUAL FOLDER CREATION
+    Command:  mkdir C:\dev\envs\IAI-env\
+    Result:   Folder created successfully.
+    Note:     Redundant - `python -m venv` creates the target directory
+              itself. Pre-creating is harmless; the venv command populates
+              an empty folder without complaint.
+
+[3] VENV BOOTSTRAP
+    Command:  python -m venv C:\dev\envs\IAI-env
+    Result:   Silent success (no output on success).
+    Effect:   Created:
+                C:\dev\envs\IAI-env\Scripts\        (activate, python.exe, pip.exe)
+                C:\dev\envs\IAI-env\Lib\site-packages\
+                C:\dev\envs\IAI-env\pyvenv.cfg
+    Cause:    `python -m venv` bootstraps pip into the venv's Scripts\
+              folder, even though the base Python install
+              (C:\dev\python311\) has no pip.
+
+[4] FIRST ACTIVATION ATTEMPT - FAILED SILENTLY
+    Command:  C:\dev\envs\IAI-env\Scripts\activate
+    Result:   No error, no prompt change, no activation.
+    Cause:    Two problems compounded:
+                (a) PowerShell does not execute extensionless scripts.
+                    The file `activate` is the bash/sh variant.
+                (b) The PowerShell variant is `Activate.ps1`, which must
+                    be invoked with its explicit extension.
+    Symptom:  Prompt stayed `PS C:\Users\hossa>`. No `(IAI-env)` prefix.
+
+[5] MISLEADING VERIFICATION - python --version showed 3.11.9
+    Command:  python --version
+    Result:   Python 3.11.9
+    Misleading because: version matched the venv's base (both are 3.11.9),
+              giving false impression that activation succeeded.
+    Diagnosis: `Get-Command python` revealed:
+                 Source = C:\dev\python311\python.exe
+               i.e. the GLOBAL Python, not the venv.
+    Confirms: Version equality alone is NOT proof of activation.
+              Must check path, not version.
+
+[6] SECOND DIAGNOSTIC - where python returned nothing
+    Command:  where python
+    Result:   Empty output.
+    Cause:    In PowerShell, `where` is an alias for `Where-Object`, a
+              cmdlet for filtering collections. It does not search PATH.
+    Fix:      Use `where.exe` (explicit binary) or `Get-Command python`.
+
+[7] CONFIRMED VENV INACTIVE
+    Command:  $env:VIRTUAL_ENV
+    Result:   Empty (no value).
+    Meaning:  The activate script sets $env:VIRTUAL_ENV as its primary
+              marker. Empty means not activated.
+
+[8] EXECUTION POLICY CHECK
+    Command:  Get-ExecutionPolicy -List
+    Result:   CurrentUser = RemoteSigned
+    Conclusion: Already permissive enough for local unsigned scripts.
+                Execution policy was NOT the blocker.
+
+[9] SET EXECUTION POLICY (redundant, harmless)
+    Command:  Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy
+              RemoteSigned
+    Result:   No-op (already RemoteSigned).
+    Note:     Kept in log for completeness; did not change behaviour.
+
+[10] SECOND ACTIVATION ATTEMPT - SUCCESS
+    Command:  C:\dev\envs\IAI-env\Scripts\Activate.ps1
+    Result:   Prompt now shows `(IAI-env) PS C:\Users\hossa>`
+    Difference from [4]: Explicit `.ps1` extension.
+
+[11] VERIFIED ACTIVATION
+    Commands:
+      $env:VIRTUAL_ENV       -> C:\dev\envs\IAI-env          [OK]
+      python --version       -> Python 3.11.9               [OK]
+      where.exe python       -> C:\dev\envs\IAI-env\Scripts\python.exe
+                                C:\dev\python311\python.exe
+    Meaning:  Venv's python.exe resolves FIRST. Correct precedence.
+              Global Python still visible but shadowed.
+
+KEY LESSONS / GOTCHAS
+---------------------
+
+1. PowerShell activation requires the .ps1 variant:
+   - WRONG:  ...\Scripts\activate
+   - RIGHT:  ...\Scripts\Activate.ps1
+
+2. Version output is not proof of activation:
+   - Same-version venvs are indistinguishable by version alone.
+   - Always verify with $env:VIRTUAL_ENV or where.exe python.
+
+3. `where` in PowerShell is not the PATH search tool:
+   - Use `where.exe` or `Get-Command`.
+
+4. `python -m venv` creates the folder; mkdir is redundant.
+
+5. ExecutionPolicy RemoteSigned (default on many Windows setups) is
+   sufficient. No admin needed if Scope = CurrentUser.
+
+6. Base Python without pip is fine:
+   - venv bootstraps pip into the venv's own Scripts\ folder.
+
+7. Activation is per-shell-session:
+   - Open a new terminal -> venv is not active -> must re-run Activate.ps1.
+
+================================================================================
+PART B - 0.1.3 INSTALL REQUIREMENTS VIA PIP
+================================================================================
+
+STEP-BY-STEP LOG
+----------------
+
+[1] CLARIFIED MODEL: requirements.txt vs venv path
+    Question from user: "If requirements.txt lives in D:\..., why does pip
+    install into C:\dev\envs\IAI-env\?"
+    Answer:
+      - requirements.txt is INPUT (a list).
+      - site-packages is OUTPUT (install destination).
+      - pip installs to the ACTIVE interpreter's site-packages,
+        regardless of CWD.
+      - `-r requirements.txt` is a RELATIVE path resolved against CWD.
+      - So: cd to the file's folder, then run pip. The install still
+        goes to the venv.
+
+[2] CLARIFIED PROMPT ANATOMY
+    Prompt format:
+        (IAI-env) PS D:\HAN\...\IAI>
+         \_____/ \/ \___________/
+          venv    shell   CWD
+    - Venv label = cosmetic.
+    - Shell      = interpreter of commands.
+    - CWD        = where relative paths resolve.
+    - Install target = determined by which pip.exe runs (PATH), not CWD.
+
+[3] CHANGED DIRECTORY
+    Command:  cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI"
+    Result:   Prompt updated to reflect new CWD.
+    Reason:   So `-r requirements.txt` resolves to the local file.
+
+[4] UPGRADED PIP
+    Command:  python -m pip install --upgrade pip
+    Result:   pip 24.0 -> pip 26.2.1
+    Notes:
+      - `python -m pip` (not bare `pip`) guarantees targeting the venv's
+        pip via the active `python`.
+      - Downloaded 1.8 MB wheel, uninstalled old, installed new.
+
+[5] INSTALLED REQUIREMENTS
+    Command:  pip install -r requirements.txt
+    Duration: ~90 seconds end-to-end (24.5 MB/s typical download speed).
+    Result:   "Successfully installed ..." — no errors.
+
+[6] NOTABLE RESOLVER BEHAVIOUR
+    (a) opencv-python backtracking:
+        - Initial download:  opencv-python-5.0.0.93
+        - Backtracked to:    opencv-python-4.11.0.86
+        - Cause: OpenCV 5.x requires numpy>=2.0; conflicts with course
+          pin numpy<2.0.
+        - Outcome: pip correctly chose a compatible 4.x wheel.
+
+    (b) tf-keras backtracking:
+        - Explored 2.21.0 -> 2.20.1 -> ... -> 2.15.1
+        - Selected: 2.15.1
+        - Cause: compatibility with tensorflow 2.15.1.
+        - Outcome: correct matching pair.
+
+    (c) imutils built from source:
+        - Only non-wheel package.
+        - Built imutils-0.5.4-py3-none-any.whl locally.
+        - Harmless; requires only Python + setuptools (already present).
+
+[7] MAJOR DOWNLOADS (for size awareness)
+    tensorflow-intel       300.9 MB
+    torch (CPU)            198.6 MB
+    opencv-python           39.5 MB
+    libclang                26.4 MB
+    scipy                   46.2 MB
+    numpy                   15.8 MB
+    pandas                  10.6 MB
+    scikit-learn            10.6 MB
+    matplotlib               9.3 MB
+    transformers             8.8 MB
+    Pillow                   7.2 MB
+    sympy                    6.3 MB
+    tensorboard              5.5 MB
+    grpcio                   5.3 MB
+    cryptography             3.8 MB
+    h5py                     3.2 MB
+    (plus ~40 smaller wheels)
+    Total approximate disk footprint: ~700 MB in site-packages.
+
+[8] VERSION VERIFICATION
+    Command:
+      python -c "import numpy, scipy, pandas, sklearn, cv2, tensorflow as tf,
+      torch, transformers, keras, matplotlib, seaborn; ..."
+    Output:
+      numpy  1.26.4
+      tf     2.15.1
+      torch  2.2.2+cpu
+      cv2    4.11.0
+      keras  2.15.0
+
+[9] WARNINGS (informational, non-blocking)
+    (a) oneDNN custom operations are on.
+        - Intel CPU math acceleration. Not an error.
+        - Suppress via: $env:TF_ENABLE_ONEDNN_OPTS = "0"
+
+    (b) tf.losses.sparse_softmax_cross_entropy is deprecated.
+        - Triggered internally by `import keras`.
+        - Course code uses the class form
+          SparseCategoricalCrossentropy, not the deprecated symbol.
+        - Suppress via: $env:TF_CPP_MIN_LOG_LEVEL = "3"
+
+[10] CONSTRAINT COMPLIANCE TABLE
+    Package         Installed    Constraint       Status
+    --------------- ------------ ---------------- ------
+    numpy           1.26.4       <2.0             OK
+    scipy           1.12.0       <1.13            OK
+    pandas          2.1.4        <2.2             OK
+    scikit-learn    1.4.2        <1.5             OK
+    scikeras        0.12.0       <0.13            OK
+    tensorflow      2.15.1       ~=2.15.0         OK
+    torch           2.2.2        ~=2.2.0          OK
+    torchvision     0.17.2       ~=0.17.0         OK
+    transformers    4.39.3       <4.40            OK
+    Augmentor       0.2.12       ==0.2.12         OK
+    opencv-python   4.11.0.86    unpinned         OK
+
+KEY LESSONS / GOTCHAS
+---------------------
+
+1. requirements.txt is input, site-packages is output. CWD only matters
+   for locating the file, not for install destination.
+
+2. Use `python -m pip` for upgrades inside venvs — guarantees the right
+   pip.
+
+3. pip resolver "looking at multiple versions" is normal, not a failure.
+   It is backtracking to satisfy upper bounds.
+
+4. Upper-bound pins force intentional downgrades:
+   - opencv-python 5.x -> 4.11 (numpy 1.x compatibility)
+   - tf-keras 2.21  -> 2.15 (tensorflow 2.15 compatibility)
+
+5. CPU-only torch (`+cpu` suffix) is expected without CUDA installation.
+   Use Google Colab for GPU workloads.
+
+6. Total install ~700 MB. Cleanup tip:
+   - pip cache (C:\Users\<user>\AppData\Local\pip\cache\) can be purged
+     after successful install to reclaim ~500 MB.
+
+7. To silence TensorFlow warnings permanently:
+     [Environment]::SetEnvironmentVariable(
+       "TF_CPP_MIN_LOG_LEVEL", "3", "User")
+     [Environment]::SetEnvironmentVariable(
+       "TF_ENABLE_ONEDNN_OPTS", "0", "User")
+
+8. Backtracking takes time. For slow connections, consider:
+   - `pip install --prefer-binary -r requirements.txt`
+   - or a mirror (`-i https://pypi.org/simple/` default; alternatives
+     exist for regional speedups).
+
+9. Activate before every session:
+   - `C:\dev\envs\IAI-env\Scripts\Activate.ps1`
+   - Otherwise pip/python resolve to global and installs leak.
+
+--------------------------------------------------------------------------------
+FINAL STATE (as of end of 0.1.3)
+--------------------------------------------------------------------------------
+
+Base Python:      C:\dev\python311\python.exe        (3.11.9)
+Venv:             C:\dev\envs\IAI-env\
+Venv Python:      C:\dev\envs\IAI-env\Scripts\python.exe
+Venv pip:         C:\dev\envs\IAI-env\Scripts\pip.exe (26.2.1)
+Site-packages:    C:\dev\envs\IAI-env\Lib\site-packages\
+requirements:     D:\HAN\...\IAI\requirements.txt
+Shell state:      (IAI-env) active in current PowerShell session.
+
+Verified imports: numpy 1.26.4 | tf 2.15.1 | torch 2.2.2+cpu |
+                  cv2 4.11.0 | keras 2.15.0
+
+Status:           0.1.1 COMPLETE
+                  0.1.2 COMPLETE
+                  0.1.3 COMPLETE
+                  Phase 0.1 COMPLETE
+
+Next:             0.2.1 Set EVML_DATA environment variable
+                  0.2.2 Verify OpenCV import
+                  0.2.3 Verify scikit-learn import
+                  0.2.4 Verify TensorFlow import
+
+================================================================================
+END OF LOG
+================================================================================

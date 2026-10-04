@@ -1,0 +1,275 @@
+SOFTWARE COMPONENTS - ROLE, ABSENCE, DATA FLOW
+==============================================
+
+================================================================================
+CORE SCIENTIFIC COMPUTING
+================================================================================
+
+numpy<2.0
+---------
+Role:        N-dimensional arrays, vectorised math. Foundation for everything
+             else.
+If absent:   Nothing works. OpenCV, sklearn, TF, torch all require it.
+Data flow:   Images -> numpy arrays -> features -> tensors.
+
+scipy<1.13
+----------
+Role:        Scientific algorithms (stats, signal, spatial, optimization,
+             distance metrics).
+If absent:   sklearn partially breaks (clustering, distance computations, some
+             solvers).
+Why pinned:  scipy >=1.13 pulls numpy >=2.0 conflicts.
+
+pandas<2.2
+----------
+Role:        Tabular data (DataFrames). CSV I/O, joins, aggregation, metadata
+             handling.
+If absent:   You'd read CSVs manually; EDA and reporting become painful.
+
+================================================================================
+MACHINE LEARNING
+================================================================================
+
+scikit-learn<1.5
+----------------
+Role:        Classical ML - SVM, k-NN, RF, DT, PCA, pipelines, GridSearchCV,
+             metrics (confusion matrix, precision/recall/F1), cross-validation,
+             scaling.
+If absent:   No classical ML project. You'd hand-code SVM/KNN.
+Data flow:   feature matrix X + labels y -> fit() -> predict() -> metrics.
+
+scikeras<0.13
+-------------
+Role:        Adapter so Keras models look like sklearn estimators -> lets you
+             use GridSearchCV on neural nets.
+If absent:   Hyperparameter search on Keras would need manual loops.
+Why pinned:  0.13+ assumes Keras 3, incompatible with TF 2.15.
+
+keras-tuner
+-----------
+Role:        Automated hyperparameter search for Keras (RandomSearch,
+             Hyperband, Bayesian).
+If absent:   Manual trial-and-error for layer sizes, LR, etc.
+
+================================================================================
+COMPUTER VISION
+================================================================================
+
+opencv-python
+-------------
+Role:        Image/video I/O, colour conversion (BGR<->HSV), thresholding,
+             contours, morphology, Hu moments, ORB, drawing, camera capture.
+If absent:   No image pipeline. Everything would be custom numpy.
+Data flow:   frame -> BGR array -> HSV -> mask -> contour -> features.
+
+imutils
+-------
+Role:        OpenCV convenience wrappers - resize, rotate_bound,
+             grab_contours, VideoStream.
+If absent:   More boilerplate; not fatal.
+
+================================================================================
+DEEP LEARNING - TENSORFLOW STACK
+================================================================================
+
+tensorflow~=2.15.0
+------------------
+Role:        Neural networks, training loop, Keras API, callbacks, TFLite
+             conversion.
+If absent:   No DL project.
+Why pinned:  2.16+ defaults to Keras 3, breaks course code.
+Data flow:   numpy arrays -> tf.data -> layers -> gradients -> weights.
+
+tensorflow-hub
+--------------
+Role:        Download pretrained models (MobileNet, ResNet, etc.) as reusable
+             modules.
+If absent:   Transfer learning requires manual weight downloads.
+
+================================================================================
+DEEP LEARNING - PYTORCH STACK (FOR ViT)
+================================================================================
+
+torch~=2.2.0
+------------
+Role:        Alternative DL framework. Used in ViT example (Hugging Face
+             transformers).
+If absent:   ViT examples fail.
+
+torchvision~=0.17.0
+-------------------
+Role:        Image transforms, datasets (MNIST), pretrained torchvision models.
+Must pair:   With torch version.
+
+transformers<4.40
+-----------------
+Role:        Hugging Face library - loads ViTForImageClassification, pretrained
+             ViT weights.
+If absent:   ViT demo won't run.
+Why pinned:  4.40+ changes imports/APIs.
+
+================================================================================
+VISUALIZATION
+================================================================================
+
+matplotlib
+----------
+Role:        All plots - histograms, scatter, box, learning curves, feature
+             maps, confusion matrix.
+If absent:   No way to inspect data or report figures.
+
+seaborn
+-------
+Role:        Statistical plots on top of matplotlib - heatmaps, countplots,
+             boxplots, violinplots.
+If absent:   Fall back to matplotlib; more code, uglier output.
+
+================================================================================
+DATA AUGMENTATION
+================================================================================
+
+Augmentor==0.2.12
+-----------------
+Role:        Offline augmentation - rotate, flip, shear, skew,
+             colour/brightness/contrast.
+If absent:   Use Keras ImageDataGenerator / RandomFlip layers instead (online).
+Why pinned:  Unmaintained; newer Pillow/numpy break it.
+
+================================================================================
+UTILITIES
+================================================================================
+
+tqdm
+----
+Role:        Progress bars in loops/training.
+If absent:   No feedback; cosmetic only.
+
+requests
+--------
+Role:        HTTP downloads (UCI datasets, model weights if not via TF Hub).
+If absent:   Manual download for some regression scripts.
+
+pyyaml
+------
+Role:        YAML config parsing.
+If absent:   Minor; only some scripts use it.
+
+================================================================================
+TESTING
+================================================================================
+
+pytest, pytest-html
+-------------------
+Role:        Run the tests/ folder; validate scripts/guides.
+If absent:   Can't run course's own validation suite.
+
+anthropic
+---------
+Role:        Claude API for the "student agent" test that reviews guides.
+If absent:   test_student_path.py skips.
+
+================================================================================
+CHAIN OF EVENTS - TYPICAL DATA FLOW
+================================================================================
+
+Classical ML Pipeline (Term 1)
+------------------------------
+
+[Camera / VideoStream]  <- opencv-python + imutils
+        |
+        v frame (numpy array, BGR)
+[Preprocess]  <- opencv-python (blur, cvtColor, inRange, morphology)
+        |
+        v masked BW image
+[Segment]  <- opencv-python (findContours, drawContours)
+        |
+        v contour (numpy)
+[Feature Extraction]  <- opencv-python (contourArea, HuMoments, ORB)
+        |
+        v feature vector (numpy)
+[Stack into matrix]  <- numpy (vstack), pandas (for CSV/metadata)
+        |
+        v X (n_samples x n_features), y (labels)
+[EDA]  <- pandas + matplotlib + seaborn
+        |
+        v insights -> feature selection / scaling
+[Preprocess Pipeline]  <- sklearn (Pipeline, StandardScaler)
+        |
+        v scaled X
+[Train + Validate]  <- sklearn (SVM / kNN / RF), GridSearchCV
+        |
+        v trained model
+[Evaluate]  <- sklearn (confusion_matrix, classification_report)
+        |
+        v metrics -> report (matplotlib / seaborn figures)
+[Deploy]  <- joblib / Flask / Docker / edge
+
+Deep Learning Pipeline (Term 2)
+-------------------------------
+
+[Image folders]  <- opencv-python (or Keras loaders)
+        |
+        v raw images
+[Augmentation]  <- Augmentor (offline) OR Keras RandomFlip/Rotation/Zoom
+                   (online)
+        |
+        v augmented dataset
+[Preprocessing]  <- numpy / tf.keras.utils.image_dataset_from_directory
+        |
+        v normalized tensors (tf.data.Dataset)
+[Model Build]  <- tensorflow/keras (Sequential or Functional)
+        |
+        +-- Custom CNN: Conv2D -> Pool -> Dense
+        +-- Transfer: tensorflow-hub (MobileNet/ResNet) OR transformers (ViT)
+        |
+        v model
+[Train]  <- tensorflow (fit, callbacks: EarlyStopping, TensorBoard)
+        |
+        v history
+[Tune]  <- keras-tuner OR scikeras + GridSearchCV
+        |
+        v best hyperparameters -> retrain
+[Evaluate]  <- sklearn (confusion_matrix, classification_report)
+               tensorflow (predict, evaluate)
+        |
+        v metrics, confusion matrix, feature maps, Grad-CAM
+[Visualize]  <- matplotlib + seaborn
+        |
+        v figures for report
+[Deploy]  <- tensorflow.lite (convert + quantize)
+        |
+        v model.tflite -> SBC (Raspberry Pi / Coral / Jetson)
+[Inference]  <- tflite.Interpreter
+
+ViT Pipeline (specific)
+-----------------------
+
+MNIST images  <- torchvision.datasets.MNIST
+        |
+        v transforms (Resize, Grayscale, Normalize)
+[DataLoader]  <- torch.utils.data
+        |
+        v batches (tensors)
+[ViT Model]  <- transformers.ViTForImageClassification.from_pretrained
+        |
+        v logits
+[Train classifier head]  <- torch (AdamW, CrossEntropyLoss)
+        |
+        v predictions
+[Evaluate]  <- sklearn.metrics + matplotlib/seaborn
+
+================================================================================
+KEY INSIGHT
+================================================================================
+
+All roads lead through numpy for arrays and matplotlib/seaborn for
+visualization.
+
+opencv-python handles image I/O and preprocessing.
+sklearn handles classical ML and metrics.
+tensorflow/torch handle DL.
+transformers/tensorflow-hub handle pretrained models.
+
+================================================================================
+END OF DOCUMENT
+================================================================================
