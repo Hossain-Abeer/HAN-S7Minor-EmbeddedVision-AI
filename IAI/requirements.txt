@@ -1,0 +1,59 @@
+# EVML-EVD3 dependencies
+#
+# Pinning strategy (see support material/guides/5_tools_environment.md §1.1):
+#   - Target Python 3.11 (best wheel coverage for the TF/Torch generation below).
+#   - The volatile deep-learning stack is UPPER-BOUNDED to keep course notebooks
+#     working; stable utilities are left loose so bug-fix releases still flow.
+#   - These bounds are known-compatible but not a guarantee. For reproducibility,
+#     generate a frozen lock file once per academic year from a clean install:
+#         python -m venv evml_env && <activate>
+#         pip install -r requirements.txt
+#         pip freeze > requirements.lock.txt
+#     Students who want an exact match then use: pip install -r requirements.lock.txt
+
+# Core scientific computing
+# numpy<2.0 is the key pin: numpy 2.0 broke the ABI and silently breaks
+# TensorFlow and older binary wheels. Everything below assumes numpy 1.x.
+numpy<2.0
+scipy<1.13          # scipy >=1.13 pulls numpy>=... conflicts; keep on the 1.x-numpy line
+pandas<2.2
+
+# Machine learning
+scikit-learn<1.5
+scikeras<0.13       # scikeras 0.13 moved to Keras 3; stay on the Keras 2 line (see tensorflow below)
+keras-tuner
+
+# Computer vision
+opencv-python
+imutils
+
+# Deep learning - TensorFlow
+# ~=2.15.0 is the last comfortable Keras 2 line. TF >=2.16 defaults to Keras 3,
+# whose API differs from what the course notebooks are written against.
+tensorflow~=2.15.0
+tensorflow-hub
+
+# Deep learning - PyTorch (for ViT examples)
+# torch and torchvision MUST be a version-matched pair.
+torch~=2.2.0
+torchvision~=0.17.0
+transformers<4.40
+
+# Visualization
+matplotlib
+seaborn
+
+# Data augmentation
+# Augmentor is effectively unmaintained; pin to its last release to avoid
+# breakage against newer Pillow/numpy.
+Augmentor==0.2.12
+
+# Utilities
+tqdm
+requests
+pyyaml
+
+# Testing (optional - for running tests/)
+pytest
+pytest-html
+anthropic  # For student agent tests
