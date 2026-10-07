@@ -1,0 +1,148 @@
+================================================================================
+0.3 GIT REPO & IDE CONFIGURATION - NOTE
+================================================================================
+
+SCOPE
+-----
+- 0.3.1 Set up Git repository                    -> COMPLETE
+- 0.3.2 Configure IDE (VS Code)                  -> COMPLETE
+- 0.3.3 Set up Google Colab (if needed)          -> SKIPPED (solo project;
+                                                   local CPU sufficient for
+                                                   now; revisit if CNN
+                                                   training is too slow)
+
+--------------------------------------------------------------------------------
+0.3.1 GIT REPOSITORY
+--------------------------------------------------------------------------------
+
+GIT INSTALLED
+- Version: git 2.55.0.windows.5
+
+REPOSITORIES TRACKED (two, separate)
+1. Course repo mirror (upstream course materials)
+   Local:  D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI
+   Remote: https://github.com/Hossain-Abeer/HAN-S7Minor-EmbeddedVision-AI.git
+
+2. Own project repo (OCR subcomponent work)
+   Created on GitHub via browser, cloned via VS Code.
+   (Path to be confirmed; keep separate from course mirror.)
+
+GIT IDENTITY (global)
+- user.name:  Hossain Abeer
+- user.email: akm.h.abeer@gmail.com
+
+REMOTE & AUTH
+- Remote name: origin
+- Protocol:    HTTPS
+- Example:     origin  https://github.com/Hossain-Abeer/HAN-S7Minor-
+                      EmbeddedVision-AI.git (fetch)
+               origin  https://github.com/Hossain-Abeer/HAN-S7Minor-
+                      EmbeddedVision-AI.git (push)
+
+SSH: NOT USED.
+- HTTPS + Personal Access Token (PAT) is the auth path.
+- No SSH key setup required. Nothing further to configure for 0.3.1.
+
+VERIFY COMMANDS
+    git --version
+    git config --global user.name
+    git config --global user.email
+    git remote -v                     # run inside each repo folder
+    ssh -T git@github.com             # ONLY if SSH is used (n/a here)
+
+--------------------------------------------------------------------------------
+0.3.2 IDE CONFIGURATION (VS CODE)
+--------------------------------------------------------------------------------
+
+IDE
+- Visual Studio Code, installed.
+
+INTERPRETER SELECTION - PROBLEM FOUND
+- `Python: Select Interpreter` listed:
+    CPython 3.14.7 (uv)                -> not ours
+    Python 3.14.7  (uv)                -> not ours
+    Python 3.11.9  C:\dev\python311\   -> GLOBAL base, not venv
+- The venv at C:\dev\envs\IAI-env\ was NOT auto-discovered.
+- Reason: VS Code auto-discovers venvs INSIDE the workspace folder only.
+  Our venv lives OUTSIDE (C:\dev\envs\), by deliberate design (see notes on
+  0.1.1 and 0.1.2-0.1.3).
+
+INTERPRETER SELECTION - FIX (RECOMMENDED: Option B)
+Option A (per-session):
+    Ctrl+Shift+P -> Python: Select Interpreter
+    -> Enter interpreter path...
+    -> C:\dev\envs\IAI-env\Scripts\python.exe
+
+Option B (permanent, workspace-level, RECOMMENDED):
+    Create .vscode/settings.json inside the repo:
+
+    {
+      "python.defaultInterpreterPath":
+        "C:\\dev\\envs\\IAI-env\\Scripts\\python.exe"
+    }
+
+    Restart VS Code. Settings travel with the repo across both laptops,
+    matching the sync workflow.
+
+VERIFY INTERPRETER
+- Bottom-right status bar shows interpreter; should read
+  "Python 3.11.9 ('IAI-env')" or similar (venv name present).
+- Or open a .py, run Python: Show Output, confirm the path.
+
+WHY VENV IS OUTSIDE PYTHON311 (rationale recap)
+1. Separation of concerns: interpreter (immutable) vs env (disposable).
+2. One base, many venvs: C:\dev\envs\<project>-env for each project.
+3. py install --target produces a MINIMAL bundle (python.exe only).
+   Adding a venv inside would mix runtime files with project state.
+4. Safe delete/rebuild: rmdir env; base Python untouched.
+5. Username-free absolute paths on both laptops.
+6. Unified C:\dev\ namespace:
+       C:\dev\
+       ├── python311\      (runtime)
+       ├── envs\
+       │   └── IAI-env\    (venv)
+       └── IAI-data\       (dataset)
+   Copy-paste C:\dev\ -> whole toolchain travels.
+
+EXTENSIONS - INSTALLED (relevant to course)
+- ms-python.python
+- ms-python.vscode-pylance
+- ms-python.debugpy
+- ms-python.vscode-python-envs
+- github.vscode-pull-request-github
+
+EXTENSIONS - OPTIONAL, NOT YET INSTALLED
+- ms-toolsai.jupyter        -> install IF you will open .ipynb files
+- eamodio.gitlens           -> nice-to-have for Git history/blame
+
+OTHER EXTENSIONS PRESENT (unrelated to course)
+rust-bundle, tailwindcss, eslint, rust-syntax, html-css, prettier,
+dependi, auto-close-tag, auto-rename-tag, mongodb, cmake-tools,
+cpp-devtools, cpptools (+ pack, + themes), liveserver, rust-analyzer,
+even-better-toml, vscode-icons.
+
+VERIFY COMMANDS
+    code --list-extensions
+    (in VS Code) Ctrl+Shift+X -> @installed
+
+--------------------------------------------------------------------------------
+STATUS
+--------------------------------------------------------------------------------
+0.3.1  COMPLETE
+0.3.2  COMPLETE (after interpreter fix applied)
+0.3.3  SKIPPED (solo project; revisit if GPU becomes necessary)
+
+--------------------------------------------------------------------------------
+KEY REMINDERS
+--------------------------------------------------------------------------------
+1. Two Git repos: course mirror + own project. Keep them separate.
+2. HTTPS + PAT is the auth path. No SSH required.
+3. Venv MUST be selected manually or pinned via .vscode/settings.json
+   because it lives outside the workspace folder by design.
+4. Commit .vscode/settings.json to the repo so both laptops inherit the
+   interpreter path.
+5. Revisit Colab only if local CPU training becomes a bottleneck.
+
+================================================================================
+END OF NOTE
+================================================================================

@@ -15,10 +15,10 @@ PHASE 0 - SETUP & SCOPE
     [x] 0.2.2 Verify OpenCV import
     [x] 0.2.3 Verify scikit-learn import
     [x] 0.2.4 Verify TensorFlow import
-[ ] 0.3 Git repo, IDE, Colab if needed.
-    [ ] 0.3.1 Set up Git repository
-    [ ] 0.3.2 Configure IDE (VS Code/PyCharm)
-    [ ] 0.3.3 Set up Google Colab (if needed)
+[x] 0.3 Git repo, IDE, Colab if needed.
+    [x] 0.3.1 Set up Git repository
+    [x] 0.3.2 Configure IDE (VS Code/PyCharm)
+    [x] 0.3.3 Set up Google Colab (if needed)
 [ ] 0.4 Define OCR subcomponent: classify ball numbers 1-15 + cue ball. Snooker excluded.
     [ ] 0.4.1 Define scope: billiard balls 1-15 and cue ball
     [ ] 0.4.2 Exclude snooker balls
