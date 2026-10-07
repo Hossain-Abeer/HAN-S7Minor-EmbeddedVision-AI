@@ -1,0 +1,34 @@
+SCOPE DEFINITION — OCR SUBCOMPONENT
+
+IN SCOPE
+- Object: billiard balls numbered 1–15
+- Object: cue ball (no number, distinguishes by absence of numeral + white colour)
+- Task: classify ball identity from numeral on ball surface
+- Ball types considered: solids (1–8), stripes (9–15), cue
+- Input: cropped ball region from overhead camera frame
+- Output: class label {1,2,...,15,cue}
+
+OUT OF SCOPE
+- Snooker balls (no numerals)
+- 8-ball (distinguished by colour, not numeral)
+- Game rule logic
+- Ball tracking, motion, physics
+- Table surface, pockets, rails
+- Billing, display, external integration
+
+RATIONALE
+Snooker balls carry no characters → outside OCR task. Cue ball has no
+numeral → treated as its own class, not via OCR but via absence of digits
++ colour. This subcomponent feeds the project's ball-identification stage,
+which in turn feeds rule logic.
+
+ASSUMPTIONS
+- Overhead camera gives full-table view
+- Numerals are legible at capture resolution (1080p min, 4K preferred)
+- Fixed camera position and stable lighting
+
+BOUNDARY CASES (to decide later)
+- Partially occluded numerals
+- Glare on ball surface
+- Ball at image edge / cropped
+- Wrong-colour ball (miscue)

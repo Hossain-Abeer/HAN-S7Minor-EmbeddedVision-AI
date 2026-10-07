@@ -19,12 +19,12 @@ PHASE 0 - SETUP & SCOPE
     [x] 0.3.1 Set up Git repository
     [x] 0.3.2 Configure IDE (VS Code/PyCharm)
     [x] 0.3.3 Set up Google Colab (if needed)
-[ ] 0.4 Define OCR subcomponent: classify ball numbers 1-15 + cue ball. Snooker excluded.
-    [ ] 0.4.1 Define scope: billiard balls 1-15 and cue ball
-    [ ] 0.4.2 Exclude snooker balls
-[ ] 0.5 Form team (if IAI requires 2-3; solo still possible but check).
-    [ ] 0.5.1 Check team requirements
-    [ ] 0.5.2 Form team or confirm solo
+[x] 0.4 Define OCR subcomponent: classify ball numbers 1-15 + cue ball. Snooker excluded.
+    [x] 0.4.1 Define scope: billiard balls 1-15 and cue ball
+    [x] 0.4.2 Exclude snooker balls
+[x] 0.5 Form team (if IAI requires 2-3; solo still possible but check).
+    [x] 0.5.1 Check team requirements
+    [x] 0.5.2 Form team or confirm solo
 
 --------------------------------------------------------------------------------
 PHASE 1 - DATA ACQUISITION & FEATURE ENGINEERING

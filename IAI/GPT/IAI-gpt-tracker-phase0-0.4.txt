@@ -1,0 +1,61 @@
+================================================================================
+0.4 DEFINE OCR SUBCOMPONENT - SCOPE LOCKED
+================================================================================
+
+SCOPE
+-----
+Billiard ball numeral recognition only.
+- In scope:  balls numbered 1-15 + cue ball (distinguished by no numeral).
+- Out of scope: snooker balls (no numerals), full game rule logic, tracking,
+  billing, table/pocket geometry, external integration.
+
+Note: cue ball has no numeral, so OCR does not classify it directly.
+      Cue is resolved by absence of digit + colour, handled by the parent
+      project's ball-identification stage, not by OCR itself.
+
+--------------------------------------------------------------------------------
+ARTIFACT
+--------------------------------------------------------------------------------
+File:  IAI\Docs\IAI-ocr-scope-defined.txt
+Status: draft v1 - may be revised after supervisor discussion or when
+        Preliminary ML report Section 2 is drafted.
+
+--------------------------------------------------------------------------------
+FOLDER STRUCTURE (adopted)
+--------------------------------------------------------------------------------
+IAI\
+├── Docs\          <- scope, requirements, decisions, report drafts  [NEW]
+├── GPT\           <- tracker & meta-notes                             [existing]
+├── models\        <- saved model files (.h5, .tflite)                 [NEW, empty]
+├── notebooks\     <- EDA, experimentation .ipynb                      [NEW, empty]
+├── src\           <- Python code for OCR subcomponent                 [NEW, empty]
+└── requirements.txt                                                   [existing]
+
+Data lives OUTSIDE the repo:
+    C:\dev\IAI-data\
+Avoids Git bloat on image binaries. Manual copy-paste across laptops.
+
+--------------------------------------------------------------------------------
+HOW SCOPE FEEDS IAI ASSESSMENTS
+--------------------------------------------------------------------------------
+- Preliminary ML report Section 2 (Problem Statement): scope becomes the
+  boundary statement + SMART objective.
+- Full ML report: same scope, refined after peer feedback.
+- DL report: same scope, augmentation + CNN framing.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 0.4.1 Define scope: billiard balls 1-15 and cue ball
+[x] 0.4.2 Exclude snooker balls (rationale: no characters)
+
+PHASE 0 STATUS:
+  0.1  complete
+  0.2  complete
+  0.3  complete
+  0.4  complete
+  0.5  pending  ->  next
+
+================================================================================
+END OF NOTE
+================================================================================
