@@ -1,0 +1,107 @@
+================================================================================
+0.2.1 SET EVML_DATA ENVIRONMENT VARIABLE - NOTE
+================================================================================
+
+PURPOSE
+-------
+EVML_DATA is an environment variable holding ONE absolute path: the folder
+where raw image datasets live, organized in class-named subfolders.
+
+Course scripts read it via:
+    data_path = os.environ.get('EVML_DATA', 'data/gesture_data')
+
+It decouples CODE from DATA: scripts live in the repo, images live elsewhere.
+Fallback (if unset) is a relative 'data/' folder — fragile, avoid.
+
+--------------------------------------------------------------------------------
+WHAT IT CONTAINS
+--------------------------------------------------------------------------------
+Raw image files only (PNG/JPG), organized as:
+
+    <EVML_DATA>/
+    ├── class_1/
+    │   ├── img001.png
+    │   └── ...
+    ├── class_2/
+    └── ...
+
+For the OCR subcomponent, eventual class folders will be:
+    1/  2/  3/  ...  15/  cue/
+
+NOT stored here: feature CSVs, trained models, notebooks, code.
+
+--------------------------------------------------------------------------------
+CHOSEN PATH
+--------------------------------------------------------------------------------
+    C:\dev\IAI-data\
+
+Rationale:
+- Username-free (matches C:\dev\python311, C:\dev\envs\IAI-env convention).
+- Local drive -> fast bulk writes during image acquisition.
+- Avoids OneDrive sync locks / cloud-stub latency.
+- Cross-laptop propagation: manual copy-paste of the 'C:\dev\' tree.
+
+Rejected alternatives:
+- C:\dev\envs\IAI-env\        -> wrong place (env folder, not data).
+- OneDrive D:\User\...\        -> username in path; sync contention on
+                                  rapid PNG writes; cloud stubs possible.
+- GitHub repo mirror D:\HAN\.. -> repo .gitignore excludes data/; Git bloats
+                                  on binaries; wrong tool for datasets.
+
+Trade-off accepted:
+- Two laptops will NOT auto-sync this folder. Manual copy-paste is the
+  sync method for now. (Optional future: symlink, robocopy, or OneDrive.)
+
+--------------------------------------------------------------------------------
+CURRENT STATE
+--------------------------------------------------------------------------------
+- C:\dev\IAI-data\ will be created empty for now.
+- No iai_ocr\ subfolder yet. No class subfolders yet.
+- Class subfolders will be created later, at data-acquisition time (Phase 1),
+  either manually or by acquire.py's makedirs logic.
+
+--------------------------------------------------------------------------------
+HOW TO SET (once folder exists)
+--------------------------------------------------------------------------------
+PowerShell (User scope, no admin needed):
+
+    [Environment]::SetEnvironmentVariable(
+      "EVML_DATA",
+      "C:\dev\IAI-data",
+      "User"
+    )
+
+Note: point to the PARENT that will HOLD class folders. If the eventual
+layout is C:\dev\IAI-data\iai_ocr\<class>\, then EVML_DATA should be set to
+C:\dev\IAI-data\iai_ocr. Decide the final leaf BEFORE setting, because
+scripts take the immediate parent of each *.png as the class label.
+
+Reopen terminal (env var changes don't apply to already-open shells).
+
+--------------------------------------------------------------------------------
+VERIFY
+--------------------------------------------------------------------------------
+    $env:EVML_DATA           -> should print the chosen path
+    Test-Path $env:EVML_DATA -> should print True
+
+--------------------------------------------------------------------------------
+INTERACTION WITH OTHER BINARIES
+--------------------------------------------------------------------------------
+- Python:          reads via os.environ / os.getenv.
+- OpenCV:          unaware; Python hands it full filenames built from path.
+- pip / venv:      irrelevant; no effect on packages.
+- Windows shell:   sets it (User scope) via PowerShell or System Properties.
+
+--------------------------------------------------------------------------------
+KEY REMINDERS
+--------------------------------------------------------------------------------
+1. EVML_DATA = "where do my raw images live?" - nothing more.
+2. Point it to the PARENT of class folders, not the class folder itself.
+3. Verify with $env:EVML_DATA AND Test-Path.
+4. Activate the venv AND ensure EVML_DATA is set before running any script.
+5. Update path per laptop if drives differ (env var is machine-local, not
+   repo-tracked).
+
+================================================================================
+END OF NOTE
+================================================================================

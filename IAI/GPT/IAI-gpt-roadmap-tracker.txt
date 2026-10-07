@@ -10,11 +10,11 @@ PHASE 0 - SETUP & SCOPE
     [x] 0.1.1 Install Python 3.11 at C:/dev/python311
     [x] 0.1.2 Create virtual environment (venv)
     [x] 0.1.3 Install requirements via pip
-[ ] 0.2 Set EVML_DATA, verify OpenCV/sklearn/TF.
-    [ ] 0.2.1 Set EVML_DATA environment variable
-    [ ] 0.2.2 Verify OpenCV import
-    [ ] 0.2.3 Verify scikit-learn import
-    [ ] 0.2.4 Verify TensorFlow import
+[x] 0.2 Set EVML_DATA, verify OpenCV/sklearn/TF.
+    [x] 0.2.1 Set EVML_DATA environment variable
+    [x] 0.2.2 Verify OpenCV import
+    [x] 0.2.3 Verify scikit-learn import
+    [x] 0.2.4 Verify TensorFlow import
 [ ] 0.3 Git repo, IDE, Colab if needed.
     [ ] 0.3.1 Set up Git repository
     [ ] 0.3.2 Configure IDE (VS Code/PyCharm)
