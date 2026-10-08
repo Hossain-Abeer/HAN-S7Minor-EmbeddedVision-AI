@@ -1,0 +1,162 @@
+================================================================================
+1.1.1 DEFINE ENVIRONMENT CONSTANTS - SCREEN RECORDING SOURCE
+================================================================================
+
+CONTEXT
+-------
+Data source: screen recording of a billiard graphics/video game (approved by
+IAI module lead, Jeroen). Replaces physical overhead camera. See Change 1 note.
+
+These constants describe the VIRTUAL scene, not a physical rig. They must be
+fixed across all 5 clips to keep the dataset internally consistent. Any
+deviation is a controlled variable and must be recorded.
+
+--------------------------------------------------------------------------------
+C1 - VIEW / CAMERA ANGLE
+--------------------------------------------------------------------------------
+Value:     Top-down / overhead (straight down onto table plane)
+Rationale: Matches deployed system's overhead camera. Avoids perspective
+           distortion of numerals, simplifies ball detection (circular blobs).
+Rejected:  Angled, side, or broadcast views (break numeral geometry).
+
+--------------------------------------------------------------------------------
+C2 - GAME TYPE / BALL SET
+--------------------------------------------------------------------------------
+Value:     Billiard / pool balls numbered 1-15 + cue ball.
+Excluded:  Snooker balls (no numerals). Snooker tables. Carom balls.
+Rationale: OCR target is the numeral. Only numbered balls qualify.
+Note:      Cue ball (white, no numeral) is resolved downstream by the parent
+           project's ball-ID stage, not by OCR.
+
+--------------------------------------------------------------------------------
+C3 - CLOTH COLOUR
+--------------------------------------------------------------------------------
+Status:    UNDECIDED - to be selected once the game is chosen.
+Constraint: ONE cloth colour across all 5 clips. Record the choice once made.
+Rationale: Segmentation depends on stable background colour. Cloth colour is
+           a background constant, not a variation axis.
+Note:      If the game allows multiple cloth colours, pick one and lock it.
+           Do not mix across clips.
+
+--------------------------------------------------------------------------------
+C4 - RESOLUTION
+--------------------------------------------------------------------------------
+Value:     1920 × 1080 (1080p).
+Rationale: Numerals on balls must be legible after cropping. 1080p overhead
+           gives sufficient pixel density for digit OCR.
+Constraint: ALL 5 clips at the SAME resolution. Do not mix 1080p and 4K.
+
+--------------------------------------------------------------------------------
+C5 - FRAME RATE
+--------------------------------------------------------------------------------
+Value:     30 fps.
+Rationale: Locked across all clips for consistent frame extraction interval
+           (1.2.3). Mixed fps would make "every Nth frame" inconsistent.
+Constraint: ALL 5 clips at 30 fps.
+
+--------------------------------------------------------------------------------
+C6 - LIGHTING
+--------------------------------------------------------------------------------
+Status:    UNDECIDED - to be selected once the game is chosen.
+Constraint: ONE lighting mode across all 5 clips. Record the choice once made.
+Rationale: Even lighting keeps numeral contrast consistent for OCR. Mixed
+           lighting modes would confound feature distributions in EDA.
+Note:      Shadow artifacts are a real-world concern deferred to augmentation
+           (Phase 4).
+
+--------------------------------------------------------------------------------
+C7 - BALL ORIENTATION & VISIBILITY
+--------------------------------------------------------------------------------
+Value:     Numerals must be VISIBLE and UNOCCLUDED in extracted crops.
+Rationale: An OCR target with a hidden numeral is not usable data.
+Handling:  Frames where a ball's numeral is rotated away, hidden by another
+           ball, or cut by frame edge are REJECTED at extraction (1.2.4).
+Note:      In-game physics may rotate balls arbitrarily. This is natural
+           orientation variance — good for training, bad for unlabelled
+           frames. Filtering is required.
+
+--------------------------------------------------------------------------------
+C8 - NUMBER OF CLIPS
+--------------------------------------------------------------------------------
+Value:     5 × .mp4 clips.
+Rationale: Per revised plan. Provides enough raw frames to hit ≥10 crops per
+           class (1.2.1) after filtering, without over-relying on one scene.
+
+--------------------------------------------------------------------------------
+C9 - CLIP NAMING
+--------------------------------------------------------------------------------
+Value:     billiards-game-clip(n).mp4, where n = 1..5.
+Example:   billiards-game-clip1.mp4 ... billiards-game-clip5.mp4
+
+--------------------------------------------------------------------------------
+C10 - STORAGE LOCATION
+--------------------------------------------------------------------------------
+Value:     D:\HAN\Semester 7 Minor\billiards-game-clips\
+Rationale: User-specified. Data lives OUTSIDE the repo. Raw clips are large
+           binary files — never committed to Git.
+Layout:
+    D:\HAN\Semester 7 Minor\billiards-game-clips\
+    ├── billiards-game-clip1.mp4
+    ├── billiards-game-clip2.mp4
+    ├── billiards-game-clip3.mp4
+    ├── billiards-game-clip4.mp4
+    └── billiards-game-clip5.mp4
+
+Note:      Extracted images will be stored at a DIFFERENT location (decided
+           later at step 1.2).
+
+--------------------------------------------------------------------------------
+C11 - PROVENANCE (OPTIONAL, NOT A SUBMISSION REQUIREMENT)
+--------------------------------------------------------------------------------
+Purpose:   Personal record to support report writing. NOT mandated by any of
+           the three report templates. Implicitly useful for Preliminary ML
+           §3 (data quality: representative, sufficient, balanced, unbiased),
+           Full ML §3, and DL §3 (augmentation rationale).
+Fields:    Game title, in-game scene/table, cloth colour, lighting mode,
+           fps, resolution.
+Format:    Plain text notes. No formal structure required.
+Location:  Optional. Keep wherever convenient.
+
+--------------------------------------------------------------------------------
+SUMMARY TABLE
+--------------------------------------------------------------------------------
+Constant              | Value
+----------------------|-------------------------------------------------------
+View                  | Overhead / top-down
+Game type             | Billiard (1-15 + cue), snooker excluded
+Cloth                 | UNDECIDED (lock one, record it)
+Resolution            | 1920 × 1080 (all clips identical)
+Frame rate            | 30 fps (all clips identical)
+Lighting              | UNDECIDED (lock one, record it)
+Orientation           | Numerals visible + unoccluded (filtered at 1.2.4)
+Clips                 | 5 × .mp4
+Naming                | billiards-game-clip(n).mp4, n = 1..5
+Storage               | D:\HAN\Semester 7 Minor\billiards-game-clips\
+Provenance            | Optional notes (not a submission requirement)
+
+--------------------------------------------------------------------------------
+WHAT CHANGES ACROSS CLIPS (CONTROLLED VARIATION)
+--------------------------------------------------------------------------------
+Only what is inherent in the game: ball positions, orientations, rack
+layouts, and clip length. All scene constants above stay fixed. Further
+variation is deferred to augmentation (Phase 4).
+
+--------------------------------------------------------------------------------
+WHAT IS EXPLICITLY NOT A VARIATION AXIS (vs. the physical-camera plan)
+--------------------------------------------------------------------------------
+- Angle (fixed by top-down choice)
+- Distance (virtual camera distance fixed)
+- Lighting mode (locked once decided)
+- Background (locked cloth colour once decided)
+These were axes in the original physical plan. Under the screen-recording
+pivot, they collapse into constants. State this in Preliminary ML report §3.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.1.1 Define environment constants
+[ ] 1.1.2 Acquire 5 × 1080p .mp4 clips
+
+================================================================================
+END OF NOTE
+================================================================================

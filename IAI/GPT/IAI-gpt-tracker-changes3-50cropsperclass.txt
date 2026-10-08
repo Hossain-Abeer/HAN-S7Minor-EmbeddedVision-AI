@@ -1,0 +1,29 @@
+================================================================================
+CHANGE NOTE - EXTRACTION TARGET UPDATED
+================================================================================
+
+FROM:  10 crops/class minimum
+TO:    50 crops/class minimum (750 total for 15 classes)
+
+REASON
+------
+Future-proofs the dataset for DL training (Phase 4) in addition to classical
+ML (Phase 2). 50/class yields sound stratified splits (~35/7/8 per class)
+and makes the "sufficient data" argument defensible in all three reports.
+
+AFFECTED FILES
+--------------
+1. IAI-gpt-roadmap-tracker.txt
+     - 1.2.1: "10 crops/class minimum" -> "50 crops/class minimum"
+
+2. IAI-gpt-tracker-changes-phase1-1.1-1.3.txt
+     - [1.2] block: "10 crops/class minimum" -> "50 crops/class minimum"
+     - [1.4] block: revise — the "tight split" concern no longer applies
+
+3. 1.1.1 note (if saved as file)
+     - C8: ">=10 crops per class" -> "50 crops per class"
+
+DATE: 2026-10-08
+================================================================================
+END OF NOTE
+================================================================================

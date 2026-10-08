@@ -19,29 +19,30 @@ PHASE 0 - SETUP & SCOPE
     [x] 0.3.1 Set up Git repository
     [x] 0.3.2 Configure IDE (VS Code/PyCharm)
     [x] 0.3.3 Set up Google Colab (if needed)
-[x] 0.4 Define OCR subcomponent: classify ball numbers 1-15 + cue ball. Snooker excluded.
-    [x] 0.4.1 Define scope: billiard balls 1-15 and cue ball
+[x] 0.4 Define OCR subcomponent: classify ball numbers 1-15 (cue ball optional). Snooker excluded.
+    [x] 0.4.1 Define scope: billiard balls 1-15 (cue ball optional)
     [x] 0.4.2 Exclude snooker balls
 [x] 0.5 Form team (if IAI requires 2-3; solo still possible but check).
     [x] 0.5.1 Check team requirements
     [x] 0.5.2 Form team or confirm solo
 
 --------------------------------------------------------------------------------
-PHASE 1 - DATA ACQUISITION & FEATURE ENGINEERING
+PHASE 1 - DATA ACQUISITION & FEATURE ENGINEERING & Preliminary ML Report
 --------------------------------------------------------------------------------
-[ ] 1.1 Build controlled capture setup: overhead camera, stable lighting, fixed distance.
-    [ ] 1.1.1 Set up overhead camera
-    [ ] 1.1.2 Ensure stable lighting
-    [ ] 1.1.3 Fix camera distance
-[ ] 1.2 Capture images of billiard balls with visible numbers. Vary angle, distance, lighting, background.
-    [ ] 1.2.1 Capture images with visible numbers
-    [ ] 1.2.2 Vary angle
-    [ ] 1.2.3 Vary distance
-    [ ] 1.2.4 Vary lighting
-    [ ] 1.2.5 Vary background
-[ ] 1.3 Label each ball crop with number (1-15) or cue.
-    [ ] 1.3.1 Extract ball crops
-    [ ] 1.3.2 Label each crop with number or cue
+[ ] [1.1] Acquire screen recording samples.
+    [x] 1.1.1 Define environment constants (overhead, fixed cloth, billiard only)
+    [ ] 1.1.2 Acquire 5 × 1080p .mp4 clips
+[ ] [1.2] Extract frames from .mp4
+    [ ] 1.2.1 Define extraction target (50 crops/class minimum)
+    [ ] 1.2.2 Choose extraction tool (recommend OpenCV VideoCapture)
+    [ ] 1.2.3 Extract frames at fixed interval
+    [ ] 1.2.4 Filter frames (reject blur/duplicates)
+[ ] [1.3] Crop ball regions
+    [ ] 1.3.1 Detect ball regions (manual or auto: Hough / HSV / contours)
+    [ ] 1.3.2 Crop and save candidates
+    [ ] 1.3.3 Create folders 1/ – 15/ (cue optional)
+    [ ] 1.3.4 Sort crops by visible numeral
+    [ ] 1.3.5 Audit class balance (≥N per class)
 [ ] 1.4 Split data: train/validation/test, stratified.
     [ ] 1.4.1 Split into train/validation/test
     [ ] 1.4.2 Ensure stratified splitting
@@ -58,12 +59,16 @@ PHASE 1 - DATA ACQUISITION & FEATURE ENGINEERING
     [ ] 1.7.1 Data cleaning (missing values, outliers)
     [ ] 1.7.2 Feature scaling
     [ ] 1.7.3 Build preprocessing pipeline
-[ ] 1.8 Deliverable: Preliminary ML report Sections 1-3 (wk 40).
+[ ] 1.8 Preliminary ML report lifecycle (draft → submit → peer review → incorporate).
     [ ] 1.8.1 Draft Sections 1-3
-    [ ] 1.8.2 Submit preliminary ML report
+    [ ] 1.8.2 Submit preliminary ML report (wk 40)
+    [ ] 1.8.3 Peer review another team's report (wk 41)
+    [ ] 1.8.4 Provide feedback via Excel template
+    [ ] 1.8.5 Review received feedback
+    [ ] 1.8.6 Incorporate feedback into report/model
 
 --------------------------------------------------------------------------------
-PHASE 2 - CLASSICAL ML MODEL & PRELIMINARY REPORT
+PHASE 2 - Classical ML Model (inputs to Full ML Report)
 --------------------------------------------------------------------------------
 [ ] 2.1 Train SVM, k-NN, random forest on features.
     [ ] 2.1.1 Train SVM
@@ -75,15 +80,6 @@ PHASE 2 - CLASSICAL ML MODEL & PRELIMINARY REPORT
 [ ] 2.3 Evaluate: confusion matrix, precision/recall/F1 per digit.
     [ ] 2.3.1 Compute confusion matrix
     [ ] 2.3.2 Compute precision/recall/F1
-[ ] 2.4 Write preliminary report, submit wk 40.
-    [ ] 2.4.1 Finalise preliminary report
-    [ ] 2.4.2 Submit by week 40
-[ ] 2.5 Peer review another team (wk 41).
-    [ ] 2.5.1 Review another team's report
-    [ ] 2.5.2 Provide feedback via Excel
-[ ] 2.6 Incorporate feedback.
-    [ ] 2.6.1 Review received feedback
-    [ ] 2.6.2 Incorporate into report/model
 
 --------------------------------------------------------------------------------
 PHASE 3 - FULL ML MODEL & REPORT

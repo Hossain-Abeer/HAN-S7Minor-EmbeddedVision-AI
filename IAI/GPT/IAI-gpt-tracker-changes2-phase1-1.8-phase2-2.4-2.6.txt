@@ -1,0 +1,105 @@
+================================================================================
+TRACKER CHANGE 2 - MERGE PRELIMINARY REPORT LIFECYCLE INTO PHASE 1 / 1.8
+================================================================================
+
+CONTEXT
+-------
+During Phase 0 completion, the question arose: which tracker phase maps to
+which report template? This exposed a structural mismatch:
+
+  - The Preliminary ML Report template covers §1 Introduction, §2 Problem
+    statement, §3 Data acquisition & exploration, §4 References.
+  - These map cleanly to tracker 0.1-0.5 (setup/scope) and 1.1-1.7
+    (acquisition through preprocessing).
+  - The DRAFTING, SUBMISSION, PEER REVIEW, and INCORPORATION of that report
+    were scattered: drafting under 1.8, submission split across 1.8.2 and
+    2.4.2, peer review under 2.5, incorporation under 2.6.
+  - Phase 2 was titled "Classical ML Model & Preliminary Report", bundling
+    two unrelated outputs into one phase.
+
+Root cause: the tracker was ordered by WORK TYPE (data, then model, then
+report) instead of by DELIVERABLE OWNERSHIP (preliminary report owns its
+full lifecycle).
+
+--------------------------------------------------------------------------------
+THE CHANGE
+--------------------------------------------------------------------------------
+
+1. Merge 2.4 (write/submit preliminary report), 2.5 (peer review), and
+   2.6 (incorporate feedback) INTO 1.8.
+
+2. Rename 1.8:
+      BEFORE: "Deliverable: Preliminary ML report Sections 1-3 (wk 40)"
+      AFTER:  "Preliminary ML report lifecycle (draft -> submit -> peer
+               review -> incorporate)"
+
+3. Expand 1.8 from 2 leaves to 6 leaves:
+      1.8.1 Draft Sections 1-3
+      1.8.2 Submit preliminary ML report (wk 40)
+      1.8.3 Peer review another team's report (wk 41)
+      1.8.4 Provide feedback via Excel template
+      1.8.5 Review received feedback
+      1.8.6 Incorporate feedback into report/model
+
+4. Rename Phase 2:
+      BEFORE: "Classical ML Model & Preliminary Report"
+      AFTER:  "Classical ML Model (inputs to Full ML Report §6)"
+
+5. Phase 2 shrinks to its true scope: 2.1-2.3 only (train, cross-validate,
+   evaluate). These are NOT part of the Preliminary report; they feed
+   Full ML Report §6 (Model selection, training, validation).
+
+--------------------------------------------------------------------------------
+WHY THIS IS BETTER
+--------------------------------------------------------------------------------
+
+a) Deliverable-aligned. Each report's full lifecycle (draft, submit, review,
+   incorporate) sits in one place. No more hunting across phases.
+
+b) Eliminates duplicate submission leaves. Previously 1.8.2 AND 2.4.2 both
+   said "submit preliminary report." Ambiguity removed.
+
+c) Clearer report-to-phase mapping:
+       Preliminary ML Report  <-  0.1-0.5 + 1.1-1.7 + 1.8
+       Full ML Report         <-  Phase 2 (model) + Phase 3 (assemble)
+
+d) Phase 2 now has a single, coherent purpose: produce model results for
+   the Full ML Report. The title matches the content.
+
+e) Peer review is now correctly framed as part of the preliminary
+   deliverable, not as a standalone Phase 2 activity. This matches the
+   template, where feedback sheets appear in Full ML Report §4 and §5.
+
+--------------------------------------------------------------------------------
+CONSEQUENCES
+--------------------------------------------------------------------------------
+
+Tracker:
+  - Phase 1 grows to 8 primary tasks (unchanged count) but 1.8 now has 6
+    leaves instead of 2.
+  - Phase 2 shrinks to 3 primary tasks, 7 leaves total.
+  - Phase 3 (Full ML Model & Report) unchanged. Still overlaps slightly with
+    Phase 2 in scope (both touch model work), but Phase 2 is experimentation
+    and Phase 3 is finalisation + deployment + writing. Acceptable.
+
+Reports:
+  - Preliminary ML Report now fully owned by 1.8 as its lifecycle anchor.
+  - Full ML Report §6 draws from Phase 2 outputs.
+  - Full ML Report §4-5 draw from 1.8.3-1.8.6 outputs (peer review sheets).
+
+Workflow:
+  - Week 40 submission is now a single tracked event (1.8.2).
+  - Week 41 peer review is now a single tracked event (1.8.3-1.8.4).
+  - Feedback incorporation is a single tracked event (1.8.5-1.8.6).
+  - No cross-phase coordination needed for the preliminary report.
+
+--------------------------------------------------------------------------------
+SUMMARY
+--------------------------------------------------------------------------------
+Move 2.4-2.6 into 1.8. Rename both 1.8 and Phase 2. Result: Phase 1 owns the
+preliminary report end-to-end; Phase 2 owns model exploration for the Full
+ML Report. Tracker now mirrors report deliverables, not work type.
+
+================================================================================
+END OF WRITE-UP
+================================================================================
