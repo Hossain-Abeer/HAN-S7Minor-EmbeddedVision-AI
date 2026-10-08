@@ -3,3 +3,4 @@ build/
 *.dll
 CMakeCache.txt
 CMakeFiles/
+desktop.ini
