@@ -46,11 +46,10 @@ PHASE 1 - DATA ACQUISITION & FEATURE ENGINEERING & Preliminary ML Report
 [ ] 1.4 Split data: train/validation/test, stratified.
     [x] 1.4.1 Split into train/validation/test
     [x] 1.4.2 Ensure stratified splitting
-[ ] 1.5 Extract classical features: colour histograms, Hu moments, contour, ORB.
-    [ ] 1.5.1 Extract colour histograms
-    [ ] 1.5.2 Extract Hu moments
-    [ ] 1.5.3 Extract contour features
-    [ ] 1.5.4 Extract ORB features
+[ ] 1.5 Extract OCR-appropriate features from ball crops.
+    [ ] 1.5.1 Extract numeral-region mask per crop
+    [ ] 1.5.2 Derive shape features from numeral blob
+    [ ] 1.5.3 Assemble feature matrix X + labels y (reads splits.csv)
 [ ] 1.6 EDA: class balance, feature distributions, correlations.
     [ ] 1.6.1 Check class balance
     [ ] 1.6.2 Plot feature distributions
