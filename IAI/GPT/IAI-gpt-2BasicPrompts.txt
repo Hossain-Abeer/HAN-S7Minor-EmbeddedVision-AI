@@ -1,0 +1,11 @@
+[1.3.5]
+validate. if not valid, prompt for add in order to complete this subsec. if valid, prompt with title of the next one
+
+
+[1.5.1] 
+i don't understand. explain them first, one by one in terms:
+1. essence - what it is, how it works, 
+2. where - who feeds data to it, who gets data fed by it? by who, i refer to the components in pipeline. 
+3. when - sequence of events of workflow. 
+4. codebase - which libraries are involved, skeletal codesnippets with [params] & description. 
+5. recommendations - relevance to my project, with reasons.
