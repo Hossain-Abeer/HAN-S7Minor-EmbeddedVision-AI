@@ -341,6 +341,49 @@ method). The nuance relevant to this note:
 - One-workflow statement recorded (Section 10).
 - Thread-relationship nuance recorded (Section 11).
 
+
+
+
+
+=================
+TRACKER CHANGE - REWRITE 1.5.x TO FIT OCR SUBCOMPONENT
+================================================================================
+
+FROM (inherited from generic IAI lesson flow, misapplied to OCR):
+    [ ] 1.5 Extract classical features: colour histograms, Hu moments,
+        contour, ORB.
+        [ ] 1.5.1 Extract colour histograms
+        [ ] 1.5.2 Extract Hu moments
+        [ ] 1.5.3 Extract contour features
+        [ ] 1.5.4 Extract ORB features
+
+TO (OCR-appropriate):
+    [ ] 1.5 Extract OCR features from ball crops.
+        [ ] 1.5.1 Extract numeral-region mask per crop
+        [ ] 1.5.2 Derive shape features from numeral blob
+        [ ] 1.5.3 Assemble feature matrix X + labels y (reads splits.csv)
+
+REASON
+------
+See IAI-gpt-explains-pre-1.51.txt, Sections 2-4. The inherited feature list
+describes the BALL, not the NUMERAL. Hu moments actively destroy rotation
+information needed to distinguish 6/9; contour is a circle for every class;
+ORB is weak on tiny crops; colour histograms give weak indirect signal only.
+
+COLOUR ROLE
+-----------
+Colour is retained as a narrow 6/9 disambiguator (pre-1.5.1 note §6), not
+as a general feature. No colour-histogram step in the OCR feature pipeline.
+
+TRACKER STATE AFTER CHANGE
+--------------------------
+- 1.5 block rewritten (3 subsections).
+- 1.6 (EDA), 1.7 (preprocessing) unchanged in structure; semantics shift
+  to numeral-blob features. Flag at 1.6.
+- 1.1-1.4 unaffected (feature-agnostic).
+
+
+
 ================================================================================
 END OF NOTE
 ================================================================================
