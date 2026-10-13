@@ -1,0 +1,68 @@
+================================================================================
+1.3.4 SORT CROPS BY VISIBLE NUMERAL
+================================================================================
+
+METHOD
+------
+Manual drag-and-drop in Windows Explorer.
+Source:      ...\billiards-game-clips\unsorted\       (dumped by script, 1.3.2)
+Destination: ...\billiards-game-clips\1\ ... 15\
+Decision origin: 1.2.2 explainer, §8(b), Option A.
+Cue:         delete (not a class).
+
+Clarification:
+  cv2.VideoCapture (1.2.2) is the SCRIPT tool that extracts frames and
+  crops ball regions. It does NOT sort. It dumps every crop into
+  \unsorted\ (per 1.3.2). Sorting is a separate, manual step done
+  afterwards in Windows Explorer.
+
+--------------------------------------------------------------------------------
+FOLDER STATE
+--------------------------------------------------------------------------------
+From this point onward, \unsorted\ EXISTS as the intermediate landing
+folder for all script-produced crops:
+
+    ...\billiards-game-clips\
+    ├── game1\            raw .mp4 clips
+    ├── unsorted\         crops dumped by script (1.3.2 output)
+    ├── 1\                sorted class folders (1.3.3)
+    ├── 2\
+    ├── ...
+    └── 15\
+
+\unsorted\ may be empty at times (between runs, after sorting) but the
+folder itself persists.
+
+--------------------------------------------------------------------------------
+WORKFLOW
+--------------------------------------------------------------------------------
+1. Open unsorted\ in Explorer. Enable Preview Pane (Alt+P) or use Windows
+   Photos (arrow keys to navigate).
+2. For each crop: read numeral -> drag into matching folder.
+3. Delete if: illegible, occluded, clipped, merged blob, false positive,
+   duplicate, or blurry.
+4. Empty unsorted\ into 1\ ... 15\. Filenames unchanged.
+
+--------------------------------------------------------------------------------
+RULES
+--------------------------------------------------------------------------------
+- When in doubt, delete. Wrong label > missing sample.
+- Common confusions: 6/9, 3/8. Zoom before deciding.
+- Solid 1-8 / striped 9-15; colour is a sanity check, numeral is truth.
+- Sort in short sessions; fatigue causes misclicks.
+
+--------------------------------------------------------------------------------
+OUTPUT
+--------------------------------------------------------------------------------
+- unsorted\ empty; 1\ ... 15\ populated.
+- Screenshot folder tree with file counts for Preliminary ML §3.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.3.4 Sort crops by visible numeral
+[ ] 1.3.5 Audit class balance
+
+================================================================================
+END OF NOTE
+================================================================================

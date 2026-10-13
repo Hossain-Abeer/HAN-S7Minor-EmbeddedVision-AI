@@ -1,0 +1,387 @@
+================================================================================
+1.4.1 SPLIT INTO TRAIN / VALIDATION / TEST
+================================================================================
+
+DECISION SUMMARY
+----------------
+Method:         Group-by-clip split (not random, not file-level).
+Clip source:    5 clips from DIFFERENT recording sessions (independent).
+Ratio:          60/20/20 -> 3 clips train, 1 clip val, 1 clip test.
+Assignment:     Fixed (no random seed).
+  - Val gets the clip with BEST class coverage (after 1.3.5 count).
+  - Test gets the clip with SECOND-BEST class coverage.
+  - Remaining 3 clips -> train.
+Representation: Logical CSV. Files stay in 1/ ... 15/.
+CSV path:       D:\HAN\Semester 7 Minor\billiards-game-clips\splits.csv
+(if) CV overlap:     Non-issue. Phase 2 CV runs only on train portion.
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+1.4.1 partitions the audited dataset (from 1.3.5) into three roles: train,
+validation, test. Every crop gets exactly one role. The crops themselves do
+not move; only a CSV records which role each file plays.
+
+This step does NOT:
+  - extract features,
+  - train a model,
+  - touch the images.
+It only produces splits.csv.
+
+--------------------------------------------------------------------------------
+2. BACKGROUND - WHY A THREE-WAY SPLIT
+--------------------------------------------------------------------------------
+Train       - model learns from these.
+Validation  - used DURING training to tune hyperparameters and detect
+              overfitting. Looked at repeatedly.
+Test        - held out until the very end. Looked at ONCE. Produces the
+              honest final number for the report.
+
+Why not just train + test:
+  Tuning on test contaminates it. Every time you look at test accuracy and
+  change something based on it, test leaks into your decisions and stops
+  being an honest judge. Val exists to absorb that tuning pressure.
+
+Analogy:
+  train = studying
+  val   = practice quizzes (check yourself as often as you like)
+  test  = final exam (once, after studying is frozen)
+
+--------------------------------------------------------------------------------
+3. SORTING vs SPLITTING
+--------------------------------------------------------------------------------
+These are different axes of the same dataset.
+
+  SORTING (1.3.4)  -> assigns a LABEL. "This crop is a 7."
+                      Output: PNGs sitting in folders 1/ ... 15/.
+
+  SPLITTING (1.4.1) -> assigns a ROLE. "This 7 plays in train."
+                       Output: a CSV mapping.
+
+A crop can be a 7 (label) AND belong to train (role). Sorting is done once.
+Splitting is a decision that could be redone with different ratios or rules.
+
+--------------------------------------------------------------------------------
+4. WHY GROUP-BY-CLIP (NOT RANDOM)
+--------------------------------------------------------------------------------
+Naive random split of crops:
+  - Frame 100 and frame 105 of the same 7-ball (5 frames apart, near-identical)
+    can land in different roles.
+  - Train sees frame 100. Val sees frame 105.
+  - Model "recognises" frame 105 not by learning 7-ball features, but by
+    memorising the frame-100 view.
+  - Val accuracy is inflated. Real-world performance is not.
+This is DATA LEAKAGE.
+
+Group-by-clip eliminates leakage:
+  - All crops from clip 1 go to train. All from clip 4 go to val.
+  - Frame 100 and frame 105 are both in clip 1 -> same role. Never split.
+  - Val contains genuinely unseen data.
+
+Requirement for group-by-clip to be valid:
+  The 5 clips must come from DIFFERENT recording sessions. If they are
+  consecutive segments of one session, the boundary between clips is
+  essentially the same scene, and leakage returns across that boundary.
+  CONFIRMED: the 5 clips are independent sessions.
+
+--------------------------------------------------------------------------------
+5. RATIOS - WHY 60/20/20
+--------------------------------------------------------------------------------
+With 5 clips and whole-clip assignment, the only sensible partition is:
+  3 train, 1 val, 1 test  =  60% / 20% / 20%
+
+Alternatives rejected:
+  2/1/2 (40/20/40)  -> val too small relative to test.
+  4/1/0 (80/20/0)   -> no test set. Unacceptable.
+  2/1/1 with 1 spare -> leftover clip has no home.
+
+Accept the trade-off: val and test each come from a single clip, so their
+class variety is limited. Mitigated by 6 (below).
+
+--------------------------------------------------------------------------------
+6. ASSIGNMENT RULE - VERIFY AND ADJUST (Option B)
+--------------------------------------------------------------------------------
+After 1.3.5, we have counts per class per clip. Some clips will cover more
+classes than others. The clip with the best coverage should play the most
+critical role.
+
+Rule:
+  1. Count crops per class per clip (from splits source, before split).
+  2. Score each clip by class coverage (how many of the 15 classes it has
+     at >= some minimum, e.g., >= 1 crop).
+  3. Assign the HIGHEST-coverage clip -> val.
+  4. Assign the NEXT-HIGHEST clip -> test.
+  5. Remaining 3 clips -> train.
+
+Why val before test:
+  Both are held out. But val is looked at repeatedly during training and is
+  more sensitive to thin classes (early stopping, LR scheduling need signal).
+  Give the best-covered clip to the harder-working role.
+
+If ties: assign by higher minimum per-class count (less sparse coverage wins).
+Ties broken arbitrarily otherwise, and the tie-break decision is recorded.
+
+--------------------------------------------------------------------------------
+7. NO RANDOM SEED
+--------------------------------------------------------------------------------
+Fixed assignment. Clip names are known; role assignment is deterministic
+given the coverage counts. No seed needed.
+
+If in future you want to randomise which 3 clips train on, introduce
+random_state then. Not now.
+
+--------------------------------------------------------------------------------
+8. LOGICAL CSV - NOT PHYSICAL FOLDERS
+--------------------------------------------------------------------------------
+Rejected: moving files into train/ val/ test/ folders.
+  - Duplicates storage if the same crop is needed in different experiments.
+  - Renames break provenance encoded in filenames.
+  - Hard to re-split with different rules.
+
+Selected: splits.csv stays beside the class folders; PNGs remain in 1/ ... 15/.
+
+splits.csv format:
+  filename,role
+  1/clip1_frame0005_ball0.png,train
+  1/clip1_frame0010_ball2.png,train
+  3/clip2_frame0025_ball1.png,val
+  ...
+  (one row per audited crop, 750+ rows)
+
+Downstream scripts (1.5 onward) read splits.csv + the PNGs and construct
+X_train, y_train, X_val, y_val, X_test, y_test.
+
+--------------------------------------------------------------------------------
+9. PIPELINE POSITION
+--------------------------------------------------------------------------------
+
+  1.3.5  audit class balance (cull + count)  [DONE upstream]
+          |
+          v
+  1.4.1  split into train/val/test           [THIS STEP]
+          |  -> writes splits.csv
+          v
+  1.4.2  ensure stratified splitting         [verification]
+          |
+          v
+  1.5    feature extraction                  [reads splits.csv + PNGs]
+          |
+          v
+  Phase 2 / Phase 4  model training          [reads X_train, y_train, ...]
+
+Upstream feeds:
+  - 1.3.5 confirms every class has >= 50 usable crops.
+  - Filename format from 1.3.2: clip{id}_frame{idx}_ball{k}.png
+    -> clip_id is extracted from the filename to group by clip.
+  - Parent folder name is the class label.
+    -> 1/clip1_frame0005_ball0.png has label 1.
+
+Downstream consumes:
+  - splits.csv
+  - The PNG crops (unchanged location).
+  - 1.4.2 verifies that after splitting, each role still has every class
+    at a workable count (this is where the "verify" part of Option B lands
+    as a discrete step).
+
+--------------------------------------------------------------------------------
+10. CODE SNIPPET - BUILD SPLIT
+--------------------------------------------------------------------------------
+
+import os
+import csv
+import re
+from collections import defaultdict
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+CROP_ROOT = r"[CROP_ROOT]"        # e.g. D:\HAN\Semester 7 Minor\
+                                  #        billiards-game-clips
+CLASS_IDS = [CLASS_IDS]           # e.g. list(range(1, 16))
+SPLITS_CSV = r"[SPLITS_CSV]"      # e.g. D:\HAN\Semester 7 Minor\
+                                  #        billiards-game-clips\splits.csv
+
+CLIP_ID_REGEX = r"clip(\d+)_frame(\d+)_ball(\d+)"
+
+# ============================================================================
+# SCAN CROPS - build (filename, label, clip_id) triples
+# ============================================================================
+def scan_crops(crop_root, class_ids):
+    """
+    Walk each class folder and return list of
+    (relative_filename, label, clip_id).
+    """
+    records = []
+    pattern = re.compile(CLIP_ID_REGEX)
+
+    for cid in class_ids:
+        folder = os.path.join(crop_root, str(cid))
+        if not os.path.isdir(folder):
+            continue
+        for fname in os.listdir(folder):
+            if not fname.lower().endswith(".png"):
+                continue
+            match = pattern.search(fname)
+            if not match:
+                continue  # malformed name; skip with warning in real code
+            clip_id = int(match.group(1))
+            rel_path = f"{cid}/{fname}"
+            records.append((rel_path, cid, clip_id))
+    return records
+
+
+# ============================================================================
+# SCORE CLIPS BY CLASS COVERAGE
+# ============================================================================
+def score_clips_by_coverage(records):
+    """
+    Return dict {clip_id: (classes_covered, min_count_across_covered)}.
+    Higher tuple = better coverage.
+    """
+    counts = defaultdict(lambda: defaultdict(int))   # clip -> class -> count
+    for _, label, clip_id in records:
+        counts[clip_id][label] += 1
+
+    scores = {}
+    for clip_id, per_class in counts.items():
+        covered = len(per_class)
+        min_count = min(per_class.values()) if per_class else 0
+        scores[clip_id] = (covered, min_count)
+    return scores
+
+
+# ============================================================================
+# ASSIGN ROLES
+# ============================================================================
+def assign_roles(scores):
+    """
+    Rank clips by (classes_covered, min_count), descending.
+    Best -> val, next -> test, remaining -> train.
+    Returns dict {clip_id: role}.
+    """
+    ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    roles = {}
+    for rank, (clip_id, _score) in enumerate(ranked):
+        if rank == 0:
+            roles[clip_id] = "val"
+        elif rank == 1:
+            roles[clip_id] = "test"
+        else:
+            roles[clip_id] = "train"
+    return roles
+
+
+# ============================================================================
+# WRITE splits.csv
+# ============================================================================
+def write_splits_csv(records, roles, out_path):
+    with open(out_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["filename", "role"])
+        for rel_path, _label, clip_id in records:
+            writer.writerow([rel_path, roles[clip_id]])
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
+if __name__ == "__main__":
+    records = scan_crops(CROP_ROOT, CLASS_IDS)
+    scores  = score_clips_by_coverage(records)
+    roles   = assign_roles(scores)
+
+    print("Clip coverage scores:")
+    for cid, s in sorted(scores.items()):
+        print(f"  clip {cid}: classes_covered={s[0]}, "
+              f"min_count={s[1]}, role={roles[cid]}")
+
+    write_splits_csv(records, roles, SPLITS_CSV)
+    print(f"\nWrote {SPLITS_CSV}")
+
+
+--------------------------------------------------------------------------------
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+Placeholder      | Example                                | Purpose
+-----------------|----------------------------------------|---------------
+[CROP_ROOT]      | D:\HAN\Semester 7 Minor\               | Parent of
+                 |   billiards-game-clips                 | class folders
+[CLASS_IDS]      | list(range(1, 16))                     | Classes 1..15
+[SPLITS_CSV]     | D:\HAN\Semester 7 Minor\               | CSV output
+                 |   billiards-game-clips\splits.csv      |
+
+--------------------------------------------------------------------------------
+11. CODE DESCRIPTION
+--------------------------------------------------------------------------------
+scan_crops()
+  Walks every class folder. Extracts (relative filename, label, clip_id)
+  for each PNG. The class label comes from the parent folder name. The
+  clip_id comes from parsing the filename with CLIP_ID_REGEX.
+  Uses relative paths (e.g., "1/clip1_frame0005_ball0.png") so splits.csv
+  is portable if the root moves.
+
+score_clips_by_coverage()
+  Tallies counts[clip_id][label]. Reduces each clip to a single score:
+  (number of classes it covers, minimum count among covered classes).
+  The tuple sorts lexicographically: coverage first, then minimum.
+
+assign_roles()
+  Sorts clips by score descending. Rank 0 -> val, rank 1 -> test,
+  ranks 2+ -> train. Deterministic, no randomness.
+
+write_splits_csv()
+  Writes header row + one row per crop. No image is moved or copied.
+
+--------------------------------------------------------------------------------
+12. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+- splits.csv at D:\HAN\Semester 7 Minor\billiards-game-clips\
+    columns: filename, role
+    rows: one per audited crop.
+
+- Printed clip coverage table (paste into Preliminary ML §3, or into
+  Full ML §6 if split evidence belongs there).
+
+- For the report: state that clips came from independent sessions, that
+  group-by-clip was used, ratios were 60/20/20, and the best/next-best
+  coverage clips were assigned to val/test.
+
+--------------------------------------------------------------------------------
+13. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+- If, after 1.4.2 verification, val or test is missing more than 1-2 classes:
+    -> revisit 1.3.5 escalation (stride 3 re-extract) to fill missing
+       classes in all clips, then re-run 1.4.1.
+- If a class has < 5 crops in a specific clip:
+    -> that clip likely cannot carry that class as val/test. If the
+       affected clip is val or test, re-rank and try next-best clip.
+- If the resulting train set is smaller than expected (< 400 crops):
+    -> escalate to 1.3.5 stride-3 re-extraction before proceeding.
+
+--------------------------------------------------------------------------------
+14. NOTES FOR LATER
+--------------------------------------------------------------------------------
+- 1.4.2 will read splits.csv and verify per-role, per-class counts.
+  It is a VERIFICATION step, not a re-splitting step.
+- 1.5 will consume splits.csv, load each PNG, extract features, and
+  produce X_/y_ arrays for train, val, and test. The CSV does NOT carry
+  the label; the label is still inferred from the parent folder.
+- Phase 2 CV operates on the train portion of splits.csv. Val and test
+  are untouched by CV.
+- Phase 4 (Keras) uses val for validation_data during fit, and test only
+  at the very end via model.evaluate.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.4.1 Split into train/validation/test
+    -> method:      group-by-clip
+    -> ratio:       3/1/1 (60/20/20)
+    -> assignment:  best-coverage -> val, next -> test, rest -> train
+    -> output:      splits.csv at D:\HAN\Semester 7 Minor\
+                    billiards-game-clips\splits.csv
+[ ] 1.4.2 Ensure stratified splitting (verification of per-role, per-class counts)
+
+================================================================================
+END OF NOTE
+================================================================================

@@ -1,0 +1,200 @@
+================================================================================
+MODULAR vs MONOLITHIC - PIPELINE ARCHITECTURE EXPLAINER
+================================================================================
+
+CONTEXT
+-------
+Decision under discussion: should the OCR data pipeline be built as one
+monolithic script, or as modular scripts (extract.py, filter.py, detect.py,
+crop.py, etc.) orchestrated by a thin program.py?
+
+The pipeline in question:
+
+  1.2.3  extract every Nth frame
+  1.2.4  filter (blur / duplicate gate)
+  1.3.1  detect ball regions
+  1.3.2  crop + save
+  1.3.3  create class folders
+  1.3.4  sort crops (manual)
+  1.3.5  audit class balance
+  1.4    split data
+  1.5    extract features
+  1.6    EDA
+  1.7    preprocessing
+
+This note compares the two architectures, identifies a specific wrinkle in the
+video-decode stage, and recommends an approach.
+
+--------------------------------------------------------------------------------
+1. MONOLITHIC - PROS AND CONS
+--------------------------------------------------------------------------------
+
+PROS
+- One file, one run, natural state flow. No interface to define.
+- Zero orchestration overhead.
+- Easy to trace execution start-to-finish in one sitting.
+
+CONS
+- You cannot re-run one stage. If detection parameters change, you re-run the
+  whole pipeline - including the slow decode and the crop-write.
+- Hard to cite in a report. "This section covers lines 47-312" is worse than
+  "this is detect.py."
+- Debugging forces a full re-run every iteration.
+- The rescale trigger (stride 5 -> 3) becomes an all-or-nothing event.
+
+--------------------------------------------------------------------------------
+2. MODULAR - PROS AND CONS
+--------------------------------------------------------------------------------
+
+PROS
+- Each stage matches one tracker subsection:
+      extract.py    <-> 1.2.3
+      filter.py     <-> 1.2.4
+      detect.py     <-> 1.3.1
+      crop.py       <-> 1.3.2
+      audit.py      <-> 1.3.5
+      features.py   <-> 1.5
+      eda.py        <-> 1.6
+      preprocess.py <-> 1.7
+  The code mirrors the plan, so the report writes itself from the file tree.
+- Each stage independently runnable -> debug one frame at a time.
+- Rescale is surgical: change one constant, re-run three stages, leave the
+  rest alone.
+- Each stage emits its own inspectable artefact (CSV, folder of PNGs) -
+  perfect evidence for Preliminary ML report §3.
+- Swapping detectors (HSV -> Hough fallback) touches one file only.
+
+CONS
+- You must define the contract between stages: what does filter.py hand to
+  detect.py? This is the real cost, not the file count.
+- Without discipline, contracts drift (one script writes a column named
+  'frame' and the next expects 'frame_idx') and you spend a day debugging
+  imports instead of models.
+- More orchestration surface for a solo project.
+
+--------------------------------------------------------------------------------
+3. THE SPECIFIC WRINKLE - SHARED VIDEO DECODE
+--------------------------------------------------------------------------------
+
+Extract, filter, detect, and crop all SHARE A SINGLE VIDEO DECODE.
+
+cv2.VideoCapture yields frames one at a time from a compressed stream. You
+cannot cheaply jump to frame 1500 without decoding the preceding 1499 first.
+
+If extract/filter/detect/crop are split into four physical scripts, one of
+three things must happen:
+
+  (a) DECODE THE VIDEO FOUR TIMES (once per script).
+      Cost: 4x decode time. For 5 short clips this is minutes, not hours.
+      Tolerable.
+
+  (b) DUMP ACCEPTED FRAMES TO DISK in extract.py, then have filter.py,
+      detect.py, crop.py read them back.
+      Cost: ~1800 full-frame PNGs at ~6 MB each ~= 10 GB of intermediate
+      files, plus disk I/O. Wasteful.
+
+  (c) FUSE extract + filter + detect + crop into one "video pass" script,
+      and keep everything AFTER it (folders, audit, features, EDA,
+      preprocess) as separate modular scripts.
+      Cost: none.
+
+OPTION (c) is the recommended shape.
+
+The fused script is not a monolith - it is a single PASS over video, with
+four logically separate functions inside it:
+
+      extract_frames()
+      passes_filter()
+      detect_balls()
+      crop_and_save()
+
+Each function is independently testable. Only the LOOP is fused. Downstream
+stages - which operate on saved crops, not video - stay modular.
+
+--------------------------------------------------------------------------------
+4. THE CONTRACT IS THE REAL DECISION
+--------------------------------------------------------------------------------
+
+Whether fully modular or with the fused-video exception, the important thing
+to decide BEFORE CODING is the inter-stage data format.
+
+Suggested contract:
+
+  Stage                | Reads                       | Writes
+  ---------------------|-----------------------------|-----------------------
+  build_dataset (fused)| .mp4 + config               | unsorted/*.png
+                       |                             | rejects.csv
+                       |                             | detections.csv
+  folders              | -                           | 1/ ... 15/
+  audit                | 1/ ... 15/                  | counts.csv
+  features             | 1/ ... 15/ + folder label   | features.csv
+  eda                  | features.csv                | figures to Docs/
+  preprocess           | features.csv                | features_scaled.csv
+                       |                             | scaler .pkl
+
+WHY CSV BETWEEN STAGES (not pickled objects):
+  - Inspectable in a text editor.
+  - Diffable in Git (if ever needed).
+  - Directly quotable in the report.
+  - Language-agnostic if tooling shifts.
+
+PICKLED OBJECTS ONLY when persisting a FITTED TRANSFORMER for deployment
+(e.g. the StandardScaler used at inference time). Not for intermediate data.
+
+--------------------------------------------------------------------------------
+5. RECOMMENDED STRUCTURE
+--------------------------------------------------------------------------------
+
+Modular, with ONE fused stage. Concretely:
+
+  src/
+  ├── build_dataset.py    <- fused: extract + filter + detect + crop
+  ├── folders.py          <- 1.3.3
+  ├── audit.py            <- 1.3.5
+  ├── features.py         <- 1.5
+  ├── eda.py              <- 1.6
+  ├── preprocess.py       <- 1.7
+  ├── config.py           <- all constants, ONE place
+  └── program.py          <- thin orchestrator: calls the above in order
+
+program.py reads as a table of contents for the report: "the pipeline runs
+these six stages."
+
+--------------------------------------------------------------------------------
+6. HONEST NOTE ON PRIOR LANGUAGE
+--------------------------------------------------------------------------------
+
+The 1.2.2 explainer previously said the extract -> filter -> detect -> crop
+loop would live in "one script." That was about the TOOL CHOICE (cv2 vs
+FFmpeg), not about monolith vs modular.
+
+The two decisions are ORTHOGONAL. You can have a modular codebase where one
+module happens to do four fused operations on a shared decode. No
+contradiction - but stated here so the two notes don't appear to conflict.
+
+--------------------------------------------------------------------------------
+7. DECISION SUMMARY
+--------------------------------------------------------------------------------
+
+Architecture:   MODULAR, with one fused video-pass stage.
+Fused stage:    build_dataset.py (extract + filter + detect + crop).
+Modular stages: folders, audit, features, eda, preprocess.
+Orchestration:  program.py - thin, calls stages in order.
+Config:         config.py - single source of constants.
+Data contract:  CSV between stages; pickles only for fitted transformers
+                intended for deployment.
+
+Rationale:
+  - Modularity matches tracker subsections -> report writes itself.
+  - Each stage independently re-runnable -> surgical rescale.
+  - Fused video pass avoids 4x decode or 10 GB of frame dumps.
+  - CSV contract is inspectable, diffable, quotable.
+
+NEXT ARTEFACT (optional, before 1.4):
+  - Draft config.py + interface contract as a separate note so that
+    subsections 1.4-1.7 can reference one shared contract rather than
+    re-specifying it.
+
+================================================================================
+END OF EXPLAINER
+================================================================================

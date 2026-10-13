@@ -31,21 +31,21 @@ PHASE 1 - DATA ACQUISITION & FEATURE ENGINEERING & Preliminary ML Report
 --------------------------------------------------------------------------------
 [ ] [1.1] Acquire screen recording samples.
     [x] 1.1.1 Define environment constants (overhead, fixed cloth, billiard only)
-    [ ] 1.1.2 Acquire 5 × 1080p .mp4 clips
+    [x] 1.1.2 Acquire 5 × 1080p .mp4 clips
 [ ] [1.2] Extract frames from .mp4
-    [ ] 1.2.1 Define extraction target (50 crops/class minimum)
-    [ ] 1.2.2 Choose extraction tool (recommend OpenCV VideoCapture)
-    [ ] 1.2.3 Extract frames at fixed interval
-    [ ] 1.2.4 Filter frames (reject blur/duplicates)
+    [x] 1.2.1 Define extraction target (50 crops/class minimum)
+    [x] 1.2.2 Choose extraction tool (recommend OpenCV VideoCapture)
+    [x] 1.2.3 Extract frames at fixed interval
+    [x] 1.2.4 Filter frames (reject blur/duplicates)
 [ ] [1.3] Crop ball regions
-    [ ] 1.3.1 Detect ball regions (manual or auto: Hough / HSV / contours)
-    [ ] 1.3.2 Crop and save candidates
-    [ ] 1.3.3 Create folders 1/ – 15/ (cue optional)
-    [ ] 1.3.4 Sort crops by visible numeral
-    [ ] 1.3.5 Audit class balance (≥N per class)
+    [x] 1.3.1 Detect ball regions (manual or auto: Hough / HSV / contours)
+    [x] 1.3.2 Crop and save candidates
+    [x] 1.3.3 Create folders 1/ – 15/ (cue optional)
+    [x] 1.3.4 Sort crops by visible numeral
+    [x] 1.3.5 Audit class balance (≥N per class)
 [ ] 1.4 Split data: train/validation/test, stratified.
-    [ ] 1.4.1 Split into train/validation/test
-    [ ] 1.4.2 Ensure stratified splitting
+    [x] 1.4.1 Split into train/validation/test
+    [x] 1.4.2 Ensure stratified splitting
 [ ] 1.5 Extract classical features: colour histograms, Hu moments, contour, ORB.
     [ ] 1.5.1 Extract colour histograms
     [ ] 1.5.2 Extract Hu moments

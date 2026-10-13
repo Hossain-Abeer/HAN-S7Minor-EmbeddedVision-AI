@@ -1,0 +1,203 @@
+================================================================================
+IAI-GPT-EXPLAINS - APPROACH / METHOD (TEACHING VS CONSULTANT)
+================================================================================
+
+PURPOSE
+-------
+Document the working method for this module, so both sides understand the
+two-thread structure and interact correctly in Thread B (this one).
+
+--------------------------------------------------------------------------------
+1. THE TWO-THREAD WORKFLOW
+--------------------------------------------------------------------------------
+
+  Thread A  -  TEACHING
+      - Learner and GPT, not visible to Thread B.
+      - Purpose: learn a concept before writing the .txt note.
+      - Output: a .txt note containing the design decision, rationale,
+        skeletal code, parameters to fill in, and downstream implications.
+
+  Thread B  -  CONSULTANT / VALIDATION
+      - The note from Thread A is edited into a prompt and pasted here.
+      - Purpose: validate, correct, expand, or catch mistakes in the note.
+      - GPT in this thread sees only the OUTPUT of Thread A, never the
+        teaching dialogue that produced it.
+
+Consequence: Thread B does not know how much the learner understands at
+each step. It only sees the note. It must not assume the learner is already
+equipped to answer downstream design questions, because those may not have
+been taught yet.
+
+--------------------------------------------------------------------------------
+2. THREAD-RELATIONSHIP NUANCE (WHY CONFUSION AROSE)
+--------------------------------------------------------------------------------
+The specific mechanism by which Thread B became confused:
+
+  - The learner studies a topic in Thread A and produces a .txt note.
+  - The learner then edits that note into a prompt for Thread B.
+  - The moment of editing is invisible to Thread B. From Thread B's view,
+    a completed, polished note appears as if from nowhere.
+  - Because the note reads as finished, Thread B infers the learner is
+    already past this topic and ready to make downstream design calls.
+  - Thread B then asks the learner to decide something not yet studied.
+  - The learner flags this as confusion, and the workflow rule is
+    corrected: Thread B must not assume. It must be told.
+
+Corrective rule:
+
+  - If the learner has NOT yet studied a subtopic, Thread B teaches it
+    first, then produces or expands the note.
+  - If the learner HAS studied it, the note is pasted and Thread B
+    validates only.
+  - Signal words: "teach" (Thread B takes teaching mode for this
+    subtopic) or "validate" (note is pasted, Thread B reviews it).
+
+--------------------------------------------------------------------------------
+3. WHAT EACH MODE IS FOR
+--------------------------------------------------------------------------------
+
+TEACHING MODE (Thread A)
+  - Explain a concept from first principles.
+  - Mechanics: what the function does, what library, what arguments,
+    what output, what it feeds into downstream.
+  - Produce a .txt note that captures the design decision and the code
+    skeleton with placeholders.
+  - Learner edits and moves the note into Thread B.
+
+CONSULTANT MODE (Thread B, this thread)
+  - Validate the note against the tracker and against the module's
+    assessment requirements.
+  - Catch inherited or misapplied items (e.g. the colour-histogram/Hu-
+    moment/ORB mistake).
+  - Flag risks, dependencies, unresolved decisions.
+  - Confirm scope: is this note sufficient for the tracker step it claims
+    to complete?
+  - Prompt the learner for the next step only after the current step is
+    validated.
+
+--------------------------------------------------------------------------------
+4. BEHAVIOURAL CORRECTIONS (DISCRETE LIST)
+--------------------------------------------------------------------------------
+Set of rules agreed between learner and Thread B, listed explicitly so they
+are not diluted across prose:
+
+  1. One subsection at a time.
+     Only the subsection marked in [brackets] is in focus. No questions
+     about later subsections. No proposing downstream structure. The
+     learner decides only on the one in focus.
+
+  2. Teaching mode first, consultant mode second, never reversed.
+     If the learner has not studied a subtopic, Thread B teaches it. If
+     the learner has studied it, Thread B validates. The order is never
+     swapped.
+
+  3. No architectural questions the learner is not equipped to answer.
+     Thread B must not assume prior teaching. It must wait for the signal
+     "teach" or "validate" before proceeding on a new subtopic.
+
+  4. Pragmatic bar, not perfectionist bar.
+     The module's assessor accepts a FUNCTIONAL program, not a
+     high-accuracy one. Design choices should be justified as "works" not
+     "optimal." Over-engineering is discouraged. Colour is used only where
+     it resolves specific ambiguity. Accuracy target is "works."
+
+  5. Notes are learning artefacts, development blueprints, and future
+     references simultaneously. Every note is structured to serve all
+     three purposes.
+
+  6. Do not graft when scope narrows; re-derive.
+     When a specific subcomponent is chosen (e.g. OCR), the tracker must
+     be rebuilt from that subcomponent upward. Inheriting generic lesson
+     content without an applicability pass is the failure mode that
+     produced the tracker's misaligned 1.5.x list.
+
+  7. Applicability pass on all inherited material.
+     Any time generic course material enters the picture, explicitly ask:
+     what applies to this specific task, and what does not? Write it down
+     before building anything.
+
+  8. Generic vs specific flag.
+     Course materials are generic; the subcomponent is specific. Any
+     element copied from a generic source is marked "inherited,
+     unverified" until confirmed to fit.
+
+--------------------------------------------------------------------------------
+5. WHY THREAD B WAS CONFUSED (ORIGINAL DIAGNOSIS, RETAINED)
+--------------------------------------------------------------------------------
+Early in this thread, GPT asked the learner to make design decisions about
+steps not yet studied. This happened because:
+
+  - Thread B does not see Thread A. It cannot tell whether a topic has
+    been taught.
+  - The note arrived pre-written, so Thread B assumed the learner was
+    already equipped to make downstream choices.
+
+The corrective rules in Section 4 resolve this.
+
+--------------------------------------------------------------------------------
+6. HOW TO INTERACT GOING FORWARD
+--------------------------------------------------------------------------------
+
+Between subtopics:
+  - Learner says either "teach" or "validate", and pastes the relevant
+    .txt if validating.
+
+During validation:
+  - Thread B checks the note for:
+      (a) scope alignment with the tracker step,
+      (b) inherited items that do not fit the OCR task,
+      (c) unresolved or blocking dependencies (e.g. cloth colour C3),
+      (d) concrete output and downstream implications,
+      (e) acceptance-criteria coverage for the eventual report.
+  - If valid, tick the checkbox and prompt the next step's title only.
+  - If not valid, prompt for the specific missing content.
+
+During teaching:
+  - Thread B explains the concept, functions, libraries, data flow, and
+    downstream use.
+  - Then produces a .txt note (or expands the pasted draft).
+  - The learner studies it, edits it, and moves it to Thread B for
+    validation.
+
+--------------------------------------------------------------------------------
+7. NOTE CONVENTIONS USED IN THIS MODULE
+--------------------------------------------------------------------------------
+
+  - Filenames:      IAI-gpt-tracker-<step>.txt (per step)
+                    IAI-gpt-explains-<topic>.txt (reference)
+                    IAI-gpt-tracker-changes<...>.txt (tracker edits)
+  - Format:         === headers, --- dividers, plain ASCII, indented
+                    pseudo-code, [PLACEHOLDER] markers for values to be
+                    filled at execution time.
+  - Each note ends with a CHECKLIST STATUS block showing ticks and the
+    next pending step.
+
+--------------------------------------------------------------------------------
+8. WHY THIS METHOD WORKS FOR THIS LEARNER
+--------------------------------------------------------------------------------
+
+  - The learner is new to AI/ML/DL. Notes are also LEARNING artefacts,
+    not only working documents.
+  - The two-thread split lets teaching and design happen without the
+    consultant thread short-circuiting the learning.
+  - The .txt notes double as:
+      (a) development blueprint,
+      (b) reference for writing the three reports,
+      (c) traceable decision record for peer review and assessment,
+      (d) learning consolidation.
+  - Because the reports (Preliminary ML, Full ML, DL) are three deliveries
+    of the SAME project, the notes accumulate into one continuous design
+    history across the semester.
+
+--------------------------------------------------------------------------------
+9. STATE AT END OF THIS NOTE
+--------------------------------------------------------------------------------
+- Workflow clarified.
+- Two-thread nuance recorded (Section 2).
+- Behavioural corrections listed explicitly (Section 4).
+- Ready to proceed with 1.5.1 in the appropriate mode.
+- Awaiting signal: "teach" or "validate".
+
+================================================================================
+END OF NOTE
+================================================================================

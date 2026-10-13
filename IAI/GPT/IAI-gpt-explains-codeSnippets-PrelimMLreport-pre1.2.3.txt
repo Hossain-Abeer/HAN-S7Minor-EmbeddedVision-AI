@@ -1,0 +1,25 @@
+[1.2.3] should thispart include a code snippet that'll be used for Prelim ML report or not?
+Short answer: No — not for 1.2.3 specifically.
+
+Reasoning:
+
+Preliminary ML template has no code appendix section. The preliminary TOC is: Introduction, Problem statement, Data acquisition & exploration, References. Code appendices only appear in the Full ML report and DL report templates.
+
+The Excel rubric (peer-review feedback form) requires code snippets only at preprocessing (1.7):
+
+"Preprocessing is appropriate, code snippets present" — level 3 for the preprocessing criterion.
+
+The acquisition and feature-engineering criteria say nothing about code snippets.
+
+Section 3 is capped at 5 A4 pages. Adding extraction-code snippets wastes space. Describe acquisition narratively instead (e.g., "Frames were extracted from 5 × 30 fps clips using cv2.VideoCapture at every 5th frame; blur rejected via Laplacian variance < T").
+
+What this means practically:
+
+Write the code anyway in 1.2.3 (a real script — you need it to actually extract frames).
+
+Do not paste it into the preliminary report. Reference it as "script in src/" if useful.
+
+Do paste snippets into the Full ML report code appendix (which does require them and includes preprocessing/model/training/evaluation snippets).
+
+At 1.7, do paste preprocessing snippets into the preliminary report — that's explicitly required by the rubric.
+

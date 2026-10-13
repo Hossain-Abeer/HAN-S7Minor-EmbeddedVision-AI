@@ -1,0 +1,224 @@
+================================================================================
+1.3.5 AUDIT CLASS BALANCE (≥N PER CLASS)
+================================================================================
+
+DECISION
+--------
+Method:      Script (counts files per class folder, prints table).
+Order:       Cull first, then count.
+Threshold:   N = 50 crops/class minimum.
+Escalation:  If any class < 50, re-run extraction at stride 3 (every 3rd frame
+             instead of every 5th), then re-sort and re-audit.
+             No other escalation applied at this stage.
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+After 1.3.4 (manual sort), each class folder 1\ ... 15\ holds some number of
+crops. 1.3.5 has TWO jobs, in this order:
+
+  (a) CULL  - glance through each folder, delete junk crops that survived
+              sorting: illegible numerals, occluded balls, merged blobs,
+              false positives, obvious duplicates, blurry crops.
+  (b) COUNT - run a script that reports per-class file counts.
+
+Culling before counting matters: a count that includes junk is misleading.
+The number that goes into the report must reflect USABLE crops, not raw
+file count.
+
+--------------------------------------------------------------------------------
+2. WHY CULL HERE (AND NOT EARLIER)
+--------------------------------------------------------------------------------
+- 1.3.2 deliberately over-produces crops (write first, judge later).
+- 1.3.4 sorts by numeral but does not cull quality.
+- 1.3.5 is the LAST step before the dataset freezes and 1.4 splits it.
+  This is the correct place to remove junk.
+- Ordering: cull first, THEN count. Counting first tempts you to keep
+  junk to hit the threshold.
+
+--------------------------------------------------------------------------------
+3. WHY A SCRIPT FOR COUNTING
+--------------------------------------------------------------------------------
+- One run prints all 15 counts + total + min/max/mean.
+- Reproducible format across re-runs (needed after any rescale).
+- The output table is direct evidence for Preliminary ML §3
+  (data quality: sufficient, balanced).
+- Manual Properties-clicking across 15 folders is error-prone and adds
+  no rigour.
+
+--------------------------------------------------------------------------------
+4. THRESHOLD - N = 50
+--------------------------------------------------------------------------------
+Reason:
+  Later, 1.4 splits each class ~70/15/15 (train/val/test). 5-fold CV on the
+  training set then produces folds of ~7-10 samples per class. Below 50,
+  folds get too thin to train or evaluate meaningfully. 50 is the floor.
+
+Not a target - if a class naturally yields 80-120 usable crops, keep them.
+
+--------------------------------------------------------------------------------
+5. ESCALATION (SINGLE STEP)
+--------------------------------------------------------------------------------
+If any class < 50 after cull + count:
+
+  Re-run the extraction pipeline with FRAME_STRIDE = 3
+  (1.2.3 currently uses 5). More frames -> more detection chances -> more
+  crops of the short class. Then re-run 1.3.2 -> 1.3.4 -> 1.3.5.
+
+No further escalation at this stage (no threshold loosening, no re-record).
+If stride 3 still leaves a class short, that finding goes into the report
+as a limitation.
+
+--------------------------------------------------------------------------------
+6. WORKFLOW
+--------------------------------------------------------------------------------
+1. Open each 1\ ... 15\ folder.
+2. Delete junk crops (per 1.3.4 rules: when in doubt, delete).
+3. Run count_classes.py.
+4. Read the printed table.
+5. If min_count >= 50  -> done.
+   If min_count <  50  -> set FRAME_STRIDE = 3, re-run 1.2.3-1.3.5.
+
+--------------------------------------------------------------------------------
+7. CODE SNIPPET
+--------------------------------------------------------------------------------
+
+import os
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+CROP_ROOT       = r"[CROP_ROOT]"       # e.g. D:\HAN\Semester 7 Minor\
+                                       #        billiards-game-clips
+CLASS_IDS       = [CLASS_IDS]          # e.g. list(range(1, 16))
+MIN_PER_CLASS   = [MIN_PER_CLASS]      # e.g. 50
+
+# ============================================================================
+# COUNT
+# ============================================================================
+def count_per_class(crop_root, class_ids):
+    """
+    Return dict {class_id: file_count} for PNG files in each class folder.
+    Missing folder -> count 0 (does not raise).
+    """
+    counts = {}
+    for cid in class_ids:
+        folder = os.path.join(crop_root, str(cid))
+        if not os.path.isdir(folder):
+            counts[cid] = 0
+            continue
+        n = sum(1 for f in os.listdir(folder)
+                if f.lower().endswith(".png"))
+        counts[cid] = n
+    return counts
+
+
+def report_counts(counts, min_per_class):
+    """
+    Print a table and flag under-delivering classes.
+    """
+    print(f"{'class':>6} | {'count':>6} | status")
+    print("-" * 30)
+    under = []
+    for cid in sorted(counts):
+        n = counts[cid]
+        flag = "OK" if n >= min_per_class else "SHORT"
+        if flag == "SHORT":
+            under.append(cid)
+        print(f"{cid:>6} | {n:>6} | {flag}")
+
+    total = sum(counts.values())
+    mn = min(counts.values())
+    mx = max(counts.values())
+    print("-" * 30)
+    print(f"total = {total} | min = {mn} | max = {mx} | "
+          f"threshold = {min_per_class}")
+
+    if under:
+        print(f"\nSHORT classes: {under}")
+        print("Action: re-run extraction with FRAME_STRIDE = 3.")
+    else:
+        print("\nAll classes meet threshold. Proceed to 1.4.")
+
+
+if __name__ == "__main__":
+    counts = count_per_class(CROP_ROOT, CLASS_IDS)
+    report_counts(counts, MIN_PER_CLASS)
+
+
+--------------------------------------------------------------------------------
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+Placeholder     | Example                                | Purpose
+----------------|----------------------------------------|------------------
+[CROP_ROOT]     | D:\HAN\Semester 7 Minor\               | Parent of
+                |   billiards-game-clips                 | class folders
+[CLASS_IDS]     | list(range(1, 16))                     | Classes 1..15
+[MIN_PER_CLASS] | 50                                     | Threshold N
+
+--------------------------------------------------------------------------------
+8. CODE DESCRIPTION
+--------------------------------------------------------------------------------
+os.listdir(folder)
+  Returns filenames in the class folder. Filtered to .png only, so that
+  stray non-image files (e.g. Thumbs.db) do not inflate the count.
+
+sum(1 for f in ...)
+  Generator count - one pass, no list allocation. Fine for hundreds of
+  files.
+
+Missing folder -> counts[cid] = 0
+  Defensive: if a class folder does not exist, we record 0 rather than
+  crash. That 0 will be flagged as SHORT and trigger escalation cleanly.
+
+report_counts()
+  Prints a fixed-width table. The min/max/total line is the summary that
+  goes into Preliminary ML §3. The "SHORT classes" line names exactly
+  which classes failed, so the escalation decision is mechanical.
+
+Threshold comparison uses >=, not >.
+  A class with exactly 50 passes.
+
+--------------------------------------------------------------------------------
+9. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+- Printed count table (paste into Preliminary ML §3).
+- Screenshot of the 1\ ... 15\ folder tree with file counts (optional,
+  reinforces the table visually).
+- If escalation triggered: reject log CSV and re-run artefacts from
+  1.2.4-1.3.4 (for traceability).
+
+--------------------------------------------------------------------------------
+10. RESCALE TRIGGERS
+--------------------------------------------------------------------------------
+- Any class < 50:
+    -> re-run 1.2.3 with FRAME_STRIDE = 3, then re-run 1.3.2-1.3.5.
+- After stride-3 re-run, if a class is STILL < 50:
+    -> document as a limitation in Preliminary ML §3
+       (data insufficiency for that class). No further escalation here.
+- If a class is heavily over-represented (e.g. > 3x median):
+    -> note in report; consider capping during 1.4 split if it biases
+       training. Not required at this step.
+
+--------------------------------------------------------------------------------
+11. NOTES FOR LATER
+--------------------------------------------------------------------------------
+- 1.4 split (stratified): reads from 1\ ... 15\. Assumes counts here are
+  final. Re-running 1.3.5 after 1.4 has started means re-doing the split.
+- Preliminary ML §3 narrative:
+    * state N = 50 threshold and why,
+    * show the count table,
+    * state cull-then-count order,
+    * if escalation ran, state stride change (5 -> 3) and result.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.3.5 Audit class balance (>=50 per class)
+    -> cull first, script count after
+    -> N = 50
+    -> escalation: stride 5 -> 3 on short class, single step only
+[ ] 1.4.1 Split into train/validation/test
+[ ] 1.4.2 Ensure stratified splitting
+================================================================================
+END OF NOTE

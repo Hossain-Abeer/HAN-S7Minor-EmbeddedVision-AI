@@ -1,0 +1,469 @@
+================================================================================
+PRE-1.2.2 EXPLAINER - SCOPE OF PRELIMINARY ML REPORT & EXTRACTION APPROACH
+================================================================================
+
+PURPOSE
+-------
+This document captures the reasoning and decisions that lead into step 1.2.2
+(choose extraction tool). It explains:
+  (a) what step 1.2.2 is and the tool options,
+  (b) why scripted extraction + manual audit was chosen,
+  (c) what cv2.VideoCapture does and does NOT do,
+  (d) how memory is handled across 5 clips,
+  (e) who does the classification (script vs human),
+  (f) the SCOPE of the Preliminary ML report - what work is and is not
+      required to complete it.
+
+It is a reference explainer, not a tracker note. The formal 1.2.2 note will
+be written separately after this is saved.
+
+--------------------------------------------------------------------------------
+1. WHERE WE ARE IN THE CHAIN
+--------------------------------------------------------------------------------
+1.1.2  5 .mp4 clips on disk (D:\HAN\Semester 7 Minor\billiards-game-clips\)
+        |
+        v
+1.2.1  Target: 50 crops/class, 750 total across 15 classes
+        |
+        v
+1.2.2  <- choose extraction tool                          [THIS DISCUSSION]
+        |
+        v
+1.2.3  Extract frames at fixed interval
+        |
+        v
+1.2.4  Filter frames (reject blur/duplicates)
+        |
+        v
+1.3.1  Detect ball regions in frames (Hough / HSV / contours)
+        |
+        v
+1.3.2  Crop ball regions -> save candidates
+        |
+        v
+1.3.3  Organise into folders 1/ ... 15/
+        |
+        v
+1.3.4  Sort crops by visible numeral
+        |
+        v
+1.3.5  Audit class balance (>=50/class)
+        |
+        v
+1.4-1.7  Split, features, EDA, preprocessing
+        |
+        v
+1.8    Write Preliminary ML report
+
+Key insight: 1.2.3 through 1.3.4 form a tight loop over frames. Keeping the
+extraction tool inside Python allows this entire backbone to live in ONE
+script. Splitting extraction into an external tool (e.g. FFmpeg dump) forces
+two stages and two tools.
+
+--------------------------------------------------------------------------------
+2. THE PROBLEM OF 1.2.2
+--------------------------------------------------------------------------------
+You have 5 .mp4 files. You need individual frames as the first step toward
+extracting ~750 ball crops (50/class x 15 classes).
+
+A frame is NOT a crop. A frame is a full 1920x1080 image. The tool choice in
+1.2.2 determines HOW frames are pulled out of the video, and whether the rest
+of the chain (filtering, ball detection, cropping) can be stitched into the
+same script or has to be a separate downstream stage.
+
+--------------------------------------------------------------------------------
+3. CANDIDATE SOLUTIONS
+--------------------------------------------------------------------------------
+
+Option A - cv2.VideoCapture (Python, inside venv)
+  - Reads .mp4 frame-by-frame.
+  - Already installed (opencv-python 4.11.0).
+  - Lets extract -> filter -> detect -> crop live in one script.
+  - Frame-by-frame granularity: you decide exactly which frames to keep.
+  - No new dependency.
+
+Option B - FFmpeg CLI (external binary, outside Python)
+  - Fastest raw extraction. One command per clip.
+  - Dumps frames to disk FIRST; then a second script loads them back.
+  - Two stages, two tools, extra disk I/O.
+  - Splits the pipeline; harder to keep "every Nth frame" logic consistent
+    with downstream filtering.
+  - Requires a separate install.
+
+Option C - imageio / imageio-ffmpeg (Python wrapper around ffmpeg)
+  - Python-native, wraps FFmpeg's speed.
+  - Another pip install.
+  - Marginal benefit over A for 5 short clips.
+
+Option D - GUI tool (VLC, Shotcut, etc.)
+  - Manual export from an editor.
+  - Infeasible at 750+ crops. No automation, no reproducibility.
+
+--------------------------------------------------------------------------------
+4. TRADE-OFF ANALYSIS
+--------------------------------------------------------------------------------
+
+cv2.VideoCapture (A):
+  (+) Already installed.
+  (+) One-script pipeline.
+  (+) Frame-by-frame control.
+  (+) No new dependency to learn.
+  (-) Naive seeking is slow, but linear read of 5 short clips is trivial.
+
+FFmpeg CLI (B):
+  (+) Fastest raw extraction.
+  (+) Industry standard.
+  (-) Separate install.
+  (-) Frames dumped to disk before any filtering.
+  (-) Two stages, two tools, more disk I/O.
+  (-) Frame-index logic duplicated between stages.
+
+imageio-ffmpeg (C):
+  (+) Python-native.
+  (-) Another pip install.
+  (-) Marginal benefit over A.
+
+GUI (D):
+  (-) Not feasible at scale.
+  (-) No reproducibility.
+
+RECOMMENDATION: Option A - cv2.VideoCapture.
+
+Justification:
+  1. Zero new setup - already verified working.
+  2. Single Python pipeline for extract -> filter -> detect -> crop.
+  3. Consistent with course scripts (acquire.py, segment.py, extract.py,
+     fetch_data.py all use OpenCV).
+  4. Easier to reproduce, document, and justify in the report.
+  5. FFmpeg still useful as an optional pre-flight (dump a few frames for
+     visual inspection), but not as the pipeline tool.
+
+--------------------------------------------------------------------------------
+5. MANUAL vs SCRIPTED - FULL COMPARISON
+--------------------------------------------------------------------------------
+
+WHAT "MANUAL" MEANS:
+  Open each clip in a player/editor, scrub to a frame, screenshot or export,
+  open image editor, crop each ball by hand, save to correct folder.
+  Repeat 750 times.
+
+WHAT "SCRIPTED" MEANS:
+  One Python script loops over clips, every Nth frame runs a filter, detects
+  ball regions, crops each, saves to 1/...15/. Then sort/audit (scripted
+  or manual).
+
+TRADE-OFF TABLE:
+
+  Dimension               | Manual              | Scripted
+  ------------------------|---------------------|-------------------------
+  Time to first crop      | Minutes             | Hours (build + debug)
+  Time per crop (after)   | ~30-60s             | milliseconds
+  Total for 750           | ~6-12 hours         | ~1 hour unattended
+  Fatigue / error rate    | High                | Zero
+  Reproducibility         | None                | Exact same every run
+  Defensibility in report | Weak                | Strong (documented)
+  Bias risk               | High (cherry-pick)  | Low (uniform rules)
+  Training value          | None                | Exercises 1.2-1.3
+  Failure mode            | Misclicks           | Detector misses
+  Recovery if rescale     | Repeat everything   | Re-run with new params
+
+CRITICAL POINTS:
+
+  1. Bias. Manual selection is selection bias in disguise. You skip blurred,
+     angled, badly-lit frames. Model trains on "nice" data and fails on real
+     data. Scripted filtering applies the same rule to every frame. The
+     Preliminary ML rubric explicitly requires discussion of UNBIASED data.
+     A scripted pipeline is the only credible defence.
+
+  2. Time. 750 crops by hand is a full working day. A script takes hours to
+     write and debug, then ~10 minutes per run. You will re-run it multiple
+     times as you tune parameters. Manual cannot be re-run cheaply.
+
+  3. Assessment alignment. The module is "Embedded Vision & AI". Rubric
+     rewards pipeline construction, automation, reproducibility. "I manually
+     cropped 750 images" scores poorly on technical rigour.
+
+  4. You'd write the script anyway. Step 1.5 (feature extraction) requires
+     Python reading crops from folders and computing colour histograms, Hu
+     moments, contours, ORB. Manual crops just delay that code-writing.
+
+  5. Counter-argument (weak). Manual guarantees 50/class if you just keep
+     going. Scripted may under-deliver on a rare number and force a re-run.
+     Fix: lower the frame interval, loosen filter thresholds, or run with
+     more permissive detector settings. Re-running is cheap.
+
+  6. HYBRID IS OPTIMAL. Script does bulk extraction + cropping + saving.
+     You do a short audit pass - glance through each folder, delete obvious
+     junk. ~10 minutes of verification, not 750 crops of work. Automated
+     uniformity + human sanity check. Standard industrial workflow.
+
+RECOMMENDATION: SCRIPTED, WITH A MANUAL AUDIT PASS.
+
+--------------------------------------------------------------------------------
+6. WHAT cv2.VideoCapture DOES AND DOES NOT DO
+--------------------------------------------------------------------------------
+
+cv2.VideoCapture is a READER ONLY. It never writes anything. It decodes a
+frame into memory (numpy array) and hands it to you.
+
+Writing crops is a SEPARATE call: cv2.imwrite(path, crop). You pass the path
+and the array. That saves the file.
+
+TWO FUNCTIONS:
+
+  cv2.VideoCapture("clip.mp4")          -> opens video, hands you frames
+  cv2.imwrite(".../1/crop_0001.png", crop)  -> writes one array to disk
+
+They are unrelated. VideoCapture does not know or care what you do with
+the frame.
+
+WHAT THE SCRIPT ACTUALLY DOES PER FRAME (pseudocode):
+
+  cap = cv2.VideoCapture("billiards-game-clip1.mp4")
+  frame_idx = 0
+
+  while True:
+      ret, frame = cap.read()
+      if not ret:
+          break
+
+      if frame_idx % N == 0:                    # 1.2.3 every Nth frame
+          if passes_filter(frame):              # 1.2.4 blur/dup reject
+              balls = detect_balls(frame)       # 1.3.1 Hough/HSV/contours
+              for ball in balls:
+                  crop = crop_region(frame, ball)    # 1.3.2
+                  label = guess_label(crop)          # 1.3.4 pre-sort
+                  cv2.imwrite(                        # <- SAVES the crop
+                      f".../billiards-game-crops/{label}/"
+                      f"clip{clip_id}_frame{frame_idx}_ball{k}.png",
+                      crop
+                  )
+      frame_idx += 1
+
+  cap.release()
+
+Only cv2.imwrite produces files. cv2.VideoCapture and cap.read() never do.
+
+--------------------------------------------------------------------------------
+7. MEMORY ANALYSIS - 16 GB RAM, ~7 GB FREE
+--------------------------------------------------------------------------------
+
+One frame at a time. ALWAYS. That is how cv2.VideoCapture works - cap.read()
+returns the next single frame and advances. It never loads the whole clip.
+
+MEMORY MATH:
+
+  One 1920x1080x3 uint8 frame       ~= 6 MB
+  One ball crop                     ~= a few KB
+  Peak RAM during loop:
+      video decoder buffer + current frame + working copy
+      ~= tens of MB
+
+  Hypothetical "all frames in RAM":
+      5 clips x 30 fps x 60 s = 9,000 frames
+      9,000 x 6 MB = 54 GB  -> impossible
+
+  But you never try to. The loop discards each frame as it moves on. RAM
+  stays flat.
+
+CONCLUSION: 16 GB RAM (or even 7 GB free) is vastly over-provisioned for
+this task. No memory concern at all.
+
+--------------------------------------------------------------------------------
+8. HOW DOES THE SCRIPT KNOW WHICH BALL IS WHICH NUMBER?
+--------------------------------------------------------------------------------
+
+This is the REAL hard part, and it splits into two sub-problems.
+
+(a) WHICH REGIONS ARE BALLS? - geometric detection
+    - Hough circles (cv2.HoughCircles): expects round shapes of known radius.
+    - HSV colour thresholding (cv2.inRange): balls are coloured, cloth is
+      a known colour, invert cloth mask.
+    - Contour filtering: find contours, keep those roughly circular and of
+      correct size.
+    Output: list of bounding boxes / circles. No numbers involved yet.
+
+(b) WHICH NUMBER IS ON EACH BALL? - classification
+    Four honest options:
+
+    Option A - Manual labelling during audit (recommended first pass).
+      Script detects and crops every ball into an unsorted/ folder with
+      traceable filenames. Then you open the folder and drag each crop into
+      1/...15/. ~750 drags - tedious but reliable. Forces visual inspection
+      of every crop, which is the audit pass anyway.
+
+    Option B - Template matching / OCR.
+      For each crop: perspective-normalise (needs numeral orientation, which
+      is unknown -> hard), run Tesseract or a pretrained digit model, accept
+      if confidence > threshold, flag for manual review.
+      This is circular - solving the module's OCR task during data prep. Only
+      viable if a strong pretrained digit recogniser is already available.
+
+    Option C - Colour + position heuristics, then manual fix.
+      In standard pool, numbers correlate with colours (1=yellow, 2=blue,
+      3=red, ..., 8=black, 9-15=stripes of matching colour). Segment by hue,
+      assign tentative label, save into colour-named folders, then rename
+      colour -> number. BUT: 1 and 9 share yellow (9 is striped, 1 is
+      solid), so a solid/stripe discriminator is also needed. Works only if
+      the game follows standard pool conventions.
+
+    Option D - Fully scripted labelling via a pre-existing model.
+      Circular. Skip.
+
+    RECOMMENDATION: Option A. Automate mechanical work; classify manually
+    during audit. The audit pass has to happen anyway to remove bad crops.
+    Manual classification during audit costs almost no extra time. Avoids
+    circularity - no reliance on a model you don't yet have.
+
+BLUR FILTER (separate from classification):
+  Purely by image statistics. Variance of Laplacian is the classic measure.
+
+      def is_blurry(image, threshold=100.0):
+          return cv2.Laplacian(image, cv2.CV_64F).var() < threshold
+
+  Low value -> blurry -> reject. No ML needed. Tune threshold by inspecting
+  a handful of frames.
+
+--------------------------------------------------------------------------------
+9. SCOPE OF THE PRELIMINARY ML REPORT - WHAT IS ACTUALLY REQUIRED
+--------------------------------------------------------------------------------
+
+This is the crucial point that determines how much work belongs BEFORE the
+1.8 submission and what is deferred to later reports.
+
+WHAT THE PRELIMINARY TEMPLATE REQUIRES (Section 3 - Data acquisition and
+exploration):
+  1. Make an image set
+  2. Set up a controlled test area
+  3. Take photos
+  4. Label each photo
+  5. Make visual representations of your data
+  6. Assess data quality: representative? sufficient? balanced? unbiased?
+  Size: max 5 A4 pages.
+
+ASSESSMENT CRITERIA (Excel feedback form) for this section:
+  - Data acquired AND appropriate features are engineered and computed
+  - Feature data visualization is appropriate
+  - Preprocessing is present (scaling, cleaning)
+
+REQUIRED vs NOT REQUIRED FOR PRELIMINARY:
+
+  Item                                  | Needed?
+  --------------------------------------|--------------------------------
+  Cropping (50/class ball crops)        | YES
+  Feature engineering (colour, Hu,      | YES
+    contour, ORB)                       |
+  EDA (histograms, scatter, box,        | YES
+    correlation)                        |
+  Preprocessing (scaling, cleaning)     | YES
+  OCR algorithm / classifier training   | NO
+
+WHY CROPPING IS NON-NEGOTIABLE:
+  For the OCR subcomponent, the natural sample is ONE BALL = ONE CROP = ONE
+  LABEL. A full 1920x1080 frame with 15 balls is not one sample - it is 15
+  overlapping samples plus irrelevant cloth.
+  You cannot:
+    - Label each photo (what is the label of a full frame?)
+    - Visualise class balance (of what classes, without crops?)
+    - Show feature distributions (of what features, on full frames?)
+  The crops ARE the dataset. Cutting them is part of building it.
+
+WHY THE OCR ALGORITHM IS NOT NEEDED:
+  The OCR algorithm is the MODEL. Models are trained in Phase 2 and Phase 4.
+  The preliminary report is PRE-MODELLING:
+    - What data you collected
+    - How you engineered features from it
+    - What the features look like statistically
+  No classifier. No SVM. No CNN. No hyperparameters. No confusion matrix.
+  Those all go into the Full ML report (Section 6) and DL report.
+
+--------------------------------------------------------------------------------
+10. WHERE THE BOUNDARY SITS
+--------------------------------------------------------------------------------
+
+  Preliminary ML report  <-  Sections 1, 2, 3
+                             (Intro, Problem, Data + Features + EDA +
+                              Preprocessing)
+          |
+          v
+  Full ML report         <-  Sections 4, 5, 6, 7, 8, 9
+                             (Feedback + Model + Deploy + Conclusion)
+          |
+          v
+  DL report              <-  Sections 1-7
+                             (Augmentation + CNN + Transfer + Deploy +
+                              Compare)
+
+The preliminary report is the ONLY one that stops before modelling.
+Everything from 1.4 onward - model training, evaluation, deployment - lives
+in the Full ML report.
+
+--------------------------------------------------------------------------------
+11. WHAT THIS MEANS FOR WORK ORDER
+--------------------------------------------------------------------------------
+
+For the Preliminary ML report, you need to complete 1.1 through 1.7:
+
+  1.1  Clips                             [done]
+  1.2  Frames extracted (no crops yet)
+  1.3  Ball crops, sorted into 1/...15/  [YES, cropping]
+  1.4  Split into train/val/test
+  1.5  Feature extraction                [YES, features]
+  1.6  EDA                               [YES, exploration]
+  1.7  Preprocessing                     [YES, pipeline]
+        |
+        v
+  1.8  Write preliminary report
+
+Only 1.4-1.7 are borderline - technically some could be argued as
+"modelling prep". But the rubric explicitly rewards them in the preliminary
+section. So do them.
+
+The OCR algorithm - writing a classifier that reads digits - is NOT
+required for preliminary. That starts in Phase 2.
+
+--------------------------------------------------------------------------------
+12. SUBTLETY - WHAT IF WE CONSIDER CLIPS AS THE IMAGE SET?
+--------------------------------------------------------------------------------
+
+Argument: "My 'image set' is the 5 clips, and crops are a preprocessing step."
+
+Defensible in principle, but it makes Section 3 weak:
+  - Cannot visualise class balance.
+  - Cannot assess per-class sufficiency.
+  - Cannot show feature distributions on whole frames.
+Every rubric line assumes samples are UNIT ITEMS WITH LABELS. For your task,
+those units are ball crops.
+
+RECOMMENDATION: Treat crops as the image set. Build them via script (per
+Section 5 decision), audit them manually, and write Section 3 around them.
+
+--------------------------------------------------------------------------------
+13. FINAL DECISIONS SUMMARY
+--------------------------------------------------------------------------------
+
+  1.2.2 Tool choice:
+     cv2.VideoCapture (Option A).
+
+  1.2.2 Workflow:
+     Scripted extraction + cropping, with a manual audit pass.
+
+  1.2.2 Crop storage location:
+     D:\HAN\Semester 7 Minor\billiards-game-crops\<label>\
+     where <label> = 1..15.
+     Each filename encodes origin: clip{id}_frame{idx}_ball{k}.png.
+
+  1.3.4 Classification approach:
+     Option A - script crops; manual drag-and-drop during audit.
+     Scripted pre-sorting (colour heuristics) is optional, not required.
+
+  Blur filter:
+     cv2.Laplacian variance, threshold tuned by inspection.
+
+  Preliminary ML report scope:
+     Includes cropping + features + EDA + preprocessing.
+     Excludes any classifier / model / OCR algorithm.
+
+--------------------------------------------------------------------------------
+END OF EXPLAINER
+================================================================================

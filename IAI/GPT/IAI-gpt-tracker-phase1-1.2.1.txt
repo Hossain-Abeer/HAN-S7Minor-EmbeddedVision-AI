@@ -1,0 +1,9 @@
+ 1.2.1 complete: 50 crops/class minimum → 750 total across 15 classes.
+
+Yield check (worth noting as a risk): 5 clips × 30 fps × ~60s = ~9,000 raw frames. If ~1–2% of frames yield a clean numeral crop for any given class, that's ~90–180 crops per class before filtering. 50/class is achievable with margin. If a specific number is rare in the clips, it'll be the bottleneck — track per-class yield during 1.3.5.
+
+Rescale triggers to keep in mind:
+
+< 30/class after extraction → extend interval (denser sampling) or re-record.
+
+< 10/class → re-record required.

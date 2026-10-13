@@ -1,0 +1,346 @@
+================================================================================
+IAI-GPT-EXPLAINS - PRE-1.5.1 CONTEXT
+================================================================================
+
+PURPOSE
+-------
+Reference note capturing the discussion immediately before tracker step 1.5.1.
+Explains (a) how the IAI subcomponent maps onto the S7 Minor Project, (b) why
+the tracker's original 1.5 feature list does not fit an OCR task, (c) what the
+OCR-appropriate feature direction is, (d) the rotation problem and how colour
+is used to resolve it, (e) the pragmatic accuracy bar set for this module,
+(f) the colour-histogram mechanics as taught (retained as learning artefact),
+(g) the Phase 2 option enumeration and the reasoning that selected (a),
+(h) the one-workflow statement, and (i) the thread-relationship nuance.
+
+--------------------------------------------------------------------------------
+1. PROJECT / IAI RELATIONSHIP (RECAP)
+--------------------------------------------------------------------------------
+The S7 Minor has two modules relevant here:
+
+- S7 Minor Project  - the larger system: Embedded Vision & AI for Billiards &
+                      Snooker. Full pipeline: camera, ball detection, rule
+                      logic, game counter, optional billing.
+
+- IAI (EVML-EVD3)  - the ML/DL module. Its assessment is scoped to ONE
+                      subcomponent of the Project, chosen by the student.
+
+Chosen subcomponent: OCR of the numerals on billiard balls.
+  - Scope: billiard balls 1-15 (cue excluded; snooker excluded).
+  - Goal: given a ball crop, output the numeral.
+
+This is the "ML objective in your EVML project" path from the IAI template
+(project option 3: replace the classifier in step 5 of the conventional vision
+train). The OCR subcomponent plugs directly into the Project's ball-ID stage.
+
+--------------------------------------------------------------------------------
+2. THE TRACKER INHERITANCE PROBLEM
+--------------------------------------------------------------------------------
+The original IAI-gpt-roadmap-tracker was built by mirroring the IAI lesson
+flow. Lesson slides list standard features for the default project paths
+(hand-gesture classification, object classification):
+
+    - Colour histograms
+    - Hu moments
+    - Contour features (area, perimeter, aspect ratio, extent)
+    - ORB keypoints
+
+These four were copied verbatim into tracker 1.5.x. That was a mistake.
+
+They were written for the DEFAULT IAI projects, not for OCR on numerals.
+Applying them to ball crops would produce features that describe the BALL,
+not the NUMERAL on it.
+
+--------------------------------------------------------------------------------
+3. WHY EACH INHERITED FEATURE FAILS FOR OCR
+--------------------------------------------------------------------------------
+
+Colour histograms
+  Summarise pixel colour distribution of the whole crop. Since ball colour
+  correlates loosely with number, this gives WEAK signal, not a reading.
+  Solid maroon "7" and striped maroon "9" share colour: cannot be
+  distinguished by colour alone. Legitimate only as an auxiliary cue when
+  resolving specific numeral ambiguity (see Section 6).
+
+Hu moments (on the ball outline)
+  Describe the SHAPE of the ball, which is a circle in every class.
+  Rotational invariance is their headline property, which actively destroys
+  the numeral signal (rotation distinguishes "6" from "9", and any rotated
+  "2", "5", "7" from their upright forms).
+  Not applicable.
+
+Contour features (area, perimeter, aspect ratio, extent)
+  Same problem: the ball contour is a circle. Identical across all 15
+  classes. Not applicable.
+
+ORB keypoints
+  Designed for large textured scenes. Numeral crops are tiny and contain
+  few distinctive keypoints. Weak and unstable. Not applicable.
+
+CONCLUSION: the entire tracker 1.5 list was inherited from a generic lesson
+example and does not fit an OCR subcomponent. It must be replaced.
+
+--------------------------------------------------------------------------------
+4. OCR-APPROPRIATE FEATURE DIRECTION
+--------------------------------------------------------------------------------
+Reading a numeral is a SPATIAL / SHAPE task, not a colour task.
+
+The pre-step that makes OCR tractable:
+
+    Numeral-region extraction
+      - Inside each ball crop (already separated from cloth by the 1.3.1
+        HSV mask), threshold on high-value, low-saturation pixels.
+      - The white numeral stands out against the coloured ball surface.
+      - Output: a binary blob containing just the numeral.
+
+Once the numeral blob exists, meaningful features can be derived:
+
+      - Aspect ratio of the blob
+      - Area ratio (numeral pixels / ball pixels)
+      - Spatial distribution (projections along x and y)
+      - Hole count ("8" has 2 holes, "0" has 1, "1" has 0)
+
+These are modest but interpretable. They capture numeral geometry and do not
+throw away rotation information the way Hu moments do.
+
+For Phase 4 (DL), the numeral blob itself can be fed directly to a CNN. The
+CNN learns the numeral without any hand-crafted feature.
+
+--------------------------------------------------------------------------------
+5. THE ROTATION PROBLEM
+--------------------------------------------------------------------------------
+Billiard balls rotate freely during play. In a screen recording, a numeral
+appears at arbitrary rotation: 0, 45, 90, 180 degrees, anything.
+
+Consequences:
+
+  - "6" rotated 180 degrees is visually identical to a "9".
+  - "2" and "5" can look similar at some orientations.
+  - A rotation-INVARIANT feature (like Hu moments) erases the information
+    that distinguishes these cases. It makes the problem HARDER, not easier.
+
+  - Classical hand-crafted features will hit a ceiling on rotated numerals.
+    This is a documented, expected limitation of Phase 2.
+
+  - Phase 4 (CNN) handles rotation via augmentation: the network sees the
+    same numeral at many angles during training and learns to read
+    regardless. This produces the central story of the DL report:
+    "classical hand-crafted features plateaued at X%; CNN with augmentation
+    reached Y%."
+
+--------------------------------------------------------------------------------
+6. COLOUR AS A TARGETED DISAMBIGUATOR (USER DECISION)
+--------------------------------------------------------------------------------
+Ball colour is NOT a primary feature. It is reserved as a fallback ONLY for
+cases where the numeral is genuinely ambiguous, specifically "6" vs "9".
+
+Rationale:
+  - Colour is used only where it resolves a specific, enumerable confusion.
+  - For 6/9, the ball colours differ in standard pool: 6 is green, 9 is
+    green-and-white striped. Solid vs striped is a colour-pattern cue, not
+    a pure hue cue, but it does disambiguate.
+  - No other numeral pair has a rotation-induced identity confusion of the
+    same severity. So the fallback is narrow by design.
+
+Practical implementation (for later reference, not for 1.5.1):
+  - If the classifier outputs "6 or 9" with high uncertainty, sample the
+    ball's dominant hue / solid-vs-stripe pattern from the crop.
+  - Use that as a tie-breaker.
+  - Not part of the initial 1.5.1 design. Added only if Phase 2/4 results
+    show a persistent 6/9 confusion in the confusion matrix.
+
+--------------------------------------------------------------------------------
+7. PRAGMATIC ACCURACY BAR
+--------------------------------------------------------------------------------
+The assessor's bar for this subcomponent is a FUNCTIONAL PROGRAM, not a
+high-accuracy model. Recognition that works, with clear documentation of
+limitations, satisfies the module.
+
+  - No push for state-of-the-art accuracy.
+  - Honest reporting of failure modes (6/9 confusion, rotation sensitivity)
+    is valued higher than a suspiciously clean result.
+  - The DL report's comparison with the ML approach is expected to show
+    an improvement, not perfection.
+
+This sets the design target: build a pipeline that reads numerals, document
+the results, note the limitations, and improve in the DL iteration.
+
+--------------------------------------------------------------------------------
+8. COLOUR-HISTOGRAM MECHANICS (TAUGHT, RETAINED AS LEARNING ARTEFACT)
+--------------------------------------------------------------------------------
+Retained because colour histograms remain part of the IAI lesson slides and
+may appear in quizzes. Not used as a feature for the OCR subcomponent, but
+the concept must be understood.
+
+WHAT A COLOUR HISTOGRAM IS
+  An image is a grid of pixels; each pixel is three numbers (BGR in OpenCV,
+  or HSV after conversion). A colour histogram summarises how many pixels
+  fall into each colour bucket.
+
+  Split a channel's 0-255 range into 32 bins (each covering 8 intensity
+  values). Count pixels per bin. The result is 32 numbers, summing to the
+  total pixel count.
+
+  For three channels independently: 3 x 32 = 96 numbers. That fixed-length
+  vector is the feature vector for that image, regardless of crop size.
+
+WHY COLOUR SPACE MATTERS
+  BGR histogram is brightness-sensitive: same ball under different lighting
+  produces very different histograms. Bad.
+
+  HSV separates hue (H) from saturation (S) from brightness (V). Histogram
+  H and S only, ignore V, and the same ball produces similar histograms
+  under different lighting.
+
+LIBRARIES AND FUNCTIONS
+  OpenCV (cv2) and NumPy only. No new dependencies.
+
+  import cv2
+  import numpy as np
+
+  img = cv2.imread("1/clip1_frame0005_ball0.png")
+  hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+  # Histogram Hue channel: 32 bins over 0-180 (OpenCV H is 0-179)
+  hist = cv2.calcHist([hsv], [0], None, [32], [0, 180])
+
+  # Normalise to sum 1, so crops of different sizes are comparable
+  hist = cv2.normalize(hist, hist).flatten()
+  # -> array of 32 floats
+
+  cv2.calcHist arguments:
+    [hsv]      image list (list even for a single image - API quirk)
+    [0]        which channel(s); [0,1] for joint H and S
+    None       optional mask to exclude pixels (e.g. cloth)
+    [32]       number of bins; [32, 32] for two-channel joint
+    [0, 180]   value range
+
+  cv2.normalize divides by the sum, removing the artefact that larger crops
+  (more pixels) would otherwise produce larger histogram values.
+
+WHAT THE OUTPUT FEEDS INTO (for the default IAI projects)
+  Crop -> colour histogram -> feature vector (1D array)
+    -> stack N rows -> X (N x N_features)
+    -> pair with labels y (from folder name)
+    -> feed to SVM / k-NN / RF (Phase 2)
+    -> feed to 1.6 EDA (histograms of histograms, scatter, correlation)
+    -> feed to 1.7 preprocessing (scaling)
+
+  The feature matrix X is what every downstream step consumes.
+
+APPLICABILITY TO OCR
+  Applied to the BALL crop, a colour histogram describes the ball, not the
+  numeral. Because ball colour correlates weakly with number, the histogram
+  carries weak indirect signal, not a reading. Solid maroon "7" and striped
+  maroon "9" produce similar colour histograms, so colour alone cannot
+  separate them. Retained as taught concept, excluded from the OCR feature
+  set.
+
+--------------------------------------------------------------------------------
+9. PHASE 2 OPTION ENUMERATION AND DECISION
+--------------------------------------------------------------------------------
+When considering how Phase 2 (classical ML) should approach the OCR task,
+three options were presented:
+
+  (a) Real attempt using numeral-blob shape features.
+      Might work, might not. Honest result either way.
+
+  (b) Baseline that demonstrates the limitation of hand-crafted features on
+      numerals, explicitly setting up Phase 4 as the solution.
+
+  (c) Skipped as a serious attempt. Trained minimally to satisfy the report
+      template, with most analysis reserved for Phase 4.
+
+DECISION: option (a).
+
+Rationale:
+  The Preliminary ML report, the Full ML report, and the DL report are
+  iterations of the SAME project, delivered at different points in the
+  3-month semester. This was stated explicitly by the learner:
+
+      "the Prelim ML report & the full ML report, together with the
+       separate full DL report, are iterations of the same, one workflow -
+       just having the document & later documents handed in at different
+       periods of the semester's 3 months time."
+
+  Because it is ONE workflow, Phase 2 must be real work on the same problem
+  that Phase 4 will later refine. Option (c) is ruled out. Option (b) is
+  close but implies Phase 2 is designed to fail; option (a) treats Phase 2
+  as a genuine attempt, with the rotation limitation documented as an
+  expected (not engineered) ceiling.
+
+  Consequence: Phase 2 features must be chosen knowing the rotation
+  limitation upfront, not discovered after training.
+
+--------------------------------------------------------------------------------
+10. ONE-WORKFLOW STATEMENT (EXPLICIT RECORD)
+--------------------------------------------------------------------------------
+The three deliverables are three successive snapshots of one continuous
+project, not three separate projects.
+
+  Preliminary ML report  -  data acquisition, features, EDA, preprocessing.
+  Full ML report         -  adds model selection, training, deployment,
+                             comparison to goals.
+  DL report              -  adds augmentation, custom CNN, transfer
+                             learning, deployment, and comparison back to
+                             the ML approach.
+
+This consolidation is deliberate. It reduces work (one project, three
+write-ups) and produces a coherent improvement narrative across the reports
+(hand-crafted features plateaued at X%; CNN with augmentation reached Y%).
+
+--------------------------------------------------------------------------------
+11. THREAD-RELATIONSHIP NUANCE (WHY VALIDATION-THREAD CONFUSION OCCURRED)
+--------------------------------------------------------------------------------
+This note is produced in a two-thread workflow (see the companion note
+IAI-gpt-explains-approach_method-teaching_n_consult.txt for the full
+method). The nuance relevant to this note:
+
+  - The learner studies a topic in Thread A (teaching), produces a .txt
+    note, then edits it into a prompt for Thread B (validation).
+  - Thread B sees only the note. It never sees the teaching dialogue.
+  - When the learner pasted the 1.5.1 draft into Thread B, Thread B
+    could not tell whether the topic had been taught or was being taught
+    for the first time. It therefore asked the learner to decide on a
+    downstream design question (option a/b/c) that the learner was not
+    yet equipped to answer.
+  - The resolution: Thread B must not assume prior study. The learner
+    signals with "teach" (teach now) or "validate" (note is ready for
+    review). This is the interaction rule captured in the companion note.
+
+--------------------------------------------------------------------------------
+12. WHERE 1.5.1 SITS IN THE PIPELINE
+--------------------------------------------------------------------------------
+  1.3.2  ball crops saved to unsorted\
+  1.3.4  crops sorted into 1\ ... 15\
+  1.3.5  class balance audited
+  1.4.1  splits.csv written (train / val / test)
+  1.4.2  stratification verified
+          |
+          v
+  1.5.1  <- TARGET: extract numeral-region mask per crop
+          |
+          v
+  1.5.2+  derive shape features from the numeral blob
+          |
+          v
+  Phase 2  train classical classifier on those features
+  Phase 4  train CNN on raw crops / numeral blobs
+
+--------------------------------------------------------------------------------
+13. STATE AT END OF THIS NOTE
+--------------------------------------------------------------------------------
+- Tracker 1.5.x as originally written (colour histograms, Hu, contour, ORB)
+  is SUPERSEDED. A rewrite of 1.5.1-1.5.x will follow.
+- 1.5.1's purpose is now defined: extract the numeral-region mask per crop.
+- Pending: teaching or validation of the numeral-mask extraction mechanics
+  (thresholding method, OpenCV functions, output format, downstream use).
+- Colour reserved only as a 6/9 disambiguator, not as a general feature.
+- Colour-histogram mechanics retained as a learning artefact (Section 8).
+- Phase 2 approach locked to option (a): real attempt (Section 9).
+- One-workflow statement recorded (Section 10).
+- Thread-relationship nuance recorded (Section 11).
+
+================================================================================
+END OF NOTE
+================================================================================

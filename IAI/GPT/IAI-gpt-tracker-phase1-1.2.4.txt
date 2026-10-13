@@ -1,0 +1,322 @@
+================================================================================
+1.2.4 FILTER FRAMES (REJECT BLUR / DUPLICATES)
+================================================================================
+
+DECISION SUMMARY
+----------------
+Blur threshold:      FIXED (single number applied uniformly to all clips).
+Duplicate strategy:  FRAME-DIFFERENCE (mean absolute diff to last kept frame).
+Frame-level gate:    Rejects frames, not individual crops.
+Reject log:          CSV, one row per rejected frame (reason, clip, frame, metric).
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+You have ~1,800 candidate frames (every 5th, from 5 clips). Not all are usable.
+
+Two failure modes drive this step:
+
+- BLUR:      motion blur (ball rolling, camera pan), out-of-focus frames,
+             compression artifacts. A blurred crop gives an unreadable
+             numeral - garbage in, garbage out.
+- DUPLICATES: in a 30 fps clip, consecutive frames can be near-identical
+             during pauses (aiming, racking, repositioning). Keeping every
+             5th still means some near-repeats. Feeding near-repeats skews
+             class balance and inflates the dataset artificially.
+
+The essence: apply the same objective, measurable rule to EVERY frame,
+before any crop or label is assigned. This is where the "unbiased data"
+line in the Preliminary ML report is earned.
+
+Boundary of this step:
+  1.2.4 decides WHICH FRAMES survive.
+  It does NOT decide which balls survive, which crops look good, or what
+  each ball is. Those are 1.3.x.
+
+--------------------------------------------------------------------------------
+2. FUNCTION & ROLE IN THE CHAIN
+--------------------------------------------------------------------------------
+Position:
+
+  1.2.3  extract every Nth frame
+          |
+          v
+  1.2.4  filter (THIS STEP)  <- blur + duplicate rejection
+          |
+          v
+  1.3.1  detect ball regions
+          |
+          v
+  1.3.2  crop + save
+
+Role: GATING. Nothing downstream sees a frame unless it passes here.
+
+Why gating first:
+  - Cost:       ball detection (Hough/contours) is more expensive per frame
+                than Laplacian variance. Filtering first saves compute.
+  - Evidence:   "We rejected X% for blur (variance < T) and Y% for
+                duplication (diff < T)" is concrete, reproducible, and
+                defensible in Preliminary ML report §3 (data quality:
+                representative, sufficient, balanced, unbiased).
+  - Training:   blurred samples teach the model to tolerate blur - but only
+                if the numeral is legible. If illegible, the sample is noise.
+                Controlled blur belongs to augmentation (Phase 4), not to the
+                raw pool.
+
+Subtlety: 1.2.4 rejects FRAMES, not crops. A frame with 8 sharp balls and 3
+blurred ones loses all 11. This is a deliberate trade-off - frame-level
+filtering is cheap, simple, and unbiased. Crop-level sharpness checks are a
+possible extension in 1.3.2, not part of this step.
+
+--------------------------------------------------------------------------------
+3. INTERACTIVITY WITH OTHER SUBSECTIONS
+--------------------------------------------------------------------------------
+Upstream:
+  1.2.3 (interval)   defines how many frames reach the gate. Smaller interval
+                     -> more duplicate work. Larger interval -> blur rejection
+                     may seem eager by chance (surviving frames already sharp).
+  1.1.1 (constants)  30 fps / 1080p sets baseline sharpness. Lower fps or
+                     lower resolution would shift the threshold tuning.
+
+Downstream:
+  1.3.1 (detect)     sees only surviving frames. Aggressive filter -> fewer
+                     frames -> risk of under-delivering on 1.3.5.
+  1.3.5 (audit)      if a rare class is mostly in blurred/duplicated frames,
+                     aggressive filtering can erase that class. Trigger:
+                     re-run at every 3rd frame or loosen BLUR_THRESHOLD.
+  1.5   (features)   features are computed on crops from surviving frames.
+                     Unfiltered blur degrades histograms / Hu moments.
+
+Lateral (design coupling):
+  1.2.3's loop skeleton already calls process_frame() inside the frame loop.
+  1.2.4 is thus a GATE inside that loop, not a second pass over disk.
+
+Report surface:
+  - Preliminary ML §3: cite thresholds and rejection rates.
+  - Full ML §8: if model fails on blurry deployment frames, point back to
+    what raw blur was excluded during data prep.
+
+--------------------------------------------------------------------------------
+4. BLUR THRESHOLD - OPTION CHOSEN: FIXED
+--------------------------------------------------------------------------------
+Metric:   variance of Laplacian.
+          lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+          Sharp image -> high variance. Blurred image -> low variance.
+
+Approach: ONE number, applied uniformly to every frame across all clips.
+
+How to pick:
+  Eyeball 10-20 frames (some visibly sharp, some visibly blurred), compute
+  their Laplacian variance, pick a number in the gap.
+  Example: sharp frames score 200-400, blurred score 20-60 -> threshold 100.
+
+Why fixed (not relative):
+  + Simple. One knob.
+  + Reproducible across runs.
+  + Easy to defend in the report ("frames below variance X were rejected").
+  + Clips come from the SAME game with the SAME recording settings, so
+    baseline sharpness is expected to be similar across clips.
+  - Fails if one clip is inherently softer than the others. Revisit if
+    inspection shows large baseline drift.
+
+Rejected alternative - relative threshold:
+  Reject bottom percentile per clip (e.g. bottom 20%).
+  + Self-calibrating; adapts per clip.
+  - Always rejects something, even if nothing is blurry.
+  - Harder to justify: "worst 20% per clip" != "anything below X".
+  - Two descriptions in the report (metric + percentile choice), not one.
+
+--------------------------------------------------------------------------------
+5. DUPLICATE REJECTION - OPTION CHOSEN: FRAME-DIFFERENCE
+--------------------------------------------------------------------------------
+Metric:   mean absolute pixel difference to the LAST KEPT frame.
+          Downscale both to (160, 90), then mean(absdiff).
+          diff = float(np.mean(cv2.absdiff(prev_kept_small, curr_small)))
+
+Rationale for comparing to LAST KEPT (not last seen):
+  A rejected duplicate must not reset the reference, or a slow pan would
+  flag every frame as duplicate.
+
+Threshold: mean abs diff < T -> reject.
+  Example: T = 5.0 on 0-255 scale.
+
+Why frame-difference (not hash-based, not skip):
+  + Cheap: ~1 ms/frame.
+  + Trivial to implement.
+  + Reliable for static states (paused aim, racking) which dominate
+    duplicate risk in billiard gameplay.
+  + No new dependency.
+  - Sensitive to global changes (brightness flicker, HUD animation) -
+    may miss duplicates that differ only slightly. Acceptable trade-off
+    here: game HUD is likely minimal or absent in overhead view.
+
+Rejected alternatives:
+  Hash-based (pHash):
+    + Robust to small pixel changes.
+    - Extra code/dependency; less intuitive threshold (Hamming 0-64).
+    - Can flag as different under particle/HUD effects - opposite failure.
+    Overkill for screen recordings, where pixels are already stable.
+
+  Skip entirely:
+    + Zero code.
+    - Risky if game holds long static states. 3 s pause = ~18 frames @ 30fps
+      = 3-4 kept frames * 5 visible balls = 15-20 duplicate crops, skewing
+      class balance in a way 1.3.5 may not catch.
+
+--------------------------------------------------------------------------------
+6. SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+Every fill-in placeholder is marked [LIKE_THIS]. Numeric placeholders are the
+ones you tune; literal-string placeholders are fixed labels.
+
+--------------------------------------------------------------------------------
+
+import cv2
+import numpy as np
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+BLUR_THRESHOLD   = [BLUR_THRESHOLD]      # e.g. 100.0 - variance of Laplacian
+DUP_THRESHOLD    = [DUP_THRESHOLD]       # e.g. 5.0   - mean abs diff, 0-255
+DUP_RESIZE       = ([DUP_RESIZE_W], [DUP_RESIZE_H])  # e.g. (160, 90)
+REJECT_LOG_PATH  = r"[REJECT_LOG_PATH]"  # e.g. "rejects.csv"
+
+# [STATE - DO NOT EDIT]
+_last_kept_frame = None
+
+
+# ============================================================================
+# FILTER
+# ============================================================================
+def passes_filter(frame, clip_id, frame_idx):
+    """
+    Return True to keep, False to reject.
+    Writes a rejection record on False.
+    """
+    global _last_kept_frame
+
+    # --- (a) Blur rejection ---
+    gray    = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+    if lap_var < BLUR_THRESHOLD:
+        log_reject("[REASON_BLUR]", clip_id, frame_idx, lap_var)
+        return False
+
+    # --- (b) Duplicate rejection ---
+    if _last_kept_frame is not None:
+        a = cv2.resize(frame,             DUP_RESIZE)
+        b = cv2.resize(_last_kept_frame,  DUP_RESIZE)
+        diff = float(np.mean(cv2.absdiff(a, b)))
+
+        if diff < DUP_THRESHOLD:
+            log_reject("[REASON_DUPLICATE]", clip_id, frame_idx, diff)
+            return False
+
+    _last_kept_frame = frame
+    return True
+
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+def log_reject(reason, clip_id, frame_idx, metric_value):
+    with open(REJECT_LOG_PATH, "a") as f:
+        f.write(f"{reason},{clip_id},{frame_idx},{metric_value:.4f}\n")
+
+--------------------------------------------------------------------------------
+
+FILL-IN TABLE
+-------------
+Placeholder             | Example            | Purpose
+------------------------|--------------------|--------------------------------
+[BLUR_THRESHOLD]        | 100.0              | Variance below this -> reject
+[DUP_THRESHOLD]         | 5.0                | Mean abs diff below -> reject
+[DUP_RESIZE_W]          | 160                | Downsample width before diff
+[DUP_RESIZE_H]          | 90                 | Downsample height before diff
+[REJECT_LOG_PATH]       | "rejects.csv"      | Where reject log is written
+[REASON_BLUR]           | "blur"             | Fixed label (don't tune)
+[REASON_DUPLICATE]      | "duplicate"        | Fixed label (don't tune)
+
+--------------------------------------------------------------------------------
+7. CODE DESCRIPTION (what each part does)
+--------------------------------------------------------------------------------
+cv2.cvtColor(frame, COLOR_BGR2GRAY)
+  Blur is a sharpness property; colour is irrelevant. Grayscale halves
+  the work per frame.
+
+cv2.Laplacian(gray, cv2.CV_64F).var()
+  Laplacian is an edge detector. .var() measures how "spread" the edge
+  responses are across the frame. Sharp image -> strong, varied edges ->
+  high variance. Blurred image -> weak, uniform edges -> low variance.
+  One number per frame.
+
+lap_var < BLUR_THRESHOLD
+  Reject if below. Threshold is the single knob.
+
+cv2.resize(frame, DUP_RESIZE)
+  Cheap 16:9 downsample. Two purposes: makes absdiff fast, and suppresses
+  pixel-level noise that could otherwise fool the duplicate test.
+
+cv2.absdiff(a, b)
+  Element-wise absolute difference. Both arrays are already downsized.
+
+np.mean(...)
+  One scalar representing "how different is this frame from the last
+  KEPT frame". Below threshold -> near-duplicate.
+
+_last_kept_frame
+  Module-level state. Updated ONLY on keep. A rejected duplicate must not
+  reset the reference, or a slow pan would flag every frame as duplicate.
+
+log_reject(reason, clip_id, frame_idx, metric_value)
+  Appends one row per rejected frame: reason, clip, frame index, and the
+  metric value that triggered the rejection (lap_var or diff). This CSV
+  is the raw evidence for the rejection-rate numbers cited in the report.
+
+--------------------------------------------------------------------------------
+8. FLOW INSIDE THE 1.2.3 LOOP (recap)
+--------------------------------------------------------------------------------
+The 1.2.3 loop calls process_frame inside the "every Nth frame" branch.
+1.2.4 is invoked inside that branch, before ball detection:
+
+    if frame_idx % FRAME_STRIDE == 0:
+        if passes_filter(frame, clip_id, frame_idx):
+            detect_and_crop(frame, clip_id, frame_idx)   # 1.3.x
+
+No frames are written to disk by 1.2.4. Only crop writing (1.3.2 via
+cv2.imwrite) produces files.
+
+--------------------------------------------------------------------------------
+9. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+- rejects.csv                (one row per rejected frame)
+- Surfaces cited in Preliminary ML §3:
+    * BLUR_THRESHOLD value
+    * DUP_THRESHOLD value
+    * rejection rate for blur (%, per clip and overall)
+    * rejection rate for duplicates (%, per clip and overall)
+
+--------------------------------------------------------------------------------
+10. RESCALE TRIGGERS
+--------------------------------------------------------------------------------
+- If any class < 50 crops at 1.3.5:
+    -> re-run at FRAME_STRIDE = 3 (denser sampling)
+- If any class < 30 crops after that:
+    -> loosen BLUR_THRESHOLD (e.g. 100 -> 70)
+- If duplicates still slip through into 1.3.5:
+    -> lower DUP_THRESHOLD (e.g. 5 -> 3)
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.2.4 Filter frames (reject blur/duplicates)
+    -> blur:      fixed threshold on Laplacian variance
+    -> duplicate: frame-difference to last kept frame
+    -> reject log: CSV
+[ ] 1.3.1 Detect ball regions (manual or auto: Hough / HSV / contours)
+
+================================================================================
+END OF NOTE
+================================================================================

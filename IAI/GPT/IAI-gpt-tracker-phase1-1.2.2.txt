@@ -1,0 +1,121 @@
+================================================================================
+1.2.2 CHOOSE EXTRACTION TOOL
+================================================================================
+
+DECISION
+--------
+Tool:      cv2.VideoCapture (opencv-python 4.11.0, already installed)
+Workflow:  Scripted extraction + cropping, with a manual audit pass.
+
+--------------------------------------------------------------------------------
+TOOL SELECTION
+--------------------------------------------------------------------------------
+Option A - cv2.VideoCapture            [SELECTED]
+Option B - FFmpeg CLI                  rejected (extra install, two-stage)
+Option C - imageio-ffmpeg              rejected (marginal gain over A)
+Option D - GUI export                  rejected (infeasible at 750+ crops)
+
+Rationale:
+- Zero new setup - verified working in 0.1.3.
+- Single Python pipeline: extract -> filter -> detect -> crop -> save.
+- Consistent with course scripts (acquire.py, extract.py, fetch_data.py).
+- Frame-by-frame control; reproducibility; report-defensible.
+
+--------------------------------------------------------------------------------
+MANUAL vs SCRIPTED
+--------------------------------------------------------------------------------
+Manual-only       rejected (6-12h for 750 crops; selection bias; weak rubric
+                  alignment; no reproducibility).
+Scripted-only     accepted for mechanical work, BUT audit pass required to
+                  remove junk crops.
+Hybrid (selected) Script bulk-work + ~10-minute manual audit.
+
+Rationale:
+- Manual selection is implicit bias; Preliminary ML §3 requires UNBIASED data.
+- 750 crops by hand is a full working day; re-runs are impossible.
+- 1.5 already requires Python reading crops + computing features - the
+  script would be written anyway.
+
+--------------------------------------------------------------------------------
+TOOL SCOPE (what cv2 does / does not do)
+--------------------------------------------------------------------------------
+cv2.VideoCapture:  READER. Yields one frame (numpy array) at a time.
+                   Never loads the whole clip; RAM stays flat.
+cv2.imwrite:       WRITER. Separate call. This is what produces crop files.
+
+Peak RAM during extraction: tens of MB.
+16 GB machine (7 GB free) is over-provisioned. No memory concern.
+
+--------------------------------------------------------------------------------
+CROP STORAGE & NAMING
+--------------------------------------------------------------------------------
+Status:    DEFERRED to 1.3.
+Reason:    Storage layout and naming scheme are tightly coupled to the
+           detection/cropping workflow (1.3.1-1.3.4). Deciding them now
+           would be premature and likely need rework once the crop
+           filenames' provenance requirements become concrete.
+Note:      Raw clips remain at D:\HAN\Semester 7 Minor\billiards-game-clips\
+           (unchanged).
+
+--------------------------------------------------------------------------------
+CLASSIFICATION APPROACH (feeds 1.3.4)
+--------------------------------------------------------------------------------
+Selected:  Option A - script detects + crops + saves to unsorted/;
+           user drags each crop into 1/ ... 15/ during audit.
+Rationale:
+- Avoids circularity (no reliance on a pre-existing digit recogniser).
+- Audit has to happen anyway; classification is ~free during audit.
+- Forces visual inspection of every crop (quality check built-in).
+
+Rejected:
+- Template matching / Tesseract - circular (solves the module's OCR task
+  during data prep).
+- Colour + position heuristics - works only if game follows standard pool
+  colour codes; solid vs stripe still needs discrimination.
+
+Note:      The unsorted/ intermediate folder is conceptual at this stage;
+           its concrete path and naming are deferred to 1.3 alongside crop
+           storage.
+
+--------------------------------------------------------------------------------
+BLUR FILTER (feeds 1.2.4)
+--------------------------------------------------------------------------------
+Method:  Variance of Laplacian.
+         cv2.Laplacian(img, cv2.CV_64F).var() < threshold -> reject.
+Threshold: Tuned by visual inspection of a handful of frames.
+No ML required for this filter.
+
+--------------------------------------------------------------------------------
+PRELIMINARY ML REPORT - SCOPE CONFIRMATION
+--------------------------------------------------------------------------------
+Required for 1.8 submission:
+  - Crops (50/class)                  YES
+  - Feature engineering               YES
+  - EDA                               YES
+  - Preprocessing (scaling, cleaning) YES
+
+NOT required for 1.8:
+  - OCR classifier / model / training
+  - Hyperparameters / confusion matrix
+  - Cross-validation / grid search
+  Those belong to Phase 2 (model) and Phase 3 (Full ML Report §6).
+
+Rationale: the Preliminary report is PRE-MODELLING. It documents data,
+features, and exploration only. Full ML template §3 explicitly requires
+"data acquired AND appropriate features engineered and computed" - which
+is exactly 1.3 + 1.5 + 1.6 + 1.7.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.2.2 Choose extraction tool
+    -> tool = cv2.VideoCapture
+    -> workflow = scripted + manual audit
+    -> crop location & naming deferred to 1.3
+
+[ ] 1.2.3 Extract frames at fixed interval
+[ ] 1.2.4 Filter frames (reject blur/duplicates)
+
+================================================================================
+END OF NOTE
+================================================================================

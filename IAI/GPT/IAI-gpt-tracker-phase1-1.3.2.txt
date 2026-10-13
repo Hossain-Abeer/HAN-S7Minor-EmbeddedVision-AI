@@ -1,0 +1,365 @@
+================================================================================
+1.3.2 CROP AND SAVE CANDIDATES
+================================================================================
+
+DECISION
+--------
+Padding:        15% of bounding box dimension, added on all four sides.
+                Tune by trial-and-error during development.
+Crop blur:      SKIPPED. No crop-level blur filter.
+Output:         One PNG per detected ball region, written to disk.
+Output path:    D:\HAN\Semester 7 Minor\billiards-game-clips\unsorted\
+                (sub-folders 1/ ... 15/ created later in 1.3.3)
+Naming:         clip{id}_frame{idx}_ball{k}.png
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+1.3.1 produced a list of bounding boxes — one per detected ball. 1.3.2 takes
+each box, expands it by a fixed padding, slices the region out of the frame,
+and writes it to disk as a PNG.
+
+This is the moment the dataset becomes FILES.
+
+Before 1.3.2, the dataset is hypothetical (a list of coordinates in RAM that
+is discarded when the loop moves on). After 1.3.2, it is 750+ PNGs on disk
+that survive process exit, can be browsed in a file explorer, can be
+dragged between folders, and can be read back by a separate script.
+
+Without 1.3.2, nothing downstream exists. 1.3.3 (folders), 1.3.4 (sort),
+1.3.5 (audit), 1.4 (split), 1.5 (features), 1.6 (EDA), 1.7 (preprocessing)
+all operate on files. 1.3.2 is the step that produces those files.
+
+--------------------------------------------------------------------------------
+2. FUNCTION & ROLE IN THE CHAIN
+--------------------------------------------------------------------------------
+Position:
+
+  1.2.3  extract every Nth frame
+          |
+          v
+  1.2.4  filter (blur / duplicate gate)
+          |
+          v
+  1.3.1  detect ball regions          -> list of (x, y, w, h)
+          |
+          v
+  1.3.2  crop + save                  [THIS STEP]
+          |
+          v
+  1.3.3  organise into 1/ ... 15/     -> folder structure
+          |
+          v
+  1.3.4  assign numeral label         -> manual drag-and-drop
+          |
+          v
+  1.3.5  audit class balance
+
+Role: MATERIALISATION. Converts an in-memory coordinate list into persistent
+image files. It is the bridge between the extraction pipeline (1.2.x, 1.3.1)
+and the dataset that the rest of the project consumes (1.3.3 onwards).
+
+Subtlety: 1.3.2 does NOT classify. It does not know or care which numeral is
+on the ball. Every detected region is written to the SAME unsorted/ folder.
+Numeral assignment happens later, at 1.3.4, by hand.
+
+Subtlety: 1.3.2 does NOT reject. Every region the detector returned becomes
+a file. Bad crops (partial balls, merged blobs, false positives from HUD)
+are written too. They get deleted during the 1.3.5 audit. The design choice
+is: over-produce, then cull — simpler and more reproducible than trying to
+decide quality inside the loop.
+
+--------------------------------------------------------------------------------
+3. INTERACTIVITY WITH OTHER SUBSECTIONS
+--------------------------------------------------------------------------------
+Upstream:
+  1.3.1 (detect)     Supplies the bounding boxes. If detection returns 0
+                     regions, 1.3.2 writes 0 crops. If detection returns a
+                     merged blob of 2 balls, 1.3.2 writes 1 crop (the blob),
+                     which the auditor deletes at 1.3.5.
+  1.2.4 (filter)     Determines which frames ever reach 1.3.2. Blurred or
+                     duplicated frames contribute zero crops.
+  1.1.1 (resolution) Padding percentage scales with pixel dimensions; 15%
+                     of a 1080p ball bbox is consistent across all clips.
+
+Downstream:
+  1.3.3 (folders)    Creates 1/ ... 15/ sub-folders alongside unsorted/.
+                     Does NOT move crops — that is 1.3.4.
+  1.3.4 (sort)       Reads from unsorted/, moves to 1/ ... 15/ based on
+                     human-visible numeral. Filenames preserved.
+  1.3.5 (audit)      Reads from 1/ ... 15/. Deletes bad crops. Re-runs 1.3.2
+                     if class yield is short (via rescale at 1.2.3).
+  1.4   (split)      Reads from 1/ ... 15/. Split is independent of crop
+                     provenance — as long as crops carry the label via
+                     their parent folder.
+  1.5   (features)   Reads crops from 1/ ... 15/. Feature extraction runs on
+                     the same pixels that 1.3.2 wrote.
+
+Lateral:
+  Report surface:    Preliminary ML §3 must cite padding %, crop count, and
+                     show 2-3 sample crops. The padding choice must be
+                     justified as a design decision.
+
+--------------------------------------------------------------------------------
+4. OPTIONS CONSIDERED
+--------------------------------------------------------------------------------
+
+(A) Padding options - how much margin around the detected box
+
+    0% (tight bbox)
+      + Minimal pixels per crop; tiny files.
+      - findContours chases the MASK boundary, not the ball's visible edge.
+        Antialiased ball edge is often excluded.
+      - Numeral near the rim risks clipping.
+      - Auditor sees a coloured disc with no margin — hard to judge whether
+        the whole numeral is inside.
+
+    5-10%
+      + Guarantees full ball inside.
+      - Very tight; little context.
+
+    15%                                 [SELECTED]
+      + Guarantees full ball + antialiased edge + a thin cloth ring.
+      + Cloth ring is USEFUL: the same [CLOTH_*] HSV range from 1.3.1 can
+        mask it out during feature extraction (1.5), leaving a clean
+        ball-only region for colour histograms and Hu moments.
+      + Small enough that adjacent balls rarely enter the crop.
+      + Easy to defend in the report as a single, justified number.
+
+    20-30%
+      + Includes neighbour context.
+      - Cloth starts dominating.
+      - Adjacent balls intrude; crop is no longer single-ball.
+      - Colour histogram skews toward cloth hue.
+
+(B) Crop-level blur filtering - reject blurred individual crops
+
+    (a) Skip                                       [SELECTED]
+      + One threshold in the entire pipeline (1.2.4's frame-level blur).
+      + Simplest to explain.
+      + 1.3.5 is a manual audit anyway; deleting one blurry crop costs ~1 s.
+      - A sharp frame can yield a blurry crop if the ball was moving fast.
+        That crop wastes one slot until audited out.
+
+    (b) Same threshold as 1.2.4 frame-level
+      Invalid. Laplacian variance magnitudes depend on image size. A 1080p
+      frame threshold (~100) is meaningless for a ~60x60 crop.
+
+    (c) Lower threshold (e.g. 50), retuned for crop scale
+      + Catches egregious blur.
+      - Second knob, second report justification, second failure mode.
+      - 1.2.4 already removed the frames where blur dominated.
+
+    (d) Size-normalised metric (variance / area)
+      + Theoretically invariant.
+      - Overengineered; still requires a tuned constant.
+
+(C) Output format - PNG vs JPG
+
+    PNG                                            [SELECTED]
+      + Lossless: no compression artifacts introduced before training.
+      + Ball radius is tiny; file size is small anyway (~10-25 KB).
+      + Matches the course scripts (cv2.imwrite defaults, example scripts
+        use PNG).
+
+    JPG
+      + Smaller files at higher quality settings.
+      - Lossy: numeral edges may develop ringing artifacts.
+      - Would need careful quality tuning.
+
+    Recommendation: PNG. Data size is negligible; lossless is worth the
+    few extra KB per file.
+
+--------------------------------------------------------------------------------
+5. RECOMMENDATION
+--------------------------------------------------------------------------------
+Padding:         15%, tune by trial-and-error.
+Crop blur:       Skip.
+Output format:   PNG.
+Output path:     D:\HAN\Semester 7 Minor\billiards-game-clips\unsorted\
+Naming:          clip{id}_frame{idx}_ball{k}.png
+
+Rationale summary:
+  - 15% is the smallest padding that guarantees the full ball plus an
+    antialiased edge plus a usable cloth margin for downstream masking.
+  - Skipping crop-level blur keeps the pipeline to a single blur threshold
+    (1.2.4's), leaves cleanup to the mandatory 1.3.5 audit, and avoids a
+    second tunable parameter that would need justification in the report.
+  - PNG is lossless and negligible in size for small crops.
+
+--------------------------------------------------------------------------------
+6. SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+import os
+import cv2
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+CROP_ROOT    = r"[CROP_ROOT]"     # D:\HAN\Semester 7 Minor\
+                                  #   billiards-game-clips\unsorted
+
+PADDING_PCT  = [PADDING_PCT]      # e.g. 0.15  (15%)
+
+# ============================================================================
+# CROP + SAVE
+# ============================================================================
+def crop_and_save(frame, regions, clip_id, frame_idx):
+    """
+    For each (x, y, w, h) in regions, crop a padded region of the frame and
+    write it to CROP_ROOT as a PNG.
+
+    Filenames: clip{id}_frame{idx}_ball{k}.png
+    Returns:   number of crops written.
+    """
+    if not os.path.exists(CROP_ROOT):
+        os.makedirs(CROP_ROOT)
+
+    H, W = frame.shape[:2]
+    written = 0
+
+    for k, (x, y, w, h) in enumerate(regions):
+        # --- (a) Compute padding in pixels ---
+        pad_x = int(w * PADDING_PCT)
+        pad_y = int(h * PADDING_PCT)
+
+        # --- (b) Expand box and clamp to frame bounds ---
+        x0 = max(0,     x - pad_x)
+        y0 = max(0,     y - pad_y)
+        x1 = min(W, x + w + pad_x)
+        y1 = min(H, y + h + pad_y)
+
+        # --- (c) Slice ---
+        crop = frame[y0:y1, x0:x1]
+
+        # --- (d) Write ---
+        filename = f"clip{clip_id}_frame{frame_idx}_ball{k}.png"
+        path     = os.path.join(CROP_ROOT, filename)
+        cv2.imwrite(path, crop)
+        written += 1
+
+    return written
+
+--------------------------------------------------------------------------------
+FILL-IN TABLE
+-------------
+Placeholder     | Example                                       | Purpose
+----------------|-----------------------------------------------|--------------
+[CROP_ROOT]     | D:\HAN\Semester 7 Minor\                     | Output dir
+                |   billiards-game-clips\unsorted              |
+[PADDING_PCT]   | 0.15                                          | Margin fraction
+
+--------------------------------------------------------------------------------
+7. CODE DESCRIPTION
+--------------------------------------------------------------------------------
+pad_x = int(w * PADDING_PCT)
+pad_y = int(h * PADDING_PCT)
+  Padding computed SEPARATELY for x and y from the box's own width and
+  height. Why separate: a ball's bounding box may not be perfectly square
+  (mask asymmetry, contour approximation). Padding proportional to each
+  dimension keeps the margin uniform in the ball's own frame of reference.
+
+max(0, x - pad_x) / min(W, x + w + pad_x)
+  Clamps the padded box to the frame. Balls near the table edge would
+  otherwise produce crops that extend beyond the image, and cv2.imwrite
+  would either pad or fail depending on version. Clamping guarantees a
+  valid slice.
+
+crop = frame[y0:y1, x0:x1]
+  Standard numpy slicing. Note the order: y first, then x. This is the
+  most common OpenCV bug for newcomers.
+
+filename = f"clip{clip_id}_frame{frame_idx}_ball{k}.png"
+  Provenance encoded in the name:
+    - clip_id:   which source .mp4
+    - frame_idx: which frame in that clip (from 1.2.3's enumeration)
+    - ball_k:    which detected region within that frame
+  Three-way traceability: any crop can be mapped back to its exact origin.
+  This matters for the report ("show a sample crop and its source frame")
+  and for debugging ("why does class 7 have weird crops?" -> find the
+  clip/frame -> inspect).
+
+cv2.imwrite(path, crop)
+  Writes PNG. OpenCV infers format from the .png extension.
+  Returns True on success, False on failure (silent!). Not checked here.
+  If disk-full or permissions block writes, imwrite returns False and the
+  loop continues. For robustness, the caller may want to count False
+  returns and warn. Not required for this project (space is ample,
+  directory is writable), but worth noting.
+
+--------------------------------------------------------------------------------
+8. FLOW INSIDE THE 1.2.3 LOOP (recap)
+--------------------------------------------------------------------------------
+1.3.2 is called from inside the 1.2.3 loop, after 1.2.4 passed and 1.3.1
+returned regions:
+
+    if frame_idx % FRAME_STRIDE == 0:
+        if passes_filter(frame, clip_id, frame_idx):
+            regions = detect_balls(frame)                     # 1.3.1
+            crop_and_save(frame, regions, clip_id, frame_idx) # 1.3.2
+
+Frames themselves are never written. Only the crops are.
+
+--------------------------------------------------------------------------------
+9. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+- D:\HAN\Semester 7 Minor\billiards-game-clips\unsorted\
+    ├── clip1_frame0005_ball0.png
+    ├── clip1_frame0005_ball1.png
+    ├── ...
+    └── clip5_frame1780_ball7.png
+
+- Estimated count: ~1,800 filtered frames x ~3-5 usable detections per
+  frame = ~5,000-9,000 candidate crops. After 1.3.5 audit, target is
+  >=750 (50 per class x 15 classes). Over-production is intentional; the
+  audit culls to the final dataset.
+
+- For Preliminary ML §3: 2-3 sample crops (one per class preferably, or a
+  representative sample) with the padding shown.
+
+--------------------------------------------------------------------------------
+10. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+- If unsorted/ contains fewer than ~2,000 crops after a full run:
+    -> detection (1.3.1) is under-delivering. Revisit HSV bounds or
+       switch to Hough fallback.
+- If a specific class is short at 1.3.5 despite its ball appearing
+  frequently in frames:
+    -> not a 1.3.2 problem; the crop exists but was mislabelled or
+       misdetected. Investigate 1.3.1 and 1.3.4.
+- If crop files are unexpectedly large (>100 KB each):
+    -> frame size or padding is wrong. Verify PADDING_PCT and that
+       imwrite is not writing full frames by mistake.
+
+--------------------------------------------------------------------------------
+11. NOTES FOR LATER (downstream reminders)
+--------------------------------------------------------------------------------
+- 1.3.3 (folders): create 1/ ... 15/ alongside unsorted/. Do NOT move
+  files during 1.3.3; that is 1.3.4's job.
+- 1.3.4 (sort): the auditor opens unsorted/, reads the numeral, drags the
+  file into the matching folder. Filenames stay the same.
+- 1.3.5 (audit): after sort, scan each 1/ ... 15/ folder. Delete:
+    - crops where the numeral is illegible or hidden
+    - merged-blob crops (two balls)
+    - false positives (pockets, HUD, chalk)
+    - crops with the wrong label (auditor mistake)
+  Then count per class. If any class < 50, trigger 1.2.3 rescale
+  (FRAME_STRIDE = 3) and re-run 1.3.2-1.3.5.
+- 1.5 (features): the 15% cloth ring is intentional. Feature extraction
+  may mask it out using the same [CLOTH_*] HSV range from 1.3.1.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.3.2 Crop and save candidates
+    -> padding:  15% (tune by trial-and-error during development)
+    -> blur:     skipped (rely on 1.2.4 + 1.3.5 audit)
+    -> format:   PNG
+    -> output:   D:\HAN\Semester 7 Minor\billiards-game-clips\unsorted\
+    -> naming:   clip{id}_frame{idx}_ball{k}.png
+[ ] 1.3.3 Create folders 1/ - 15/ (cue optional)
+
+================================================================================
+END OF NOTE
+================================================================================

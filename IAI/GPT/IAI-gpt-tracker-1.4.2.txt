@@ -1,0 +1,19 @@
+
+1.4.2 ENSURE STRATIFIED SPLITTING (VERIFICATION)
+-------------------------------------------------
+Purpose:   Verify group-by-clip split produced workable class coverage
+           in each role. Not a re-split.
+Input:     splits.csv (from 1.4.1) + class folders 1/ ... 15/
+Method:    Count crops per role per class; cross-reference with label
+           inferred from filename prefix.
+Pass criteria:
+  - Every role (train/val/test) covers all 15 classes.
+  - Every role has ≥ 1 crop per class (hard floor).
+  - Val and test: ≥ 3 crops per class preferred (soft target).
+  - Train: ≥ 5 crops per class (hard floor; else 2.2 CV folds too thin).
+Fail action:
+  - Missing class(es) in a role → revisit 1.4.1 clip assignment.
+  - Class thin in val/test → re-rank clips or escalate to 1.3.5 stride-3.
+Output:
+  - Printed per-role per-class count table.
+  - Paste into Preliminary ML §3 (evidence of stratified data).

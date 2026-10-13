@@ -1,0 +1,358 @@
+================================================================================
+1.3.1 DETECT BALL REGIONS
+================================================================================
+
+DECISION
+--------
+Primary method:  HSV cloth mask + contours + circularity filter (Option B).
+Fallback:        HoughCircles (Option A) - invoked only if B under-detects.
+Combinatorial:   Option C (watershed / distance-transform splitting) - NOT
+                 adopted unless Option B provably fails on touching balls.
+Manual:          rejected (infeasible at ~1,800 frames).
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+Given a filtered 1920x1080 frame, find WHERE the balls are. Output is a list
+of regions (bounding boxes), not numbers, not labels. Geometric half of the
+problem; the semantic half (which numeral) belongs to 1.3.4.
+
+Correct detection is a precondition for every downstream step:
+  - too many regions  -> junk crops inflate audit time.
+  - too few regions   -> reduced yield, possible rescale trigger at 1.3.5.
+
+Detection runs once per frame, inside the 1.2.3 loop, AFTER 1.2.4 gate.
+
+--------------------------------------------------------------------------------
+2. FUNCTION & ROLE IN THE CHAIN
+--------------------------------------------------------------------------------
+Position:
+
+  1.2.3  extract every Nth frame
+          |
+          v
+  1.2.4  filter (blur / duplicate gate)
+          |
+          v
+  1.3.1  detect ball regions               [THIS STEP]
+          |
+          v
+  1.3.2  crop each region -> save
+          |
+          v
+  1.3.3  organise into 1/ ... 15/
+          |
+          v
+  1.3.4  assign numeral label
+          |
+          v
+  1.3.5  audit class balance
+
+Role: LOCALISATION. Answers "where", never "what". Every downstream step
+trusts its output.
+
+Cost rationale: detection (HSV + contours) is more expensive per frame than
+the Laplacian variance of 1.2.4, but cheaper than a full CNN. Gating before
+detection (1.2.4 -> 1.3.1) is intentional: fewer wasted detection calls.
+
+--------------------------------------------------------------------------------
+3. INTERACTIVITY WITH OTHER SUBSECTIONS
+--------------------------------------------------------------------------------
+Upstream:
+  1.1.1 (cloth colour)  *** NOT YET DECIDED ***
+                        C3 in the 1.1.1 note is still UNDECIDED. The cloth
+                        colour (and therefore its HSV bounds) will be locked
+                        DURING PROGRAM DEVELOPMENT, as soon as a candidate
+                        game/clip is inspected in the colour picker.
+                        Until locked, detect_balls() cannot be finalised.
+                        This is a blocking dependency: 1.3.1 is DESIGNED
+                        here, but not COMMITTABLE until C3 resolves.
+  1.1.1 (resolution)    Ball pixel radius depends on 1080p. min/max area
+                        thresholds are derived from it.
+  1.2.3 (stride)        Determines how many frames reach detection.
+  1.2.4 (filter)        Blurred / duplicate frames never reach detection.
+
+Downstream:
+  1.3.2 (crop)          Crop box size derives from detection output.
+  1.3.3 (folders)       Folder creation is independent of detection.
+  1.3.4 (sort)          Bad detections become crops you delete during audit.
+  1.3.5 (audit)         Per-class yield partly determined by detection
+                        recall. Persistent under-detection -> rescale.
+
+Lateral:
+  Fallback switching    If Option B under-delivers at 1.3.5, swap in Option A
+                        without changing the rest of the pipeline (same
+                        output shape: list of bounding boxes).
+  Cloth-colour lock     When C3 is decided, record the chosen cloth colour,
+                        its HSV bounds, and the clip it was sampled from.
+                        This feeds 1.1.1 (fill C3), 1.3.1 (fill [CLOTH_*]
+                        parameters), and Preliminary ML report §3.
+
+Report surface:
+  - Preliminary ML §3: cite method, tuned thresholds, sample detections,
+    and the cloth colour decision (with rationale).
+  - Full ML §8: if model fails on frames with many overlapping balls, point
+    back to detection limitations during data prep.
+
+--------------------------------------------------------------------------------
+4. OPTIONS CONSIDERED
+--------------------------------------------------------------------------------
+Option A - HoughCircles
+  + Robust to partial occlusion.
+  + Outputs circles directly -> clean crop extraction.
+  - Parameter-tuned (dp, minDist, param1, param2, minRadius, maxRadius).
+  - False positives on curved cloth folds / HUD elements.
+  - False negatives on overlapping balls.
+  Best when: balls are well separated, radius range is known.
+
+Option B - HSV cloth mask + contours + circularity filter   [SELECTED]
+  + Exploits locked cloth colour (to be finalised during development).
+  + Cheap; no Canny / accumulator tuning.
+  + Simple to explain and defend in the report.
+  - Touching balls merge into one blob (handled later if it occurs).
+  - Sensitive to cloth colour drift (low risk - cloth locked per clip set,
+    screen capture is deterministic).
+  Best when: cloth colour is known and stable.
+
+Option C - Combination (mask + morphology + watershed splitting)
+  + Handles touching balls.
+  - More code; watershed params to tune.
+  Not adopted. Only if Option B proves insufficient.
+
+Option D - Manual
+  Rejected. Infeasible at ~1,800 frames; also kills reproducibility and
+  biases the dataset (see 1.2.2 rationale).
+
+--------------------------------------------------------------------------------
+5. WHY OPTION B PRIMARY, OPTION A FALLBACK
+--------------------------------------------------------------------------------
+Option B first because:
+  - Cloth colour is a background constant (C3 in 1.1.1). Once locked, the
+    mask is essentially free.
+  - Screen recordings are clean (no wrinkles, no glare, no shadow noise),
+    so HSV thresholds are stable across the whole dataset.
+  - Balls are separated in the vast majority of spread-ball frames; the
+    touching-ball failure mode is rare after break.
+  - Cheaper to write, tune, and justify than Hough.
+
+Option A held in reserve because:
+  - If HSV under-detects (a ball colour too close to cloth hue), Hough
+    works geometrically and does not depend on colour separation.
+  - Output interface identical (list of bounding boxes) -> drop-in swap.
+
+Do NOT adopt Option C pre-emptively. Complexity is a tax; pay it only when
+B actually fails.
+
+--------------------------------------------------------------------------------
+6. BLOCKING DEPENDENCY - CLOTH COLOUR
+--------------------------------------------------------------------------------
+Status:    C3 in 1.1.1 is UNDECIDED. No cloth colour locked yet.
+Impact:    The [CLOTH_H_LO/HI], [CLOTH_S_LO/HI], [CLOTH_V_LO/HI] parameters
+           cannot be filled in. detect_balls() will not run meaningfully.
+Resolution plan:
+  1. Inspect a candidate clip (chosen game) in a colour picker.
+     - In VS Code: open a frame as PNG, hover over cloth region, read RGB.
+     - Or Python: cv2.imshow + cv2.setMouseCallback to sample pixels.
+     - Convert sampled RGB to HSV (remember OpenCV H is 0-179).
+  2. Lock the cloth colour (single colour across all 5 clips, per C3).
+  3. Fill the [CLOTH_*] parameters.
+  4. Update 1.1.1 C3 from UNDECIDED to the locked value.
+  5. Note the sampled pixel coordinates and clip ID for the report.
+This dependency is EXPECTED and does not block 1.3.1's DESIGN. It only
+blocks 1.3.1's EXECUTION.
+
+--------------------------------------------------------------------------------
+7. SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+import cv2
+import numpy as np
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+# NOTE: [CLOTH_*] cannot be filled until C3 (cloth colour) is locked.
+#       See section 6 above for the resolution plan.
+CLOTH_H_LO, CLOTH_H_HI  = [CLOTH_H_LO], [CLOTH_H_HI]   # hue range (0-179)
+CLOTH_S_LO, CLOTH_S_HI  = [CLOTH_S_LO], [CLOTH_S_HI]   # saturation (0-255)
+CLOTH_V_LO, CLOTH_V_HI  = [CLOTH_V_LO], [CLOTH_V_HI]   # value (0-255)
+
+MIN_BALL_AREA           = [MIN_BALL_AREA]              # px^2, lower bound
+MAX_BALL_AREA           = [MAX_BALL_AREA]              # px^2, upper bound
+MIN_CIRCULARITY         = [MIN_CIRCULARITY]            # 0..1, typically 0.6-0.8
+
+MORPH_KERNEL_SIZE       = [MORPH_KERNEL_SIZE]          # e.g. 5
+MORPH_OPEN_ITER         = [MORPH_OPEN_ITER]            # e.g. 2
+MORPH_CLOSE_ITER        = [MORPH_CLOSE_ITER]           # e.g. 2
+
+
+# ============================================================================
+# DETECT
+# ============================================================================
+def detect_balls(frame):
+    """
+    Return list of (x, y, w, h) bounding boxes for ball candidates.
+    Empty list if no candidates.
+    """
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # (a) Cloth mask -> invert to get ball mask
+    cloth_lo = np.array([CLOTH_H_LO, CLOTH_S_LO, CLOTH_V_LO])
+    cloth_hi = np.array([CLOTH_H_HI, CLOTH_S_HI, CLOTH_V_HI])
+    cloth_mask = cv2.inRange(hsv, cloth_lo, cloth_hi)
+    ball_mask  = cv2.bitwise_not(cloth_mask)
+
+    # (b) Morphology - remove specks, fill holes
+    kernel = np.ones((MORPH_KERNEL_SIZE, MORPH_KERNEL_SIZE), np.uint8)
+    ball_mask = cv2.morphologyEx(ball_mask, cv2.MORPH_OPEN,  kernel,
+                                 iterations=MORPH_OPEN_ITER)
+    ball_mask = cv2.morphologyEx(ball_mask, cv2.MORPH_CLOSE, kernel,
+                                 iterations=MORPH_CLOSE_ITER)
+
+    # (c) Find external contours
+    contours, _ = cv2.findContours(ball_mask, cv2.RETR_EXTERNAL,
+                                   cv2.CHAIN_APPROX_SIMPLE)
+
+    # (d) Filter by area + circularity
+    regions = []
+    for c in contours:
+        area = cv2.contourArea(c)
+        if not (MIN_BALL_AREA <= area <= MAX_BALL_AREA):
+            continue
+
+        perimeter = cv2.arcLength(c, True)
+        if perimeter == 0:
+            continue
+        circularity = 4 * np.pi * area / (perimeter ** 2)
+        if circularity < MIN_CIRCULARITY:
+            continue
+
+        x, y, w, h = cv2.boundingRect(c)
+        regions.append((x, y, w, h))
+
+    return regions
+
+--------------------------------------------------------------------------------
+FILL-IN TABLE
+-------------
+Placeholder             | Example            | Blocked by
+------------------------|--------------------|-----------------------------
+[CLOTH_H_LO], [CLOTH_H_HI] | 40, 80          | C3 (cloth colour) UNDECIDED
+[CLOTH_S_LO], [CLOTH_S_HI] | 50, 255         | C3 (cloth colour) UNDECIDED
+[CLOTH_V_LO], [CLOTH_V_HI] | 40, 255         | C3 (cloth colour) UNDECIDED
+[MIN_BALL_AREA]         | 2000               | Can be estimated from 1080p
+                                               ball radius; refine after first
+                                               detection run
+[MAX_BALL_AREA]         | 20000              | Same as above
+[MIN_CIRCULARITY]       | 0.7                | Free parameter; tune by eye
+[MORPH_KERNEL_SIZE]     | 5                  | Free parameter; tune by eye
+[MORPH_OPEN_ITER]       | 2                  | Free parameter; tune by eye
+[MORPH_CLOSE_ITER]      | 2                  | Free parameter; tune by eye
+
+--------------------------------------------------------------------------------
+8. CODE DESCRIPTION
+--------------------------------------------------------------------------------
+cv2.cvtColor(frame, COLOR_BGR2HSV)
+  Colour space where colour (hue) is separated from brightness (value). This
+  is what allows the cloth to be isolated regardless of local shading.
+
+cv2.inRange(hsv, cloth_lo, cloth_hi)
+  Produces a binary mask: 255 where pixels fall in cloth range, 0 elsewhere.
+  The cloth range is a 3-axis box in HSV, defined by [PARAMETERS].
+
+cv2.bitwise_not(cloth_mask)
+  Inverts: cloth becomes black, everything else (candidate balls) becomes
+  white. This is the ball_mask.
+
+cv2.morphologyEx(..., MORPH_OPEN, ...)
+  Erosion followed by dilation. Removes small white specks (noise) while
+  preserving larger shapes. Removes false-positive blobs before they reach
+  contour filtering.
+
+cv2.morphologyEx(..., MORPH_CLOSE, ...)
+  Dilation followed by erosion. Fills small black holes inside white blobs
+  (e.g. the numeral itself creating a dark patch inside a ball mask).
+
+cv2.findContours(..., RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)
+  Returns only outer contours. Inner contours (like the numeral's black
+  patch) are ignored. CHAIN_APPROX_SIMPLE compresses straight edges.
+
+cv2.contourArea(c)
+  Area in px^2. Used to reject small blobs (specks that survived morphology)
+  and large blobs (merged balls or huge HUD elements).
+
+cv2.arcLength(c, True) + circularity formula
+  circularity = 4*pi*area / perimeter^2. A perfect circle gives 1.0. Higher
+  threshold = stricter (fewer non-circles pass). 0.6-0.8 typical.
+
+cv2.boundingRect(c)
+  Returns (x, y, w, h). This is the output the rest of the pipeline consumes.
+  Downstream (1.3.2) can optionally pad the box before cropping.
+
+--------------------------------------------------------------------------------
+9. TUNING PROCEDURE
+--------------------------------------------------------------------------------
+1. Lock cloth colour first (see section 6).
+2. Pick a sharp, spread-ball frame from any clip (inspect manually).
+3. Open the frame in a colour picker (VS Code + image viewer, or Python +
+   cv2.imshow + cv2.setMouseCallback). Sample cloth pixels to get HSV bounds.
+   NOTE: OpenCV H is 0-179 (not 0-359). S and V are 0-255.
+4. Run detect_balls(frame), print len(regions), visualise boxes with
+   cv2.rectangle for a sanity check.
+5. If count > expected ball count -> tighten thresholds:
+       raise MIN_BALL_AREA, raise MIN_CIRCULARITY.
+6. If count < expected ball count -> loosen thresholds:
+       lower MIN_BALL_AREA, lower MIN_CIRCULARITY, widen cloth HSV range.
+7. Repeat on 3-5 frames from different clips before committing.
+8. Store the final parameter values in the report and in the source file.
+
+--------------------------------------------------------------------------------
+10. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+- regions list per frame: [(x, y, w, h), ...]
+- Optional debug artefact: annotated frames saved to
+    D:\HAN\Semester 7 Minor\billiards-game-crops\_debug_detection\
+  for the first N frames only - do not keep for the whole run.
+- For Preliminary ML §3: 2-3 sample frames with detection boxes overlaid.
+
+--------------------------------------------------------------------------------
+11. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+- If a specific class < 50 crops at 1.3.5 AND the frame contains that ball
+  visibly (confirmed by eye):
+      -> detection recall problem. Loosen HSV bounds or lower
+         MIN_CIRCULARITY first.
+- If loosening fails:
+      -> switch to Option A (HoughCircles). Same output interface.
+      -> do not use Hough and HSV simultaneously in the same run
+         (avoids double-counting and parameter confounds).
+- If overlapping balls dominate the frame pool:
+      -> evaluate Option C (watershed splitting) as a pre-step before
+         contour filtering. Only if evidence justifies it.
+
+--------------------------------------------------------------------------------
+12. NOTES FOR LATER (downstream reminders)
+--------------------------------------------------------------------------------
+- 1.3.2 (crop): pad bounding box by ~10-15% before cropping. This preserves
+  context around the ball and makes the crop readable for the human auditor.
+- 1.3.3 (folders): created once; detection does not create folders itself.
+- 1.3.4 (sort): manual drag-and-drop during audit per 1.2.2 decision. Script
+  does NOT attempt numeral classification.
+- 1.3.5 (audit): the detection count per frame is a useful audit metric. If
+  average count is wildly off from typical pool ball count, revisit 1.3.1.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.3.1 Detect ball regions
+    -> primary:  HSV + contours + circularity
+    -> fallback: HoughCircles
+    -> parameters: to be tuned empirically before commit
+    -> BLOCKING: cloth colour (C3 in 1.1.1) must be locked during
+       development before detect_balls() is runnable. Design complete;
+       execution pending C3.
+[ ] 1.3.2 Crop and save candidates
+
+================================================================================
+END OF NOTE
+================================================================================
