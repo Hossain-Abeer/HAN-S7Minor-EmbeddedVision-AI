@@ -1,0 +1,391 @@
+================================================================================
+1.5.3 ASSEMBLE FEATURE MATRIX X + LABELS y (READS splits.csv)
+================================================================================
+
+DECISION SUMMARY
+----------------
+Inputs:           features.csv   (from 1.5.2)
+                  splits.csv     (from 1.4.1)
+Join:             inner, on "filename"
+Label extraction: parent folder name cast to int (1..15, NOT renumbered)
+Output:           dataset.csv at billiards-game-clips\
+                  columns: filename | label | role | <23 feature columns>
+Tool:             pandas (first appearance in pipeline)
+Post-join check:  print per-role / per-class counts (re-verifies 1.4.2)
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+Everything so far has produced two separate tables on disk:
+
+  - features.csv (from 1.5.2): one row per surviving mask, columns =
+    filename + 23 numeric features. NO labels, NO roles.
+  - splits.csv (from 1.4.1): one row per crop, columns = filename + role
+    (train / val / test). NO features, NO labels.
+
+1.5.3 merges these into ONE final table that contains everything: filename,
+label, role, and the 23 features. That table is what Phase 2 loads.
+
+This is the LAST step of data preparation. After this, no more CSV juggling
+-- Phase 2 just reads one file.
+
+1.5.3 does NOT: scale, clean, impute, split further, or train.
+That is 1.7 and Phase 2.
+
+--------------------------------------------------------------------------------
+2. WHY THIS STEP EXISTS
+--------------------------------------------------------------------------------
+
+(a) THE TWO-SOURCE PROBLEM
+    Features and roles live in different files because they were produced
+    at different times by different scripts, each with a single
+    responsibility. Keeping them separate is good design: if 1.5.1's
+    thresholds change, only features.csv is regenerated; splits.csv is
+    untouched. The join happens once, at the end.
+
+(b) THE LABEL PROBLEM
+    Labels are not stored anywhere yet. But they are recoverable from the
+    filename:
+
+        1/clip1_frame0005_ball0_mask.png
+        ^
+        +-- parent folder name = class label
+
+    Folder 1/ means class 1. Folder 15/ means class 15. That is the label.
+
+(c) THE REJECTED-CROP PROBLEM
+    1.5.1 rejected some crops (no usable mask). Those crops are in
+    splits.csv but not in features.csv. Handle this with an INNER JOIN:
+    keep only rows present in both. Rejected crops are dropped silently.
+    This policy was locked in 1.5.2 section 8.
+
+(d) THE OUTPUT-FORMAT DECISION
+    We could split into X_train.csv, y_train.csv, etc. -- six files. Or
+    one combined dataset.csv with a role column.
+
+    Chosen: one combined table.
+      - 1.6 EDA reads it once.
+      - Phase 2 slices by role in one line.
+      - Human-readable; openable in Excel.
+      - Six files would need keeping in sync when anything changes.
+
+--------------------------------------------------------------------------------
+3. FUNCTION & ROLE IN THE CHAIN
+--------------------------------------------------------------------------------
+Position:
+
+  1.5.1  numeral-region mask per crop
+          |
+          v
+  1.5.2  shape features -> features.csv
+          |
+          v
+  1.5.3  join features + roles + labels -> dataset.csv   [THIS STEP]
+          |
+          v
+  1.6    EDA on dataset.csv
+  1.7    cleaning / scaling / pipeline
+  Phase 2  SVM / k-NN / RF consume X_train, y_train
+
+Role: FINAL DATA ASSEMBLY. Last data-preparation step. Everything before
+this produces intermediate tables; everything after consumes one final one.
+
+--------------------------------------------------------------------------------
+4. INTERACTIVITY
+--------------------------------------------------------------------------------
+Upstream:
+  1.5.2  features.csv -- one row per surviving mask, 23 features, no
+         label, no role.
+  1.4.1  splits.csv   -- one row per crop, role only.
+  1.5.1  rejections: crops with no mask appear in splits.csv but not in
+         features.csv; inner join drops them.
+
+Downstream:
+  1.6    reads dataset.csv for EDA plots.
+  1.7    reads dataset.csv for cleaning / scaling.
+  Phase 2  slices by role; drops filename, label, role columns to get X;
+           takes label column as y.
+  Phase 4  does NOT use dataset.csv; reads crops directly (independent
+           branch from 1.5 onward).
+
+Lateral:
+  Re-verification  print per-role / per-class counts after the join. If
+                   any role is missing a class after inner-join drops,
+                   escalate to 1.3.5 stride-3 (same trigger as 1.4.2).
+
+Report surface:
+  - Preliminary ML section 3: final dataset shape (n_samples x n_features),
+    class balance after inner join, and the label-encoding choice.
+  - Full ML section 6: cite the dataset size in the training methodology.
+
+--------------------------------------------------------------------------------
+5. MECHANICS - HOW THE JOIN WORKS
+--------------------------------------------------------------------------------
+The join is a one-liner IF you use pandas. That is why pandas is in the
+course requirements -- it exists precisely for operations like this. This
+is the first time in the pipeline that pandas is genuinely the right tool.
+
+    import pandas as pd
+
+    df_feat   = pd.read_csv("features.csv")
+    df_splits = pd.read_csv("splits.csv")
+
+    df = df_feat.merge(df_splits, on="filename", how="inner")
+
+That is the join. Everything else is bookkeeping:
+
+  1. Extract the label from the filename's parent folder:
+
+         df["label"] = df["filename"].str.split("/").str[0].astype(int)
+
+  2. Reorder columns canonically so every downstream read gets the same
+     column order:
+
+         filename | label | role | hole_count |
+         connected_component_count | ... | proj_y_7
+
+  3. Save as dataset.csv.
+
+  4. Re-verify stratification (a light recheck of 1.4.2 after the inner
+     join, since the join can drop different numbers per role per class):
+       - Print per-role, per-class counts.
+       - If any role is missing a class after the join, escalate.
+
+--------------------------------------------------------------------------------
+6. WHAT PHASE 2 WILL DO WITH IT
+--------------------------------------------------------------------------------
+    df = pd.read_csv("dataset.csv")
+
+    train = df[df["role"] == "train"]
+    val   = df[df["role"] == "val"]
+    test  = df[df["role"] == "test"]
+
+    X_train = train.drop(columns=["filename", "label", "role"]).values
+    y_train = train["label"].values
+    # ... same for val, test
+
+Then SVM().fit(X_train, y_train) etc. The role column is what makes the
+group-by-clip split from 1.4.1 actually enforced at training time.
+
+--------------------------------------------------------------------------------
+7. DESIGN DECISIONS - ALL CONFIRMED
+--------------------------------------------------------------------------------
+
+(a) Join: inner, on "filename".
+    Rejected: left join on splits.csv (would produce NaN rows for dropped
+    crops -- unusable downstream). Right join on features.csv (equivalent
+    here since all feature rows have a matching split row; but inner is
+    the honest expression of intent).
+
+(b) Label: integer 1..15, equal to the folder name.
+    Rejected: 0-indexed encoding (would make confusion matrix axes
+    non-obvious). Rejected: one-hot (sklearn classifiers take integer
+    labels; OneHotEncoder would be a preprocessing concern for a later
+    model that needs it).
+
+(c) Output: single dataset.csv.
+    Rejected: three files (train/val/test). Rejected: six files
+    (X + y per role). Rationale: one file, one read, one place for 1.6
+    and Phase 2 to look. Splitting happens at load time in Phase 2 by
+    filtering on "role".
+
+(d) Column order: filename | label | role | 23 feature columns (canonical
+    order matching 1.5.2's output).
+    Rationale: reproducible column order means downstream feature-vector
+    extraction is a stable slice, not a name lookup.
+
+(e) Tool: pandas.
+    First pandas appearance in the pipeline. Justified: joining two CSVs
+    is exactly what pandas is for. Manual csv.DictReader merge is possible
+    but adds 20 lines of bookkeeping for zero benefit.
+
+--------------------------------------------------------------------------------
+8. ONE SUBTLETY - LABEL ENCODING
+--------------------------------------------------------------------------------
+Folder names are strings ("1", "2", ..., "15"). We cast them to integers
+1..15. We DELIBERATELY do NOT renumber to 0..14.
+
+Why: sklearn's SVM, k-NN, and RF all accept arbitrary integer labels.
+Keeping the label equal to the ball number means:
+  - Confusion matrix axes read 1..15 -- no mental remapping.
+  - Report figures are self-explanatory.
+  - Phase 4's CNN uses sparse_categorical_crossentropy with class indices,
+    which WOULD prefer 0-based, so we subtract 1 at that point. Not here.
+
+This asymmetry is intentional: keep data labels human-readable, remap only
+at model input if the framework demands it.
+
+--------------------------------------------------------------------------------
+9. SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+import os
+import pandas as pd
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+FEATURES_CSV = r"[FEATURES_CSV]"      # ...\billiards-game-clips\features.csv
+SPLITS_CSV   = r"[SPLITS_CSV]"        # ...\billiards-game-clips\splits.csv
+DATASET_CSV  = r"[DATASET_CSV]"       # ...\billiards-game-clips\dataset.csv
+
+FEATURE_COLUMNS = [FEATURE_COLUMNS]   # canonical order, e.g.:
+                                      # ["hole_count",
+                                      #  "connected_component_count",
+                                      #  "blob_area_ratio",
+                                      #  "hole_area_ratio",
+                                      #  "hole_aspect",
+                                      #  "hole_centroid_dx",
+                                      #  "hole_centroid_dy",
+                                      #  "proj_x_0", ..., "proj_x_7",
+                                      #  "proj_y_0", ..., "proj_y_7"]
+
+
+# ============================================================================
+# ASSEMBLE
+# ============================================================================
+def assemble_dataset(features_csv, splits_csv, dataset_csv,
+                     feature_columns):
+    df_feat   = pd.read_csv(features_csv)
+    df_splits = pd.read_csv(splits_csv)
+
+    # (a) inner join on filename
+    df = df_feat.merge(df_splits, on="filename", how="inner")
+
+    # (b) attach label from filename prefix
+    df["label"] = df["filename"].str.split("/").str[0].astype(int)
+
+    # (c) reorder columns
+    cols = ["filename", "label", "role"] + feature_columns
+    df = df[cols]
+
+    # (d) save
+    df.to_csv(dataset_csv, index=False)
+
+    # (e) post-join stratification report
+    print(f"\nFinal dataset: {len(df)} rows, "
+          f"{len(feature_columns)} features, 3 roles.")
+    print("\nPer-role / per-class counts:")
+    pivot = (df.groupby(["role", "label"])
+               .size()
+               .unstack(fill_value=0))
+    print(pivot)
+
+    # (f) flag any role missing a class after join
+    missing = {}
+    for role in ["train", "val", "test"]:
+        if role not in pivot.index:
+            missing[role] = list(range(1, 16))
+            continue
+        row = pivot.loc[role]
+        zeros = [c for c in range(1, 16) if row.get(c, 0) == 0]
+        if zeros:
+            missing[role] = zeros
+
+    if missing:
+        print("\nWARNING: roles missing classes after inner join:")
+        for role, classes in missing.items():
+            print(f"  {role}: {classes}")
+        print("Action: consider 1.3.5 stride-3 re-extraction.")
+    else:
+        print("\nAll roles cover all 15 classes. Proceed to 1.6.")
+
+
+if __name__ == "__main__":
+    assemble_dataset(FEATURES_CSV, SPLITS_CSV, DATASET_CSV,
+                     FEATURE_COLUMNS)
+
+
+--------------------------------------------------------------------------------
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+Placeholder        | Example                                | Purpose
+-------------------|----------------------------------------|----------
+[FEATURES_CSV]     | ...\billiards-game-clips\features.csv  | Input 1
+[SPLITS_CSV]       | ...\billiards-game-clips\splits.csv    | Input 2
+[DATASET_CSV]      | ...\billiards-game-clips\dataset.csv   | Output
+[FEATURE_COLUMNS]  | 23 names in canonical order            | Column order
+
+--------------------------------------------------------------------------------
+10. CODE DESCRIPTION
+--------------------------------------------------------------------------------
+pd.read_csv(...)
+  Loads both CSVs into DataFrames.
+
+df.merge(..., on="filename", how="inner")
+  Inner join: keeps only rows whose filename appears in BOTH tables. Rows
+  in splits.csv without a matching features.csv row (crops rejected at
+  1.5.1) are dropped. Rows in features.csv without a matching splits.csv
+  row would also be dropped -- should not occur, but defensive.
+
+df["filename"].str.split("/").str[0].astype(int)
+  Extracts "1" from "1/clip1_...png", then casts to int. Column-wise,
+  vectorized, no loop.
+
+cols = ["filename", "label", "role"] + feature_columns
+df = df[cols]
+  Reorders columns. Guarantees Phase 2 and 1.6 see the same column layout
+  every run.
+
+df.groupby(["role", "label"]).size().unstack(fill_value=0)
+  Produces a roles x classes count matrix. This is the post-join
+  stratification check. If any cell is 0 (except at the outer edge of the
+  matrix), a class was dropped from a role by the inner join.
+
+WARNING block
+  Names missing (role, class) pairs explicitly. Escalates to the same
+  stride-3 trigger used by 1.3.5 / 1.4.2.
+
+--------------------------------------------------------------------------------
+11. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+- dataset.csv at ...\billiards-game-clips\
+  Columns: filename | label | role | <23 feature columns>
+  Rows: one per surviving (not-rejected) sample.
+- Printed per-role / per-class count table.
+- For Preliminary ML section 3:
+    * final dataset shape (n_samples x 23 features),
+    * per-role class balance table,
+    * label-encoding choice and rationale,
+    * inner-join policy and how many samples were dropped (from 1.5.1
+      reject log).
+
+--------------------------------------------------------------------------------
+12. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+- Any (role, class) cell is 0 after join:
+    -> trigger 1.3.5 stride-3 re-extraction; re-run 1.3.2 -> 1.5.1 -> 1.5.2
+       -> 1.5.3.
+- Any role has < 30 samples per class after join:
+    -> same trigger; the inner join hit a class hard.
+- dataset.csv row count is far below 750 (say, < 500):
+    -> inspect 1.5.1 reject log; mask extraction is over-rejecting.
+
+--------------------------------------------------------------------------------
+13. NOTES FOR LATER
+--------------------------------------------------------------------------------
+- 1.6 EDA reads dataset.csv directly. Group-by-class histograms, scatter
+  matrices, and correlation heatmaps all operate on the 23 feature columns.
+- 1.7 preprocessing reads dataset.csv; the scaler is fit on TRAIN ROWS
+  ONLY, then applied to val and test. Never fit on the whole table.
+- Phase 2 loads dataset.csv, filters by role, drops filename/label/role to
+  form X, takes label as y. Feature column order must be preserved (it is,
+  because dataset.csv is canonical).
+- Phase 4 does NOT use dataset.csv. Independent branch.
+- Report must state: number of samples dropped by inner join, and
+  confirm that no role lost a class because of it.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.5.3 Assemble feature matrix X + labels y (reads splits.csv)
+    -> join:       inner on filename
+    -> labels:     int 1..15 from parent folder name
+    -> output:     dataset.csv (single combined table)
+    -> tool:       pandas
+    -> post-check: per-role / per-class count matrix, escalate on zero
+[ ] 1.6 EDA: class balance, feature distributions, correlations.
+
+================================================================================
+END OF NOTE
+================================================================================

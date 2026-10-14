@@ -29,27 +29,27 @@ PHASE 0 - SETUP & SCOPE
 --------------------------------------------------------------------------------
 PHASE 1 - DATA ACQUISITION & FEATURE ENGINEERING & Preliminary ML Report
 --------------------------------------------------------------------------------
-[ ] [1.1] Acquire screen recording samples.
+[x] [1.1] Acquire screen recording samples.
     [x] 1.1.1 Define environment constants (overhead, fixed cloth, billiard only)
     [x] 1.1.2 Acquire 5 × 1080p .mp4 clips
-[ ] [1.2] Extract frames from .mp4
+[x] [1.2] Extract frames from .mp4
     [x] 1.2.1 Define extraction target (50 crops/class minimum)
     [x] 1.2.2 Choose extraction tool (recommend OpenCV VideoCapture)
     [x] 1.2.3 Extract frames at fixed interval
     [x] 1.2.4 Filter frames (reject blur/duplicates)
-[ ] [1.3] Crop ball regions
+[x] [1.3] Crop ball regions
     [x] 1.3.1 Detect ball regions (manual or auto: Hough / HSV / contours)
     [x] 1.3.2 Crop and save candidates
     [x] 1.3.3 Create folders 1/ – 15/ (cue optional)
     [x] 1.3.4 Sort crops by visible numeral
     [x] 1.3.5 Audit class balance (≥N per class)
-[ ] 1.4 Split data: train/validation/test, stratified.
+[x] 1.4 Split data: train/validation/test, stratified.
     [x] 1.4.1 Split into train/validation/test
     [x] 1.4.2 Ensure stratified splitting
-[ ] 1.5 Extract OCR-appropriate features from ball crops.
-    [ ] 1.5.1 Extract numeral-region mask per crop
-    [ ] 1.5.2 Derive shape features from numeral blob
-    [ ] 1.5.3 Assemble feature matrix X + labels y (reads splits.csv)
+[x] 1.5 Extract OCR-appropriate features from ball crops.
+    [x] 1.5.1 Extract numeral-region mask per crop
+    [x] 1.5.2 Derive shape features from numeral blob
+    [x] 1.5.3 Assemble feature matrix X + labels y (reads splits.csv)
 [ ] 1.6 EDA: class balance, feature distributions, correlations.
     [ ] 1.6.1 Check class balance
     [ ] 1.6.2 Plot feature distributions

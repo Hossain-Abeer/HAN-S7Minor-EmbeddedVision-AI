@@ -1,0 +1,409 @@
+================================================================================
+1.5.1 EXTRACT NUMERAL-REGION MASK PER CROP
+================================================================================
+
+DECISION SUMMARY
+----------------
+Thresholding:      HSV high-V, low-S. Two parameters: V_MIN, S_MAX.
+Morphology:        Opening = 1 iteration; closing = 0 iterations.
+Cloth masking:     Enabled. Reuse [CLOTH_*] HSV bounds from 1.3.1.
+Output form:       Save masks to disk as {original_name}_mask.png.
+No-numeral case:   Reject crop; log to CSV. Triggers second audit pass.
+Strategy:          Strategy 1 (circle-as-blob). Numeral captured by hole
+                   pattern. No two-stage numeral extraction.
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+A mask is a binary image the same size as the crop: 0 (ignore) or 255
+(keep). It is a map of WHERE the numeral region is, not a picture of it.
+
+The crop contains: coloured ball surface, white circle patch, numeral
+(black, inside the circle), 15% cloth ring (from 1.3.2 padding).
+
+Thresholding on HSV high-V, low-S isolates the white circle patch (and the
+numeral's white surroundings) while rejecting the coloured ball and the
+cloth. The numeral itself appears as a hole inside the surviving blob.
+
+Downstream (1.5.2) derives shape features from this blob and its holes.
+
+--------------------------------------------------------------------------------
+2. FUNCTION & ROLE IN THE CHAIN
+--------------------------------------------------------------------------------
+Position:
+
+  1.3.5  audit class balance
+          |
+          v
+  1.4.1  split into train/val/test
+          |
+          v
+  1.4.2  verify stratification
+          |
+          v
+  1.5.1  extract numeral-region mask per crop      [THIS STEP]
+          |
+          v
+  1.5.2  derive shape features from numeral blob
+          |
+          v
+  Phase 2 / Phase 4  train models
+
+Role: PREPROCESSING + SECOND AUDIT.
+
+  - Produces the binary mask that 1.5.2 consumes.
+  - Rejects crops that pass visual inspection (1.3.5) but have no usable
+    numeral region after thresholding. This is audit pass #2.
+  - Feeds directly into 1.5.2's shape features and indirectly into the
+    report's "sufficient / unbiased" claim.
+
+--------------------------------------------------------------------------------
+3. INTERACTIVITY
+--------------------------------------------------------------------------------
+Upstream:
+  1.3.2  crop PNG written with 15% cloth ring; filename carries provenance.
+  1.3.1  [CLOTH_*] HSV bounds reused for cloth masking.
+  1.4.1  splits.csv used only for splitting roles at model time; not needed
+         inside 1.5.1 itself.
+  1.1.1  crop dimensions consistent (1080p-derived).
+
+Downstream:
+  1.5.2  reads masks (from disk or returns in-memory) and computes features.
+  1.6    EDA on 1.5.2's features.
+  1.7    scaling/cleaning.
+  Phase 2  SVM / k-NN / RF.
+  Phase 4  CNN may use crop directly OR mask as cleaner input.
+
+Lateral:
+  Reject log  mirrors 1.2.4's reject-log pattern. Format:
+              reason, class_id, filename
+  Second audit  may reduce class counts below 1.3.5's threshold. If so,
+                trigger 1.3.5 stride-3 escalation and document limitation.
+
+Report surface:
+  - Preliminary ML §3: state mask method, thresholds (V_MIN, S_MAX),
+    rejection rate, sample masks. Justify Strategy 1 (circle-as-blob).
+  - Full ML §8 / DL report: cite mask-rejection as a data-preparation
+    limitation if any class struggled.
+
+--------------------------------------------------------------------------------
+4. DESIGN DECISIONS (all confirmed)
+--------------------------------------------------------------------------------
+(a) Thresholding: HSV high-V, low-S.
+    Rejected: Otsu (assumes bimodal histogram; invalid for coloured ball
+    with small white patch). Fixed grayscale threshold (fails across ball
+    colours). 
+
+(b) Morphology: opening = 1, closing = 0.
+    Rationale: closing would fill holes inside numerals 8, 0, 9 — and hole
+    count is a strong feature for Phase 2. Opening removes specks without
+    destroying numeral shape.
+
+(c) Cloth masking: ENABLED.
+    Rationale: the 15% cloth ring was added in 1.3.2 specifically for this.
+    Skipping it lets bright cloth reflections leak into the mask as edge
+    blobs.
+
+(d) Output: save masks to disk ({name}_mask.png).
+    Rationale: ~1-5 KB each; enables visual tuning during 1.5.2 / 1.6;
+    re-running 1.5.1 for parameter changes is a one-time cost.
+
+(e) No-numeral fallback: reject crop, log to CSV.
+    Rationale: labelled noise degrades both SVM and CNN. Honest rejection
+    is consistent with 1.2.4's pattern and strengthens §3's data-quality
+    claim.
+
+(f) Strategy: circle-as-blob (Strategy 1).
+    Rejected: two-stage numeral extraction (more thresholds, more failure
+    modes; unnecessary at the pragmatic bar).
+
+--------------------------------------------------------------------------------
+5. SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+import os
+import cv2
+import numpy as np
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+S_MAX   = [S_MAX]      # e.g. 60     max saturation for white pixels
+V_MIN   = [V_MIN]      # e.g. 180    min value for bright pixels
+
+CLOTH_H_LO, CLOTH_H_HI = [CLOTH_H_LO], [CLOTH_H_HI]   # from 1.3.1
+CLOTH_S_LO, CLOTH_S_HI = [CLOTH_S_LO], [CLOTH_S_HI]
+CLOTH_V_LO, CLOTH_V_HI = [CLOTH_V_LO], [CLOTH_V_HI]
+USE_CLOTH_MASK = [USE_CLOTH_MASK]     # True
+
+MORPH_KERNEL_SIZE = [MORPH_KERNEL_SIZE]  # e.g. 3
+MORPH_OPEN_ITER   = [MORPH_OPEN_ITER]    # e.g. 1
+MORPH_CLOSE_ITER  = [MORPH_CLOSE_ITER]   # 0  (do not change without reason)
+
+MIN_MASK_AREA      = [MIN_MASK_AREA]     # e.g. 30 px
+SAVE_MASKS_TO_DISK = [SAVE_MASKS_TO_DISK]  # True
+MASK_OUTPUT_DIR    = r"[MASK_OUTPUT_DIR]"
+REJECT_LOG_PATH    = r"[REJECT_LOG_PATH]"
+
+
+# ============================================================================
+# MASK EXTRACTION
+# ============================================================================
+def extract_numeral_mask(crop_bgr):
+    hsv = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2HSV)
+
+    # (a) raw numeral-region: high V, low S
+    white_lo = np.array([0,   0,     V_MIN])
+    white_hi = np.array([179, S_MAX, 255])
+    mask = cv2.inRange(hsv, white_lo, white_hi)
+
+    # (b) intersect with non-cloth
+    if USE_CLOTH_MASK:
+        cloth_lo = np.array([CLOTH_H_LO, CLOTH_S_LO, CLOTH_V_LO])
+        cloth_hi = np.array([CLOTH_H_HI, CLOTH_S_HI, CLOTH_V_HI])
+        cloth_mask = cv2.inRange(hsv, cloth_lo, cloth_hi)
+        valid = cv2.bitwise_not(cloth_mask)
+        mask = cv2.bitwise_and(mask, valid)
+
+    # (c) morphology
+    if MORPH_KERNEL_SIZE > 0:
+        k = np.ones((MORPH_KERNEL_SIZE, MORPH_KERNEL_SIZE), np.uint8)
+        if MORPH_OPEN_ITER > 0:
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k,
+                                    iterations=MORPH_OPEN_ITER)
+        if MORPH_CLOSE_ITER > 0:
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k,
+                                    iterations=MORPH_CLOSE_ITER)
+
+    return mask
+
+
+def mask_is_usable(mask):
+    return int(np.count_nonzero(mask)) >= MIN_MASK_AREA
+
+
+def log_reject(class_id, filename):
+    with open(REJECT_LOG_PATH, "a") as f:
+        f.write(f"no_mask,{class_id},{filename}\n")
+
+
+# ============================================================================
+# MAIN LOOP
+# ============================================================================
+def build_masks(crop_root, class_ids):
+    for cid in class_ids:
+        folder = os.path.join(crop_root, str(cid))
+        if not os.path.isdir(folder):
+            continue
+        out_folder = os.path.join(MASK_OUTPUT_DIR, str(cid))
+        if SAVE_MASKS_TO_DISK and not os.path.isdir(out_folder):
+            os.makedirs(out_folder, exist_ok=True)
+
+        for fname in os.listdir(folder):
+            if not fname.lower().endswith(".png"):
+                continue
+            if fname.endswith("_mask.png"):
+                continue
+
+            crop = cv2.imread(os.path.join(folder, fname))
+            if crop is None:
+                continue
+
+            mask = extract_numeral_mask(crop)
+
+            if not mask_is_usable(mask):
+                log_reject(cid, fname)
+                continue
+
+            if SAVE_MASKS_TO_DISK:
+                out_name = fname.replace(".png", "_mask.png")
+                cv2.imwrite(os.path.join(out_folder, out_name), mask)
+
+
+if __name__ == "__main__":
+    CROP_ROOT = r"[CROP_ROOT]"
+    CLASS_IDS = list(range(1, 16))
+    build_masks(CROP_ROOT, CLASS_IDS)
+
+
+FILL-IN TABLE
+-------------
+Placeholder            | Example         | Purpose
+-----------------------|-----------------|-----------------------------
+[S_MAX]                | 60              | Max saturation for white
+[V_MIN]                | 180             | Min value for bright
+[CLOTH_*]              | (from 1.3.1)    | Cloth HSV bounds
+[USE_CLOTH_MASK]       | True            | Cloth masking on
+[MORPH_KERNEL_SIZE]    | 3               | Morph kernel size
+[MORPH_OPEN_ITER]      | 1               | Opening iterations
+[MORPH_CLOSE_ITER]     | 0               | Closing iterations
+[MIN_MASK_AREA]        | 30              | Minimum surviving pixels
+[SAVE_MASKS_TO_DISK]   | True            | Disk vs in-memory
+[MASK_OUTPUT_DIR]      | path            | Mask output root
+[REJECT_LOG_PATH]      | path            | Reject-log CSV
+[CROP_ROOT]            | path            | Parent of class folders
+
+--------------------------------------------------------------------------------
+6. CODE DESCRIPTION
+--------------------------------------------------------------------------------
+cvtColor(BGR2HSV)     Move to HSV. "Whiteness" = low S + high V. This is
+                      what makes the numeral region trivially separable
+                      regardless of ball colour.
+
+inRange(...)          Binary mask. Called twice: once for numeral-region
+                      (white_lo, white_hi), once for cloth. Result: two
+                      binary images.
+
+bitwise_not(cloth)    Invert cloth mask: cloth pixels → 0.
+bitwise_and(...)      Keep only pixels that are (numeral-region) AND
+                      (not cloth). This removes the 15% ring.
+
+morphologyEx OPEN     Erode → dilate. Removes specks, preserves blob.
+morphologyEx CLOSE    Dilate → erode. Fills holes — including numeral holes.
+                      Kept at 0 to preserve hole-count feature.
+
+count_nonzero(mask)   Pixel count. Threshold at MIN_MASK_AREA.
+
+log_reject(...)       Appends CSV row. Consistent with 1.2.4's pattern.
+                      Raw evidence for the second-audit rejection rate
+                      cited in the report.
+
+--------------------------------------------------------------------------------
+7. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+- Mask PNGs: {MASK_OUTPUT_DIR}\1\clip1_frame0005_ball0_mask.png, etc.
+  Parallel folder tree to the crop folders.
+- Reject log CSV: no_mask, class_id, filename rows.
+- For Preliminary ML §3:
+    * V_MIN, S_MAX values,
+    * sample masks (before / after),
+    * rejection count per class,
+    * justification for Strategy 1 (circle-as-blob).
+
+--------------------------------------------------------------------------------
+8. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+- If a class falls below 50 usable masks after 1.5.1 rejection:
+    -> trigger 1.3.5 stride-3 re-extraction.
+    -> re-run 1.3.2-1.3.5, then re-run 1.5.1.
+    -> if still short after stride-3, document as limitation.
+- If mask quality is visibly poor on samples (numerals cut, cloth
+  leaking into blob):
+    -> loosen S_MAX (60 → 80) or lower V_MIN (180 → 150).
+    -> inspect 5-10 sample masks before committing new params.
+- If masks are almost all empty:
+    -> cloth HSV range likely overlapping numeral white (e.g. very pale
+       cloth). Inspect cloth sample directly and refine [CLOTH_*].
+
+--------------------------------------------------------------------------------
+9. NOTES FOR LATER
+--------------------------------------------------------------------------------
+- 1.5.2 reads masks either from MASK_OUTPUT_DIR (if SAVE_MASKS_TO_DISK) or
+  recomputes on the fly. Disk is preferred — see decision (d).
+- 1.5.2 should additionally keep only the largest connected component
+  before computing features. Mitigates residual false blobs (pockets,
+  chalk, HUD) that survive both masks.
+- 1.6 EDA semantics shift: distributions of numeral-blob features, not
+  colour histograms. Flag at 1.6.
+- Phase 4 CNN: mask is optional input. Crop direct is also viable.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.5.1 Extract numeral-region mask per crop
+    -> threshold: HSV high-V, low-S
+    -> morphology: open=1, close=0
+    -> cloth mask: enabled (reuse [CLOTH_*])
+    -> output: masks to disk
+    -> no-numeral: reject + log (second audit)
+    -> strategy: circle-as-blob
+[ ] 1.5.2 Derive shape features from numeral blob
+
+================================================================================
+END OF NOTE
+================================================================================
+
+
+================================================================================
+1.5.1 ADDENDUM - KNOWN LIMITATION: 6/9 ORIENTATION AMBIGUITY
+================================================================================
+
+THE PROBLEM
+-----------
+Billiard balls rotate freely during play. A numeral can appear at any
+rotation in the crop. Two consequences:
+
+  - "6" rotated 180 degrees is visually identical to "9".
+  - Numeral-mask shape features (aspect ratio, projections, hole count)
+    cannot separate the pair. Both numerals have one hole; both have
+    similar bounding boxes and projection profiles under rotation.
+
+This is not a defect in 1.5.1. It is an inherent ambiguity in the numeral
+pair. No shape engineering resolves it; mitigation must come from a
+different signal in the crop.
+
+BILLIARD-SPECIFIC DISCRIMINATOR
+-------------------------------
+In standard pool/billiard sets:
+
+    6  - green ball, SOLID   (fully coloured surface)
+    9  - green ball, STRIPED (white band with green stripe)
+
+Both share the same hue. Solid vs stripe pattern is the ONLY distinguishing
+signal in the crop.
+
+MITIGATION METHODS
+------------------
+Method A - Colour (dominant hue)
+  Sample dominant hue outside the numeral mask.
+  VERDICT: insufficient alone. Both 6 and 9 are green. Narrows candidate
+  set to {6, 9} but does not resolve it.
+
+Method B - Solid vs stripe pattern
+  Sample a ring of pixels between the numeral region and the ball edge.
+  On a solid ball, ring is uniformly coloured. On a striped ball, ring
+  contains alternating white and colour bands.
+  VERDICT: sufficient. Directly separates 6 (solid) from 9 (striped).
+  CAVEAT: if the ball is rotated so the stripe faces away, the ring
+  appears uniform. Failure rate low at overhead view but non-zero.
+
+ADOPTED MITIGATION
+------------------
+Use Method B (solid vs stripe) as the primary tie-breaker.
+Method A not adopted standalone; may serve as a sanity check (confirm the
+ball is green before applying B).
+
+Pragmatic combined rule:
+
+    If classifier_uncertain AND top_two == {6, 9}:
+        sample peripheral ring
+        if ring is uniform  -> predict 6
+        if ring is striped  -> predict 9
+
+WHEN TO INVOKE
+--------------
+Only if Phase 2 or Phase 4 confusion matrices show persistent 6/9
+confusion. Not built speculatively. If the CNN (Phase 4) with rotation
+augmentation already separates 6 from 9 at acceptable accuracy, the
+tie-breaker is dead code and should not exist.
+
+WHERE IT BELONGS
+----------------
+- NOT in 1.5.1. Mask extraction produces shape features only; no
+  classification decision is made here.
+- Possibly in Phase 2: wrapper around SVM prediction step. If top-2 are
+  {6, 9} and confidence gap is small, call the tie-breaker.
+- Possibly in Phase 3: same logic at deployment.
+Placement deferred until confusion matrices exist.
+
+CONSEQUENCE FOR THE REPORT
+--------------------------
+1.5.1's narrative must state the rotation-ambiguity limitation explicitly.
+This is why Phase 2 (hand-crafted features) will hit a ceiling on 6 vs 9.
+Phase 4's CNN + augmentation is expected to recover most of it. This is
+the "classical plateaued at X%; CNN reached Y%" narrative from the
+one-workflow statement.
+
+================================================================================
+END OF ADDENDUM
+================================================================================

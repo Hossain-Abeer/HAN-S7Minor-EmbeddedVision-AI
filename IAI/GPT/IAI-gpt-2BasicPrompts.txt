@@ -9,3 +9,8 @@ i don't understand. explain them first, one by one in terms:
 3. when - sequence of events of workflow. 
 4. codebase - which libraries are involved, skeletal codesnippets with [params] & description. 
 5. recommendations - relevance to my project, with reasons.
+
+
+
+i have made a decision. If mitigating the issue of orientation fails, ie. non of the method works or the code becomes too complex, we will be ignoring 6, and only recognizing 9, as it matters for 9-ball game rule, and during 8-ball game rule, 6 doesn't really count. so both 6 & 9 could be mapped to a 9. 
+do a txt writeup. will be saved as 'IAI-gpt-explains-6vs9_fails.txt'
