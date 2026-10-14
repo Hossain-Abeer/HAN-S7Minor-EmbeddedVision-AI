@@ -1,0 +1,498 @@
+================================================================================
+1.6.2 PLOT FEATURE DISTRIBUTIONS
+================================================================================
+
+DECISION SUMMARY
+----------------
+Type:             DIAGNOSTIC step (not a producer of machine-consumed data).
+Input:            dataset.csv (from 1.5.3).
+Outputs:          one boxplot figure per feature (disk), one compact grid
+                  overview figure (disk), one written verdict per feature.
+Libraries:        pandas, matplotlib, seaborn (all already installed).
+New dependencies: none.
+Feeds:            Preliminary ML §3 (evidence); Phase 2 feature selection
+                  (justification for retain/drop); interpretive context for
+                  1.6.3.
+Does NOT feed:    any downstream script via CSV. Not a pipeline producer.
+
+
+================================================================================
+0. PLAIN-LANGUAGE WALKTHROUGH
+================================================================================
+
+PURPOSE OF THIS SECTION
+-----------------------
+The rest of this note is written in the tracker's terse design style. This
+section restates the same content in plain terms, for first-read
+understanding. It is retained as a learning artefact, not as a
+specification. Nothing below overrides the numbered sections.
+
+--------------------------------------------------------------------------------
+0.1 WHAT IS 1.6.2, AT THE TOP LEVEL?
+--------------------------------------------------------------------------------
+It is a VISUAL INSPECTION step.
+
+You now have dataset.csv - one row per surviving crop, with 23 numeric
+columns describing the shape of its numeral mask, plus a class label
+(1-15) and a role (train/val/test).
+
+1.6.2 asks, for each of the 23 features: does it actually look different
+across the 15 classes?
+
+  - If yes: the feature is useful.
+  - If all 15 classes look the same on that feature: it is dead weight.
+
+--------------------------------------------------------------------------------
+0.2 WHAT IS A BOXPLOT?
+--------------------------------------------------------------------------------
+A boxplot is a compact graph of a distribution. For one feature and one
+class:
+
+  - The BOX spans the middle 50% of the values (25th to 75th percentile).
+  - The LINE inside the box is the median.
+  - The WHISKERS extend up/down to roughly the min and max (excluding
+    outliers).
+  - DOTS mark outliers.
+
+So a boxplot answers: "for class 3, what range does this feature take?
+Where is the middle? Is it tight or spread?"
+
+--------------------------------------------------------------------------------
+0.3 WHY COMPARE BOXES ACROSS CLASSES?
+--------------------------------------------------------------------------------
+A boxplot of one feature across 15 classes puts 15 boxes side-by-side.
+You look at them and ask:
+
+  - Do the boxes sit at DISTINCT HEIGHTS? -> the feature separates
+    classes. Good.
+  - Do the boxes OVERLAP HEAVILY?         -> the feature does not separate
+    classes. Weak or dead.
+
+This is the single most important EDA step for the Preliminary ML report:
+it is the visual proof of "informative" and "discriminating."
+
+--------------------------------------------------------------------------------
+0.4 WHAT ARE THE 23 FEATURES?
+--------------------------------------------------------------------------------
+From 1.5.2, they describe the numeral's white-patch geometry:
+
+  hole_count                 - how many enclosed holes the numeral patch
+                               has. "8" -> 2 holes; "0"/"6"/"9" -> 1;
+                               most digits -> 0.
+  connected_component_count  - how many white blobs the mask splits into.
+  blob_area_ratio            - size of white patch / crop area.
+  hole_area_ratio,
+  hole_aspect,
+  hole_centroid_dx,
+  hole_centroid_dy           - geometry of the largest hole (the numeral).
+  proj_x_0..7, proj_y_0..7   - 16 values describing how the white mass is
+                               distributed horizontally and vertically
+                               (like a coarse silhouette).
+
+Total: 1 + 1 + 1 + 1 + 1 + 2 + 16 = 23.
+
+--------------------------------------------------------------------------------
+0.5 WHY FILTER TO role == "train" ONLY?
+--------------------------------------------------------------------------------
+dataset.csv has all rows tagged train / val / test. 1.6.2 plots TRAIN ONLY.
+
+Reason: train is what the model learns from. If a feature separates classes
+in val/test but not train, that is a generalisation concern for later. For
+now, look at what the model will actually see.
+
+--------------------------------------------------------------------------------
+0.6 WHY SAVE 23 INDIVIDUAL FIGURES + ONE GRID?
+--------------------------------------------------------------------------------
+  - Individual figure per feature: for deep reading - you zoom in and
+    study one feature at a time. These go in the report appendix.
+  - Grid: one figure with 23 mini-boxplots side by side - for quick scan.
+    This is what you stare at first to spot dead features at a glance.
+
+You save all of them. You CURATE which 5-10 go into the report body.
+Curation happens at writing time, not here.
+
+--------------------------------------------------------------------------------
+0.7 WHAT IS THE "VERDICT PER FEATURE"?
+--------------------------------------------------------------------------------
+After looking at each figure, you write one word per feature:
+
+  - INFORMATIVE : boxes at distinct heights, low overlap -> keep.
+  - WEAK        : some separation, some overlap -> keep, but flag.
+  - DEAD        : boxes all at the same height -> remove before Phase 2.
+
+Dead features do not help the classifier; they just add noise and
+dimensionality.
+
+--------------------------------------------------------------------------------
+0.8 WHY NO CSV OUTPUT?
+--------------------------------------------------------------------------------
+This step produces FIGURES and HUMAN VERDICTS, not data. Nothing downstream
+reads a file from 1.6.2. 1.6.3 (correlations) reads the same dataset.csv,
+not anything 1.6.2 produced.
+
+So 1.6.2 is a DIAGNOSTIC, not a PRODUCER - same pattern as 1.6.1.
+
+--------------------------------------------------------------------------------
+0.9 WHAT LANDS IN THE REPORT?
+--------------------------------------------------------------------------------
+Preliminary ML §3:
+
+  - The grid figure + 5-10 curated deep-dive figures.
+  - A verdict table: feature | informative? | discriminating? | notes.
+  - A sentence naming the top 5-8 features expected to carry Phase 2.
+  - A sentence on any dead features.
+
+The Excel rubric line "creativity in visualization" is satisfied here -
+by CHOOSING WHICH FIGURES TELL THE STORY, not by dumping all 23 into the
+
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+WHAT IT IS
+  A per-feature visual diagnostic. For each of the 23 feature columns in
+  dataset.csv, produce a figure showing how that feature's values are
+  distributed across samples, split by class.
+
+HOW IT WORKS
+  - Load dataset.csv.
+  - For each feature column, plot a per-class boxplot (15 boxes, one per
+    class 1..15).
+  - Save each figure to disk.
+  - Also produce a compact grid overview (all features in one figure).
+  - Human reads the figures and writes one verdict per feature:
+    informative / weak / dead.
+
+WHY IT MATTERS
+  This is the single most important EDA step for Preliminary ML §3. The
+  Excel rubric explicitly rewards:
+    - "Feature data visualization is appropriate"
+    - "Feature quality: informative, discriminating, independent,
+       explainable"
+  Feature distributions are how you argue INFORMATIVE and DISCRIMINATING.
+  Correlation (1.6.3) handles INDEPENDENT. EXPLAINABLE is a written
+  argument.
+
+THE CORE QUESTION
+  If I look at a boxplot of feature F with 15 boxes (one per class), do
+  the boxes overlap heavily (feature is weak) or sit at distinct heights
+  (feature is strong)?
+
+HOW IT DIFFERS FROM PRIOR STEPS
+  1.5.2  engineered the features (produced values).
+  1.5.3  assembled them into one table with labels and roles.
+  1.6.1  counted class balance (how many per class).
+  1.6.2  shows the SHAPE of each feature's distribution per class. First
+         step that asks "does this feature actually separate classes?"
+
+--------------------------------------------------------------------------------
+2. WHERE
+--------------------------------------------------------------------------------
+WHO FEEDS 1.6.2
+  - 1.5.3 writes dataset.csv. Columns:
+      filename | label | role | 23 features. Only input.
+  - 1.6.1 does not feed data, but sets interpretive context. If class 3
+    has 12 samples vs class 8 having 90, class-3 boxplots are noisy.
+    1.6.2 must note this.
+
+WHO 1.6.2 FEEDS
+  - 1.6.3 (correlations) -- conceptual cross-check. Features flagged
+    uninformative here will show near-zero correlation with label.
+  - 1.7 (preprocessing) -- the retained feature set informs what gets
+    scaled. Features shown to be near-constant may be dropped.
+  - Preliminary ML §3 -- figures and verdicts go into the report.
+  - Phase 2 (feature selection) -- the ranked list justifies retaining
+    or dropping features before training.
+  - No CSV output feeds another script. Diagnostic, not producer.
+
+CONCEPTUAL PIPELINE POSITION
+
+  1.5.3  dataset.csv
+           |
+           v
+  1.6.1  class balance       (context: which classes are thin?)
+           |
+           v
+  1.6.2  feature distributions            [THIS STEP]
+           |
+           v
+  1.6.3  correlations
+           |
+           v
+  1.7    preprocessing
+
+LATERAL
+  1.6.2's figures are visual evidence for the feature-quality discussion
+  in the report. Consumed by the report reader, not by code.
+
+--------------------------------------------------------------------------------
+3. WHEN - SEQUENCE OF EVENTS
+--------------------------------------------------------------------------------
+  1. dataset.csv exists (from 1.5.3), post inner-join, with roles.
+  2. class_balance.png and class-count table exist (from 1.6.1).
+     You know which classes are thin.
+  3. 1.6.2 runs:
+     - load dataset.csv
+     - filter to ROLE_TO_PLOT (train by default)
+     - for each feature: boxplot x=label, y=feature; save to disk
+     - save one grid overview figure
+  4. HUMAN STEP: read each figure. For each feature, verdict:
+     informative / weak / dead.
+  5. Document verdicts in Preliminary §3 (table or short prose). Curate
+     a subset of figures (5-10 most telling) for the report; rest to
+     appendix.
+  6. Proceed to 1.6.3.
+
+BEFORE 1.6.2: you know counts, not distributions.
+AFTER 1.6.2: you know which features actually carry signal per class.
+
+--------------------------------------------------------------------------------
+4. CODEBASE
+--------------------------------------------------------------------------------
+LIBRARIES
+  pandas          - load, filter, group
+  matplotlib      - figure backbone
+  seaborn         - boxplot, cleaner defaults
+  No new dependencies.
+
+SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+DATASET_CSV     = r"[DATASET_CSV]"       # ...\billiards-game-clips\
+                                         #    dataset.csv
+OUT_DIR         = r"[OUT_DIR]"           # ...\billiards-game-clips\
+                                         #    feature_dist\
+FEATURE_COLUMNS = [FEATURE_COLUMNS]      # 23 column names, canonical order
+ROLE_TO_PLOT    = [ROLE_TO_PLOT]         # "train" (default) or "all"
+FIG_DPI         = [FIG_DPI]              # e.g. 150
+GRID_COLS       = [GRID_COLS]            # e.g. 4
+
+# ============================================================================
+# LOAD
+# ============================================================================
+df = pd.read_csv(DATASET_CSV)
+if ROLE_TO_PLOT != "all":
+    df = df[df["role"] == ROLE_TO_PLOT]
+
+os.makedirs(OUT_DIR, exist_ok=True)
+
+# ============================================================================
+# PER-FEATURE BOXPLOT, ONE FIGURE EACH
+# ============================================================================
+for feat in FEATURE_COLUMNS:
+    fig, ax = plt.subplots(figsize=(10, 4))
+    sns.boxplot(data=df, x="label", y=feat, ax=ax)
+    ax.set_title(f"Distribution of '{feat}' per class ({ROLE_TO_PLOT})")
+    ax.set_xlabel("Class (ball number)")
+    ax.set_ylabel(feat)
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUT_DIR, f"feature_dist_{feat}.png"),
+                dpi=FIG_DPI)
+    plt.close(fig)
+
+# ============================================================================
+# COMPACT GRID OVERVIEW
+# ============================================================================
+n = len(FEATURE_COLUMNS)
+ncols = GRID_COLS
+nrows = (n + ncols - 1) // ncols
+fig, axes = plt.subplots(nrows, ncols, figsize=(4*ncols, 3*nrows))
+axes = axes.ravel()
+
+for ax, feat in zip(axes, FEATURE_COLUMNS):
+    sns.boxplot(data=df, x="label", y=feat, ax=ax)
+    ax.set_title(feat, fontsize=9)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+
+for ax in axes[n:]:
+    ax.axis("off")
+
+plt.tight_layout()
+plt.savefig(os.path.join(OUT_DIR, "feature_dist_GRID.png"), dpi=FIG_DPI)
+plt.close(fig)
+
+
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+Placeholder        | Example                              | Purpose
+-------------------|--------------------------------------|----------
+[DATASET_CSV]      | ...\billiards-game-clips\dataset.csv | Input
+[OUT_DIR]          | ...\billiards-game-clips\feature_dist| Figures
+[FEATURE_COLUMNS]  | 23 names, canonical order            | Columns
+[ROLE_TO_PLOT]     | "train"                              | Rows to plot
+[FIG_DPI]          | 150                                  | Resolution
+[GRID_COLS]        | 4                                    | Grid layout
+
+--------------------------------------------------------------------------------
+5. CODE DESCRIPTION
+--------------------------------------------------------------------------------
+pd.read_csv(DATASET_CSV)
+  Single input. All features, labels, roles in one table.
+
+df[df["role"] == ROLE_TO_PLOT]
+  Filter to TRAIN by default. Rationale: train is what Phase 2 learns
+  from; val/test are held out. If a feature separates classes on train
+  but not val, that is a generalisation warning. Optionally plot "all"
+  to compare, but train is the default.
+
+sns.boxplot(data=df, x="label", y=feat)
+  One box per class (1..15) side by side. Box shows median + IQR;
+  whiskers 1.5*IQR; dots mark outliers. This is the most
+  information-dense visual for feature-vs-class comparison at 15 classes.
+  Alternatives rejected:
+    - histplot with hue=label: unreadable for 15 classes.
+    - violinplot: prettier, slower to read at a glance.
+    - pairplot: 23x23 pairwise, combinatorial overkill.
+
+plt.savefig(..., dpi=FIG_DPI)
+  Mandatory. Figures are report artefacts, not ephemeral.
+
+plt.close(fig)
+  Releases memory. 23 figures in a loop accumulate otherwise.
+
+Grid overview
+  One compact figure for quick scan / appendix. Each subplot is a
+  miniature version of the individual boxplot.
+
+--------------------------------------------------------------------------------
+6. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+DISK (persistent)
+  - feature_dist_<feature>.png x 23    (one per feature)
+  - feature_dist_GRID.png              (compact overview)
+
+SCREEN (ephemeral)
+  - none; this step is figure-driven
+
+HUMAN (documented)
+  - One verdict per feature: informative / weak / dead
+  - Top 5-8 features named explicitly as Phase 2's expected workhorses
+  - This lands in Preliminary ML §3
+
+No machine-consumed CSV. No downstream script reads 1.6.2's output.
+
+--------------------------------------------------------------------------------
+7. WHAT TO LOOK FOR (FEATURE-BY-FEATURE EXPECTATIONS)
+--------------------------------------------------------------------------------
+feature                    | expected signal                          | if fails
+---------------------------|------------------------------------------|----------
+hole_count                 | Strong. 8->2, {0,6,9}->1, rest->0.       | Check
+                           | Flat boxes at distinct heights.          | MORPH_CLOSE
+                           |                                          | at 1.5.1
+connected_component_count  | Weak-medium. Mostly 1; some 2 for         | If constant,
+                           | two-digit (10-15).                       | drop it
+blob_area_ratio            | Encodes solid-vs-stripe. Striped          | If uniform,
+                           | classes (9-15) should sit higher.        | stripe leak
+                           |                                          | missing
+hole_area_ratio            | Medium. 8, 0 wide; 1 narrow.             | Check
+                           |                                          | normalisation
+hole_aspect                | Medium. 1 tall-thin; 8 square.            | Rotation
+                           |                                          | may smear
+hole_centroid_dx / dy      | Weak-medium. Off-centre digits.           | Likely noisy
+proj_x_0..7, proj_y_0..7   | Rotation-sensitive by design. Moderate    | Overlap is
+                           | on unrotated.                            | expected
+
+--------------------------------------------------------------------------------
+8. DESIGN DECISIONS - ALL CONFIRMED
+--------------------------------------------------------------------------------
+(a) Idiom: per-class boxplot. One figure per feature.
+    Rejected: histplot with hue (unreadable at 15 classes). Rejected:
+    violinplot (slower to read at a glance). Rejected: pairplot
+    (combinatorial explosion).
+
+(b) Role filter: TRAIN only by default.
+    Rejected: "all". Rationale: train is what Phase 2 learns from; the
+    val/test comparison matters later, not here. Optional "all" mode
+    kept for the curious.
+
+(c) One figure per feature, plus one grid overview.
+    Rationale: individual figures for deep-dive reading; grid for quick
+    scan and appendix. Both serve different report needs.
+
+(d) Save ALL 23 figures, curate for the report.
+    Rationale: storage is cheap; the curation choice happens at report
+    writing time, not at figure time. Do not pre-cull.
+
+(e) No machine-consumed CSV output.
+    Rationale: same as 1.6.1. The consumers are the human decision and
+    the report. No downstream script reads this.
+
+(f) No automatic feature-ranking.
+    Rationale: automated separability metrics (e.g., ANOVA F-score) are
+    a 1.7/Phase-2 concern. 1.6.2 is visual. The human reads the boxes
+    and writes verdicts.
+
+--------------------------------------------------------------------------------
+9. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+- If a feature's boxplots are flat lines at a single value across all
+  classes (feature is constant):
+    -> mark as DEAD; flag for removal at Phase 2 feature selection.
+- If ALL 23 features show heavy overlap across all 15 classes:
+    -> the feature engineering at 1.5.2 has failed. Revisit mask
+       extraction (1.5.1 thresholds) and hole detection (1.5.2 hole
+       algorithm). This is a blocking finding, not a report limitation.
+- If a specific class (e.g. class 3) shows noisy boxes:
+    -> cross-check with 1.6.1. If class is thin (< 30 in train),
+       the noise is expected. Note in report.
+- If striped classes (9-15) separate from solid (1-8) on a feature,
+  but not from each other:
+    -> feature is a solid/stripe discriminator, not a digit
+       discriminator. Note this; it is useful for the 6/9 tie-breaker
+       but not for primary classification.
+
+--------------------------------------------------------------------------------
+10. NOTES FOR LATER
+--------------------------------------------------------------------------------
+- 1.6.3 reads dataset.csv and computes correlations. Features marked
+  DEAD here should show near-zero correlation with label there. Cross-
+  check both.
+- 1.7 reads dataset.csv. Features marked DEAD may be dropped before
+  scaling; document the drop in the report.
+- Phase 2 feature selection: the verdicts from 1.6.2 + correlations from
+  1.6.3 combine into the argument for which features train on.
+- Preliminary ML §3: curated figures + verdict table + top-5-8 features
+  named explicitly. This is where "creativity in visualization" points
+  live -- curate, do not dump.
+- Timebox: hours, not days. Once dead/alive is clear, stop.
+
+--------------------------------------------------------------------------------
+11. REPORT SURFACE
+--------------------------------------------------------------------------------
+Preliminary ML §3 (feature quality: informative, discriminating)
+  - 5-10 curated figures (grid overview + selected deep dives).
+  - 2-3 sentences per figure: what it shows, why it matters.
+  - Verdict table: feature | informative? | discriminating? | notes.
+  - Top 5-8 features named as Phase 2 workhorses.
+
+Full ML §6 (methodology)
+  - Only if features were dropped: which, why, and the effect on the
+    final model.
+
+Full ML §8 / DL report (limitations)
+  - Rotation-sensitive features (projections) noted as known ceiling
+    for classical ML. Sets up Phase 4's CNN improvement narrative.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.6.2 Plot feature distributions
+    -> type:        diagnostic (not a producer)
+    -> idiom:       per-class boxplot, one figure per feature
+    -> output:      feature_dist_<feature>.png x 23 + grid overview
+    -> human step:  one verdict per feature (informative/weak/dead)
+    -> report:      curated figures + verdicts in Preliminary ML §3
+[ ] 1.6.3 Compute correlations
+
+================================================================================
+END OF NOTE
+================================================================================

@@ -51,9 +51,9 @@ PHASE 1 - DATA ACQUISITION & FEATURE ENGINEERING & Preliminary ML Report
     [x] 1.5.2 Derive shape features from numeral blob
     [x] 1.5.3 Assemble feature matrix X + labels y (reads splits.csv)
 [ ] 1.6 EDA: class balance, feature distributions, correlations.
-    [ ] 1.6.1 Check class balance
-    [ ] 1.6.2 Plot feature distributions
-    [ ] 1.6.3 Compute correlations
+    [x] 1.6.1 Check class balance
+    [x] 1.6.2 Plot feature distributions
+    [x] 1.6.3 Compute correlations
 [ ] 1.7 Preprocessing: cleaning, scaling, pipeline.
     [ ] 1.7.1 Data cleaning (missing values, outliers)
     [ ] 1.7.2 Feature scaling

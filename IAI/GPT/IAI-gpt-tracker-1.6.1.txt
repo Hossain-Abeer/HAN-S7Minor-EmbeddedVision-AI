@@ -1,0 +1,454 @@
+================================================================================
+1.6.1 CHECK CLASS BALANCE
+================================================================================
+
+DECISION SUMMARY
+----------------
+Type:             DIAGNOSTIC step (not a producer of machine-consumed data).
+Input:            dataset.csv (from 1.5.3).
+Outputs:          printed count table (screen), class_balance.png (disk),
+                  one written decision (accept / weight / resample).
+Libraries:        pandas, matplotlib, seaborn (all already installed).
+New dependencies: none.
+Feeds:            Preliminary ML §3 (evidence); Phase 2 code (only if
+                  severe imbalance triggers class weighting).
+Does NOT feed:    any downstream script via CSV. Not a pipeline producer.
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+WHAT IT IS
+  A diagnostic check on the assembled dataset that answers one question:
+  are the 15 classes equally represented, or does one class dominate?
+
+HOW IT WORKS
+  - Count samples per class.
+  - Count samples per class per role (train / val / test).
+  - Compute the spread: max/min ratio on the TRAIN set.
+  - Visualise as a grouped bar chart.
+  - Branch on a threshold to produce a decision.
+
+WHY IT MATTERS
+  Class imbalance is a documented ML pitfall (IAI lessons 1.1 and 1.5).
+  A classifier trained on imbalanced data learns to favour the majority
+  class. Accuracy hides this: a model that always predicts the majority
+  class can hit a deceptively high accuracy on a skewed dataset. This is
+  why the IAI performance lesson insists on precision/recall/F1 and
+  confusion matrices as complements to accuracy.
+
+HOW IT DIFFERS FROM PRIOR EXISTENCE CHECKS
+  1.4.2  verified each role had >= 1 sample per class (existence).
+  1.5.3  re-verified existence after mask inner-join dropped crops.
+  1.6.1  checks the SHAPE of the count distribution. Not "does class X
+         exist?" but "how many does class X have, and how does that
+         compare to the others?"
+
+  Existence checks are pass/fail. Balance is a spectrum, and the response
+  is a judgement call, not a gate.
+
+--------------------------------------------------------------------------------
+2. WHERE
+--------------------------------------------------------------------------------
+WHO FEEDS 1.6.1
+  - 1.5.3 writes dataset.csv.
+  - That is the only input. No images, no masks, no splits.csv --
+    everything has already been merged into dataset.csv with a role column.
+
+WHO 1.6.1 FEEDS
+  - 1.6.2 (feature distributions) -- concept context. If class 3 has only
+    12 samples, its histograms will be noisy; the imbalance number frames
+    the reading.
+  - 1.6.3 (correlations) -- same reasoning. Small classes distort
+    correlation estimates.
+  - 1.7 (preprocessing) -- only if the decision is Path B2 (resampling).
+    Paths A and B1 leave 1.7 unchanged.
+  - Phase 2 training -- only if the decision is Path B1 (class weighting).
+    The imbalance finding is what justifies the argument.
+
+LATERAL (peer EDA sub-steps)
+  1.6.1, 1.6.2, 1.6.3 are three sub-steps of one EDA stage. They share an
+  input file and a reading context. 1.6.1 runs first because it frames
+  the interpretation of the other two.
+
+KEY DISTINCTION FROM PIPELINE PRODUCERS
+  Steps 1.3.2, 1.4.1, 1.5.2, 1.5.3 produce files consumed by other
+  scripts (crops, splits.csv, features.csv, dataset.csv). 1.6.1 produces
+  a DIAGNOSTIC: a printed table, a figure, and a human decision. No CSV
+  output feeds another script. Its only "downstream" is the report and,
+  conditionally, a one-line argument in Phase 2 code.
+
+--------------------------------------------------------------------------------
+3. WHEN
+--------------------------------------------------------------------------------
+SEQUENCE OF EVENTS
+
+  1. dataset.csv exists (from 1.5.3).
+     Columns: filename | label | role | 23 feature columns.
+
+  2. 1.6.1 runs:
+     - reads dataset.csv
+     - prints overall class counts
+     - prints per-role / per-class count matrix
+     - computes train max/min ratio
+     - prints a threshold-based message
+     - saves class_balance.png
+     - (optionally) saves class_balance_table.csv
+
+  3. HUMAN STEP: read the printed output, decide Path A or Path B.
+
+  4. If Path A: document in notes and report; proceed to 1.6.2 unchanged.
+
+  5. If Path B1: document; proceed to 1.6.2 unchanged. Add class_weight
+     argument in Phase 2 later.
+
+  6. If Path B2: document; proceed to 1.6.2 unchanged. Add resampling step
+     in 1.7 later.
+
+  7. If Path B3: document as limitation; proceed to 1.6.2 unchanged.
+
+  8. Then 1.6.2, 1.6.3, 1.7, Phase 2 follow as normal.
+
+BEFORE 1.6.1: nothing EDA-related.
+AFTER 1.6.1: every EDA interpretation has the class balance context.
+
+--------------------------------------------------------------------------------
+4. CODEBASE
+--------------------------------------------------------------------------------
+LIBRARIES
+  pandas        - reading, grouping, counting
+  matplotlib    - figure backbone
+  seaborn       - countplot (grouped bars), cleaner defaults
+  No new dependencies.
+
+SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+DATASET_CSV            = r"[DATASET_CSV]"      # ...\billiards-game-clips\
+                                               #    dataset.csv
+BALANCE_TABLE_CSV      = r"[BALANCE_TABLE_CSV]"  # optional output; can be
+                                                 # None to skip saving
+BALANCE_PNG            = r"[BALANCE_PNG]"       # ...\class_balance.png
+SEVERE_RATIO           = [SEVERE_RATIO]        # e.g. 3.0
+MODERATE_RATIO         = [MODERATE_RATIO]      # e.g. 1.5
+
+# ============================================================================
+# LOAD
+# ============================================================================
+df = pd.read_csv(DATASET_CSV)
+
+# ============================================================================
+# COUNT - overall
+# ============================================================================
+overall = df["label"].value_counts().sort_index()
+print("Class counts (overall):")
+print(overall)
+
+# ============================================================================
+# COUNT - per role / per class
+# ============================================================================
+pivot = (df.groupby(["role", "label"])
+           .size()
+           .unstack(fill_value=0))
+print("\nPer-role / per-class counts:")
+print(pivot)
+
+# ============================================================================
+# IMBALANCE METRIC - on TRAIN only
+# ============================================================================
+train_counts = (df[df["role"] == "train"]["label"]
+                .value_counts()
+                .sort_index())
+min_c = int(train_counts.min())
+max_c = int(train_counts.max())
+ratio = max_c / max(min_c, 1)
+
+print(f"\nTRAIN imbalance:")
+print(f"  min class count = {min_c}")
+print(f"  max class count = {max_c}")
+print(f"  max/min ratio   = {ratio:.2f}")
+
+if ratio >= SEVERE_RATIO:
+    verdict = "SEVERE"
+    action  = ("Apply class_weight='balanced' in Phase 2 for SVC and RF. "
+               "Do not resample unless weighting proves insufficient.")
+elif ratio >= MODERATE_RATIO:
+    verdict = "MODERATE"
+    action  = "Document ratio in report §3. No correction applied."
+else:
+    verdict = "BALANCED"
+    action  = "Document ratio in report §3. No correction needed."
+
+print(f"  verdict         = {verdict}")
+print(f"  action          = {action}")
+
+# ============================================================================
+# OPTIONAL: save count table
+# ============================================================================
+if BALANCE_TABLE_CSV:
+    pivot.to_csv(BALANCE_TABLE_CSV)
+
+# ============================================================================
+# PLOT
+# ============================================================================
+fig, ax = plt.subplots(figsize=(10, 5))
+sns.countplot(data=df, x="label", hue="role", ax=ax)
+ax.set_title("Class balance per role")
+ax.set_xlabel("Class (ball number)")
+ax.set_ylabel("Sample count")
+plt.tight_layout()
+plt.savefig(BALANCE_PNG, dpi=150)
+plt.show()
+
+
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+Placeholder           | Example                              | Purpose
+----------------------|--------------------------------------|---------
+[DATASET_CSV]         | ...\billiards-game-clips\dataset.csv | Input
+[BALANCE_TABLE_CSV]   | ...\class_balance_table.csv          | Optional
+                                                             table save
+[BALANCE_PNG]         | ...\class_balance.png                | Figure save
+[SEVERE_RATIO]        | 3.0                                  | Action threshold
+[MODERATE_RATIO]      | 1.5                                  | Warn threshold
+
+--------------------------------------------------------------------------------
+5. CODE DESCRIPTION
+--------------------------------------------------------------------------------
+pd.read_csv(DATASET_CSV)
+  Loads dataset.csv. Single input.
+
+df["label"].value_counts().sort_index()
+  Counts samples per class (1..15). .sort_index() keeps numeric order
+  rather than frequency order, so classes read top-to-bottom as 1..15.
+
+df.groupby(["role","label"]).size().unstack(fill_value=0)
+  3 x 15 matrix. Rows: train, val, test. Columns: class 1..15. Cells:
+  sample count. fill_value=0 ensures missing combinations appear as 0
+  rather than NaN. This table is the primary evidence figure for §3.
+
+df[df["role"] == "train"]...
+  The imbalance metric is computed on TRAIN only. Rationale: val and
+  test are held out. Their balance is descriptive, not actionable.
+  Modifying them would break the group-by-clip split integrity.
+
+ratio = max_c / max(min_c, 1)
+  Simple, defensible single number. Guard against divide-by-zero by
+  flooring the denominator at 1.
+
+Threshold branch
+  Produces a DECISION, not just a number. This is what distinguishes
+  an EDA step from a raw count. SEVERE -> act in Phase 2. MODERATE ->
+  document. BALANCED -> document.
+
+sns.countplot(data=df, x="label", hue="role")
+  One figure, all 15 classes x 3 roles. Grouped bars show both the
+  overall class distribution and per-role coverage in a single glance.
+  This is the figure that goes into Preliminary ML §3.
+
+plt.savefig(..., dpi=150)
+  Figure MUST be saved to disk. It is a report artefact, not optional.
+
+--------------------------------------------------------------------------------
+6. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+SCREEN (ephemeral)
+  - Overall class counts.
+  - Per-role / per-class count matrix.
+  - max/min ratio and verdict.
+
+DISK (persistent)
+  - class_balance.png       (MANDATORY: report §3 figure)
+  - class_balance_table.csv (OPTIONAL: report artefact)
+
+HUMAN (documented)
+  - One written sentence naming verdict and action.
+  - This sentence lands in Preliminary ML §3, and conditionally becomes
+    a code change in Phase 2 (Path B1) or 1.7 (Path B2).
+
+Note: 1.6.1 does NOT write a machine-consumed CSV. No downstream script
+reads 1.6.1's output.
+
+--------------------------------------------------------------------------------
+7. DECISION BRANCHES
+--------------------------------------------------------------------------------
+Path A -- BALANCED (ratio < MODERATE_RATIO, e.g. < 1.5)
+  Action:      none.
+  Code impact: none.
+  Report:      one sentence: "Train set max/min = X. Well balanced."
+  Pipeline:    proceed to 1.6.2 unchanged.
+
+Path A' -- MODERATE (MODERATE_RATIO <= ratio < SEVERE_RATIO)
+  Action:      document.
+  Code impact: none.
+  Report:      one sentence naming ratio and interpreted risk.
+  Pipeline:    proceed to 1.6.2 unchanged.
+  Reason:      moderate imbalance rarely justifies intervention under
+               a pragmatic bar; F1 and confusion matrix will reveal
+               whether it actually hurts.
+
+Path B1 -- SEVERE (ratio >= SEVERE_RATIO): CLASS WEIGHTING (PREFERRED)
+  Action:      in Phase 2, pass class_weight="balanced" to SVC and
+               RandomForestClassifier.
+               KNeighborsClassifier does NOT support class_weight; leave
+               it unweighted and note this in the report.
+  Data impact: dataset.csv UNCHANGED. No samples added or removed.
+  Report:      §3 states the finding; Full ML §6 states the method.
+  Pipeline:    proceed to 1.6.2 and 1.7 unchanged; the argument is added
+               later, at Phase 2 classifier instantiation.
+
+Path B2 -- SEVERE: RESAMPLING (AVOID)
+  Action:      oversample minority or undersample majority in 1.7.
+  Data impact: modifies the training distribution.
+  Report:      must argue why resampling was preferred over weighting.
+  Pipeline:    1.7 gains a resampling step BEFORE scaling.
+  Status:      NOT RECOMMENDED. Only fall back to this if B1
+               demonstrably fails (F1 on small classes remains poor).
+
+Path B3 -- SEVERE: DOCUMENT AND ACCEPT
+  Action:      no correction; document the imbalance as a limitation.
+  Code impact: none.
+  Report:      §3 + §8 (limitations) both name the ratio and the reason
+               no correction was applied.
+  Status:      legitimate under time pressure, but only if B1 is not
+               feasible.
+
+DEFAULT RECOMMENDATION
+  Path A / A' as the base case.
+  Path B1 if severe.
+  Path B2 only on evidence.
+  Path B3 as last resort.
+
+--------------------------------------------------------------------------------
+8. WHERE EACH PATH SITS IN THE PIPELINE
+--------------------------------------------------------------------------------
+
+  1.5.3  dataset.csv
+           |
+           v
+  1.6.1  count -> ratio -> branch
+           |
+           +--- Path A / A'  -> document in §3 -> proceed unchanged
+           |
+           +--- Path B1      -> document in §3
+           |                    -> add class_weight in Phase 2 code
+           |                    -> all other steps unchanged
+           |
+           +--- Path B2      -> document in §3
+           |                    -> add resampling step in 1.7
+           |
+           +--- Path B3      -> document as limitation in §3 and §8
+           |
+           v
+  1.6.2  feature distributions (reads dataset.csv; balance context frames reading)
+  1.6.3  correlations          (same)
+           |
+           v
+  1.7    preprocessing         (Path A/A'/B1/B3: unchanged;
+                                 Path B2: adds resampling)
+           |
+           v
+  Phase 2  train                (Path A/A'/B3: plain fit;
+                                 Path B1: fit with class_weight="balanced";
+                                 Path B2: fit on resampled data)
+
+--------------------------------------------------------------------------------
+9. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+- If train ratio >= SEVERE_RATIO (3.0):
+    -> apply class_weight="balanced" in Phase 2.
+- If, after weighting, F1 on the thin classes remains poor (< 0.5):
+    -> consider resampling (Path B2); update report accordingly.
+- If a class has fewer than 30 samples in TRAIN after 1.6.1:
+    -> trigger 1.3.5 stride-3 re-extraction. Same escalation as 1.4.2
+       and 1.5.3.
+- If val or test has a class with < 3 samples:
+    -> documented as a limitation. Do NOT modify val/test; the group-by-
+       clip split must remain intact.
+
+--------------------------------------------------------------------------------
+10. NOTES FOR LATER
+--------------------------------------------------------------------------------
+- 1.6.2 reads dataset.csv and plots feature distributions per class. The
+  class-balance number from 1.6.1 is the context for interpreting noise
+  in thin-class histograms.
+- 1.6.3 reads dataset.csv and computes feature correlations. Small-class
+  distortion is a known limitation; note it in the report.
+- 1.7 reads dataset.csv. Only Path B2 changes 1.7's content.
+- Phase 2 reads dataset.csv, filters by role, drops filename/label/role
+  to form X, takes label as y. Path B1 adds class_weight="balanced" at
+  classifier instantiation.
+- Report must state: per-role class balance, max/min ratio on train, and
+  which decision path was chosen (with reason).
+
+--------------------------------------------------------------------------------
+11. DESIGN DECISIONS - ALL CONFIRMED
+--------------------------------------------------------------------------------
+(a) Metric: max/min ratio on TRAIN only.
+    Rejected: overall ratio (hides per-role behaviour). Rejected: standard
+    deviation of class counts (less interpretable). Ratio is the standard
+    and the one an assessor will recognise.
+
+(b) Thresholds: moderate=1.5, severe=3.0.
+    Common rule-of-thumb values. Defensible. Tunable via parameters.
+
+(c) Output: figure to disk (mandatory), table to disk (optional).
+    No machine-consumed CSV. Rationale: the diagnostic's only "consumers"
+    are a human decision and the report. A CSV output would be an artefact
+    with no downstream reader.
+
+(d) Manual vs code-based: CODE-BASED counting, HUMAN-based decision.
+    Rationale: pandas counts 750+ rows in one line. Manual counting would
+    be slow, error-prone, and provide no benefit. The decision after the
+    numbers is a judgement call that cannot be automated (whether a
+    given ratio warrants intervention depends on context).
+
+(e) Imbalance correction: class weighting preferred over resampling.
+    Rationale: no data modified; simplest to justify; supported by SVC and
+    RandomForestClassifier directly. Resampling distorts the class
+    distribution and complicates the "unbiased" claim in §3.
+
+(f) Do not modify val/test even if imbalanced.
+    Rationale: the group-by-clip split (1.4.1) is what makes evaluation
+    honest. Modifying val/test would break that integrity.
+
+--------------------------------------------------------------------------------
+12. REPORT SURFACE
+--------------------------------------------------------------------------------
+Preliminary ML §3 (data quality - balanced)
+  - Per-role / per-class count table.
+  - class_balance.png figure.
+  - Sentence naming max/min ratio on train and verdict.
+  - Sentence naming the decision path (A / A' / B1 / B2 / B3) and why.
+
+Full ML §6 (methodology)
+  - Only if Path B1: state class_weight="balanced" was applied, to which
+    classifiers, and why.
+
+Full ML §8 / DL report (limitations)
+  - Only if Path B3: state the imbalance, its magnitude, and the fact that
+    no correction was applied.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.6.1 Check class balance
+    -> type:       diagnostic (not a producer)
+    -> metric:     train max/min ratio
+    -> thresholds: moderate=1.5, severe=3.0
+    -> output:     printed table + class_balance.png (disk)
+                   + one written decision
+    -> branches:   A / A' (accept), B1 (weight), B2 (resample),
+                   B3 (document as limitation)
+    -> default:    A/A' as base; B1 if severe; B2 only on evidence
+[ ] 1.6.2 Plot feature distributions
+
+================================================================================
+END OF NOTE
+================================================================================

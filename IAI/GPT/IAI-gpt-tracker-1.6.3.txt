@@ -1,0 +1,560 @@
+================================================================================
+1.6.3 COMPUTE CORRELATIONS
+================================================================================
+
+DECISION SUMMARY
+----------------
+Type:             DIAGNOSTIC step (not a producer of machine-consumed data).
+Input:            dataset.csv (from 1.5.3).
+Context in:       1.6.1 (class balance), 1.6.2 (feature verdicts).
+Outputs:          corr_heatmap.png (disk, MANDATORY),
+                  feature_label_relevance.csv (disk, report artefact),
+                  retained_features.txt (disk, HUMAN-WRITTEN config),
+                  one written verdict per flagged pair.
+Libraries:        pandas, numpy, matplotlib, seaborn,
+                  sklearn.feature_selection (all already installed).
+New dependencies: none.
+Feeds:            Preliminary ML §3 (evidence for "independent"),
+                  Phase 2 feature selection (justification),
+                  1.7 preprocessing (via retained_features.txt).
+Does NOT feed:    any downstream script via data CSV.
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+WHAT IT IS
+  A check of LINEAR relationships between pairs of variables in the
+  dataset. Two analyses bundled into one step:
+
+    (a) Feature-feature correlation
+        Does feature A move together with feature B?
+        Detects REDUNDANCY.
+
+    (b) Feature-label relevance
+        Does feature A move with the class label?
+        Detects PREDICTIVE VALUE.
+
+WHY IT MATTERS
+  The Excel rubric requires feature quality criteria:
+    informative / discriminating / independent / explainable.
+
+  1.6.2 (boxplots)          handles  informative, discriminating
+  1.6.3 (this step)         handles  independent
+  Written argument          handles  explainable
+
+  Feature-feature correlation is the direct evidence for INDEPENDENT.
+  Feature-label relevance cross-checks informative/discriminating.
+
+HOW IT WORKS
+
+  Correlation coefficient r between two variables X and Y, range [-1, +1]:
+    r ~ +1  -> X and Y rise together (redundant)
+    r ~ -1  -> X rises as Y falls (redundant, inverted)
+    r ~  0  -> no linear relationship (independent)
+
+  Interpretation by pair type:
+    Feature-Feature |  r near +/-1: redundant
+                    |  r near 0:    independent
+    Feature-Label   |  |r| high:    strong predictor
+                    |  |r| low:     weak/no predictive value
+
+KEY SUBTLETY - LABEL IS CATEGORICAL, NOT CONTINUOUS
+  The label is 1..15, a category, not an ordered magnitude. Pearson
+  correlation treats 1, 2, ..., 15 as numbers, which is technically wrong
+  (class 10 is not "twice" class 5).
+
+  For feature-label relevance, use:
+    - ANOVA F-score (sklearn.feature_selection.f_classif)
+        Tests whether feature means differ significantly across classes.
+    - Mutual information (mutual_info_classif)
+        Non-parametric, captures non-linear relations.
+
+  So 1.6.3 produces TWO analyses, not one:
+    (a) feature-feature Pearson correlation  (both sides continuous)
+    (b) feature-label ANOVA F / mutual information (label categorical)
+
+WHAT IT IS NOT
+  A machine-consumed step. Like 1.6.1 and 1.6.2, it produces figures and
+  human verdicts. No CSV output feeds a script downstream. The
+  retained_features.txt is a CONFIG file, not a data producer.
+
+--------------------------------------------------------------------------------
+2. WHERE
+--------------------------------------------------------------------------------
+WHO FEEDS 1.6.3
+  1.5.3  dataset.csv (filename | label | role | 23 features). Sole data
+         input.
+  1.6.1  context: which classes are thin? Thin classes distort
+         correlation estimates. Note this in interpretation.
+  1.6.2  context: which features look dead/weak? Cross-check: a feature
+         flagged DEAD in 1.6.2 should show near-zero feature-label
+         relevance here.
+
+WHO 1.6.3 FEEDS
+  1.7    preprocessing -- retained feature set defines which columns get
+         scaled. Via retained_features.txt (HUMAN-WRITTEN config, see
+         section 11).
+  Phase 2  feature selection -- retained set + verdicts from 1.6.2 and
+         1.6.3 combine into the argument for which features train on.
+  Preliminary ML §3 -- the independence claim in the rubric. Heatmap +
+         verdict table are the evidence.
+  NO CSV output feeds any downstream script.
+
+CONCEPTUAL PIPELINE POSITION
+
+  1.5.3  dataset.csv
+           |
+           v
+  1.6.1  class balance       (context: thin classes?)
+           |
+           v
+  1.6.2  feature distributions (context: dead/weak features?)
+           |
+           v
+  1.6.3  correlations                [THIS STEP]
+           |
+           v
+  1.7    preprocessing
+           |
+           v
+  Phase 2  train
+
+LATERAL
+  1.6.1, 1.6.2, 1.6.3 are three peer sub-steps of one EDA stage. Each
+  reads the same dataset.csv. Each produces figures + verdicts. None is
+  a data producer.
+
+--------------------------------------------------------------------------------
+3. WHEN - SEQUENCE OF EVENTS
+--------------------------------------------------------------------------------
+  1. dataset.csv exists (from 1.5.3), post inner-join, with roles.
+  2. 1.6.1 has run: class balance known.
+  3. 1.6.2 has run: feature verdicts known.
+  4. 1.6.3 runs:
+     - load dataset.csv
+     - filter to role == train (same convention as 1.6.2)
+     - compute feature-feature Pearson correlation matrix (23 x 23)
+     - compute feature-label ANOVA F + mutual information
+     - save corr_heatmap.png
+     - save feature_label_relevance.csv
+  5. HUMAN STEP: read heatmap, flag pairs with |r| >= 0.9, classify each
+     pair as structural or redundant, decide keep/drop.
+  6. HUMAN STEP: consolidate 1.6.2 and 1.6.3 into ONE decision: which
+     features survive? Write retained_features.txt.
+  7. Document verdicts in Preliminary §3.
+  8. Proceed to 1.7 (which reads dataset.csv + retained_features.txt).
+
+BEFORE 1.6.3: you know which features separate classes, but not whether
+              they contribute uniquely.
+AFTER 1.6.3:  argued feature set -- informative, discriminating,
+              independent, explainable.
+
+--------------------------------------------------------------------------------
+4. CODEBASE
+--------------------------------------------------------------------------------
+LIBRARIES
+  pandas                          load, filter, df.corr()
+  numpy                           matrix ops
+  matplotlib                      figure backbone
+  seaborn                         heatmap()
+  sklearn.feature_selection       f_classif, mutual_info_classif
+  No new dependencies.
+
+SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.feature_selection import f_classif, mutual_info_classif
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+DATASET_CSV     = r"[DATASET_CSV]"       # ...\dataset.csv
+OUT_DIR         = r"[OUT_DIR]"           # ...\eda_corr\
+FEATURE_COLUMNS = [FEATURE_COLUMNS]      # 23 names, canonical order
+ROLE_TO_USE     = [ROLE_TO_USE]          # "train"
+CORR_METHOD     = [CORR_METHOD]          # "pearson"
+REDUNDANCY_THR  = [REDUNDANCY_THR]       # e.g. 0.9
+FIG_DPI         = [FIG_DPI]              # 150
+
+# ============================================================================
+# LOAD
+# ============================================================================
+df = pd.read_csv(DATASET_CSV)
+if ROLE_TO_USE != "all":
+    df = df[df["role"] == ROLE_TO_USE]
+
+os.makedirs(OUT_DIR, exist_ok=True)
+
+# ============================================================================
+# (a) FEATURE-FEATURE CORRELATION
+# ============================================================================
+corr = df[FEATURE_COLUMNS].corr(method=CORR_METHOD)
+
+fig, ax = plt.subplots(figsize=(12, 10))
+sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm",
+            center=0, square=True, ax=ax, cbar_kws={"shrink": 0.8})
+ax.set_title(f"Feature-feature correlation ({ROLE_TO_USE})")
+plt.tight_layout()
+plt.savefig(os.path.join(OUT_DIR, "corr_heatmap.png"), dpi=FIG_DPI)
+plt.close(fig)
+
+# flag redundant pairs (upper triangle only)
+flagged = []
+for i, a in enumerate(FEATURE_COLUMNS):
+    for b in FEATURE_COLUMNS[i+1:]:
+        if abs(corr.loc[a, b]) >= REDUNDANCY_THR:
+            flagged.append((a, b, round(corr.loc[a, b], 3)))
+
+print("Redundant pairs (|r| >= threshold):")
+for a, b, r in flagged:
+    print(f"  {a} <-> {b} : r = {r}")
+
+# ============================================================================
+# (b) FEATURE-LABEL RELEVANCE
+# ============================================================================
+X = df[FEATURE_COLUMNS].values
+y = df["label"].values
+
+f_scores, p_vals = f_classif(X, y)
+mi_scores       = mutual_info_classif(X, y, random_state=42)
+
+relevance = pd.DataFrame({
+    "feature":   FEATURE_COLUMNS,
+    "anova_F":   f_scores,
+    "anova_p":   p_vals,
+    "mut_info":  mi_scores,
+}).sort_values("mut_info", ascending=False)
+
+print("\nFeature-label relevance (sorted by mutual information):")
+print(relevance.to_string(index=False))
+
+relevance.to_csv(os.path.join(OUT_DIR, "feature_label_relevance.csv"),
+                 index=False)
+
+
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+Placeholder        | Example               | Purpose
+-------------------|-----------------------|-------------------------------
+[DATASET_CSV]      | ...\dataset.csv       | Input
+[OUT_DIR]          | ...\eda_corr\         | Figure + relevance output
+[FEATURE_COLUMNS]  | 23 names              | Columns
+[ROLE_TO_USE]      | "train"               | Rows to use
+[CORR_METHOD]      | "pearson"             | Feature-feature method
+[REDUNDANCY_THR]   | 0.9                   | Flag threshold
+[FIG_DPI]          | 150                   | Resolution
+
+--------------------------------------------------------------------------------
+5. CODE DESCRIPTION
+--------------------------------------------------------------------------------
+pd.read_csv(DATASET_CSV)
+  Single input. All features, labels, roles in one table.
+
+df[df["role"] == ROLE_TO_USE]
+  Filter to TRAIN by default. Same rationale as 1.6.2: train is what
+  Phase 2 learns from.
+
+df[FEATURE_COLUMNS].corr(method="pearson")
+  23 x 23 symmetric matrix. Diagonal = 1.0 (self-correlation).
+  Off-diagonal = pairwise correlation. Read upper triangle only.
+
+sns.heatmap(..., annot=True, center=0)
+  Visual. Diverging colour scale with 0 at white so + and - are
+  symmetric. Annotation prints r values in each cell.
+
+f_classif(X, y)
+  ANOVA F-statistic per feature. Returns (F, p). Higher F = feature means
+  differ more across classes. p is the probability of observing F under
+  the null hypothesis (feature unrelated to label).
+
+mutual_info_classif(X, y, random_state=42)
+  Non-parametric relevance. Captures non-linear relationships that ANOVA
+  misses. Range [0, inf), higher = more shared information with label.
+  random_state for reproducibility (uses k-NN internally).
+
+relevance DataFrame
+  Side-by-side F, p, MI per feature. Sorted by MI descending. This table
+  is a REPORT artefact (feature_label_relevance.csv), not a pipeline
+  input.
+
+--------------------------------------------------------------------------------
+6. HOW TO READ THE HEATMAP
+--------------------------------------------------------------------------------
+ANATOMY
+  23 x 23 grid. Cell (i, j) = r between feature i and feature j.
+
+  - Symmetric: cell (i, j) equals (j, i). Read upper OR lower triangle.
+  - Diagonal = 1.0. Ignore.
+  - Off-diagonal is what matters.
+
+COLOUR SCALE
+  Deep red   (+1): features move together - redundant
+  Deep blue  (-1): one rises, other falls - redundant (inverted)
+  White / pale (0): no linear relationship - independent
+
+INTERPRETATION RULE
+  The further from 0, the more redundant.
+  The closer to 0, the more unique.
+
+TWO-PASS READING
+
+  PASS 1 - SCAN FOR HOT SPOTS
+    Look for clusters of deep red / deep blue OFF the diagonal.
+    You will not find one giant block; expect pairs or small clusters.
+    Expected in this feature set:
+      - proj_x_0..7 cluster (structural - see below)
+      - proj_y_0..7 cluster (structural)
+      - possibly blob_area_ratio <-> hole_area_ratio
+      - possibly hole_centroid_dx <-> hole_centroid_dy
+
+  PASS 2 - INSPECT EACH HOT SPOT
+    Classify each flagged pair:
+
+    Type         | Example                                | Action
+    -------------|----------------------------------------|-----------
+    Structural   | proj bins sum to 1 -> forced negative  | Keep both
+                 | correlation                            | Document
+    Redundant    | Two features measuring the same thing  | Drop one
+    Expected     | Bigger blob implies bigger hole        | Keep both
+                 |                                        | Note
+
+THRESHOLD AND DECISION RULE
+  Use |r| >= 0.9 as the flag threshold.
+
+  Rationale: ~500 train samples. Correlation estimates at 500 samples
+  have noise. Below 0.9, an apparent correlation may be spurious.
+  Above 0.9, it is stable enough to act on.
+
+  Per flagged pair:
+    1. Structural (projections)?         -> Keep both. Document.
+    2. One already DEAD/WEAK in 1.6.2?   -> Drop the weaker.
+    3. Both INFORMATIVE in 1.6.2?        -> Keep both. SVM/RF handles
+                                            mild redundancy.
+
+  Do NOT aggressively prune. 23 features / ~500 samples is far from the
+  curse of dimensionality. Redundancy here is a report argument, not a
+  computational problem.
+
+SPECIFIC CASES IN THIS FEATURE SET
+
+  Structural (MUST NOT DROP):
+    proj_x_0..7 sum to 1 by construction (each bin is column_sum /
+    blob_area, all bins together = blob_area). Increasing one bin forces
+    others down. This is a design constraint, not a bug.
+    Same for proj_y_0..7.
+    Document as design constraint in the report.
+
+  Real redundancy candidates to check:
+    blob_area_ratio <-> hole_area_ratio
+      If |r| > 0.9, they measure the same thing. Keep the more
+      discriminating one (from 1.6.2's verdicts).
+    hole_centroid_dx <-> hole_centroid_dy
+      If |r| > 0.9, numeral sits in a consistent position; one offset
+      is enough.
+    hole_count <-> connected_component_count
+      If strongly correlated, drop the weaker per 1.6.2.
+
+  Weak-but-real correlations to keep:
+    |r| < 0.7 -> both features carry unique signal. Keep.
+
+--------------------------------------------------------------------------------
+7. FEATURE-LABEL RELEVANCE TABLE
+--------------------------------------------------------------------------------
+The second analysis. Reports per-feature:
+  anova_F   - higher = means differ more across classes
+  anova_p   - lower = stronger significance
+  mut_info  - higher = more shared information with label
+
+Cross-check with 1.6.2 verdicts:
+  - Feature flagged DEAD in 1.6.2 should show low relevance here.
+  - Feature flagged INFORMATIVE in 1.6.2 should show high relevance.
+  - Mismatch (informative-looking boxplot but low MI) signals either
+    small-class artefact or a non-linear relationship ANOVA misses.
+
+This table goes into the report as supporting evidence. Not a pipeline
+input.
+
+--------------------------------------------------------------------------------
+8. DESIGN DECISIONS - ALL CONFIRMED
+--------------------------------------------------------------------------------
+(a) Two analyses bundled: feature-feature Pearson + feature-label ANOVA/MI.
+    Rationale: feature-feature Pearson alone is wrong for a categorical
+    label. Separating them is methodologically correct.
+
+(b) Role filter: TRAIN only by default.
+    Same rationale as 1.6.2.
+
+(c) Heatmap with annotation, diverging colour scale centred at 0.
+    Rationale: symmetric treatment of positive and negative correlation.
+
+(d) Redundancy threshold: |r| >= 0.9.
+    Rationale: noise floor at 500 samples. Below 0.9, correlation
+    estimates are unstable.
+
+(e) No automatic dropping.
+    Rationale: the drop decision is a judgement call requiring the
+    context from 1.6.2 (which of the pair is more discriminating).
+    Human makes the call, writes retained_features.txt.
+
+(f) No machine-consumed CSV output.
+    Rationale: same as 1.6.1/1.6.2. Consumers are the human decision and
+    the report.
+
+(g) retained_features.txt introduced as CONFIG (see section 11).
+    Not a producer output. Input to 1.7 and Phase 2.
+
+--------------------------------------------------------------------------------
+9. OUTPUTS / ARTEFACTS
+--------------------------------------------------------------------------------
+DISK (persistent)
+  - corr_heatmap.png                    (MANDATORY: report §3 figure)
+  - feature_label_relevance.csv         (report artefact)
+  - retained_features.txt               (HUMAN-WRITTEN config; see
+                                         section 11)
+
+SCREEN (ephemeral)
+  - printed list of flagged redundant pairs
+
+HUMAN (documented)
+  - One verdict per flagged pair: structural / redundant / fine.
+  - Retained feature set (via retained_features.txt).
+  - These land in Preliminary ML §3.
+
+No machine-consumed data CSV. No downstream script reads 1.6.3's output
+directly.
+
+--------------------------------------------------------------------------------
+10. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+- If a feature is flagged DEAD here (r with label ~ 0, MI ~ 0) AND DEAD in
+  1.6.2: confirm drop via retained_features.txt.
+- If ALL 23 features show |r| > 0.9 with at least one other feature:
+  the feature set is over-redundant. Revisit 1.5.2 feature engineering.
+- If a feature shows DEAD in 1.6.2 but high MI here: investigate.
+  Non-linear relationship possible. Keep the feature; note in report.
+- If a pair has |r| between 0.7 and 0.9: note as "weak redundancy",
+  keep both. Not a drop trigger.
+
+--------------------------------------------------------------------------------
+11. RETAINED FEATURES FILE - WHY IT EXISTS
+--------------------------------------------------------------------------------
+THE GAP
+  dataset.csv always holds all 23 features. It is never modified. But
+  after 1.6.2 and 1.6.3 verdicts, the human decides some features should
+  not enter Phase 2. Where does that decision persist?
+
+  Without persistence, every downstream script hardcodes its own feature
+  list. Across two laptops, they drift.
+
+THE SOLUTIONS CONSIDERED
+
+  Option A - parameter in 1.7's script.
+    + No extra file.
+    - Decision is embedded in code, invisible without opening it.
+
+  Option B - retained_features.txt, a small config file.
+    + Decision survives outside code.
+    + Human-readable, portable.
+    + Same category as .gitignore or .env -- config, not data.
+    + Phase 2 and 1.7 both read the same list.
+
+  CHOSEN: Option B.
+
+WHY IT DOES NOT VIOLATE "NOT A PRODUCER"
+  A PRODUCER writes a data file a downstream script MUST read to
+  function. features.csv and dataset.csv are producer outputs.
+  A CONFIG file is input to a specific script, chosen by the human. Its
+  content is a decision, not a computation. Writing retained_features.txt
+  is like editing settings. It is 1.7's input, not 1.6.3's output.
+
+FORMAT
+  Plain text. One feature per line. # for comments.
+  Location: ...\billiards-game-clips\retained_features.txt
+
+  Example:
+    # Retained features after 1.6.3 correlation analysis
+    # Dropped: hole_centroid_dy (r=0.94 with hole_centroid_dx)
+    # Dropped: connected_component_count (DEAD in 1.6.2)
+    hole_count
+    blob_area_ratio
+    hole_area_ratio
+    hole_aspect
+    hole_centroid_dx
+    proj_x_0
+    proj_x_1
+    ...
+
+--------------------------------------------------------------------------------
+12. NOTES FOR LATER
+--------------------------------------------------------------------------------
+- 1.7 reads dataset.csv + retained_features.txt. Loads only the retained
+  columns. Scaling happens on the reduced set.
+- Phase 2 reads dataset.csv + retained_features.txt + splits.csv. Trains
+  on the retained columns.
+- Preliminary ML §3: correlation heatmap + relevance table + verdict
+  table + interpretation paragraph. This is where "independent" is
+  argued.
+- Full ML §6: only if features were dropped -- which, why, effect.
+- Full ML §8 / DL report: rotation-sensitive features (projections) noted
+  as known ceiling for classical ML. Sets up Phase 4's improvement
+  narrative.
+- Timebox: 30 minutes of code, 30 minutes of reading. Once redundant
+  pairs are identified and verdicts written, stop.
+
+--------------------------------------------------------------------------------
+13. REPORT SURFACE
+--------------------------------------------------------------------------------
+PRELIMINARY ML §3 (feature quality: independent)
+  - Correlation heatmap figure.
+  - Feature-label relevance table.
+  - Redundancy verdict table (5-8 rows, not 23):
+      Feature A | Feature B | r | Type | Decision
+  - Interpretation paragraph:
+      (a) Are any features mathematically forced to correlate?
+          (Yes: the projections.)
+      (b) Which pairs are truly redundant? Decision?
+      (c) What is the final retained feature set?
+  - Cross-check sentence: dead features in 1.6.2 should show low
+    relevance here; mismatches investigated.
+
+FULL ML §6 (methodology)
+  - Only if features were dropped: which, why, effect on final model.
+
+FULL ML §8 / DL report (limitations)
+  - Rotation-sensitive features noted as classical ML ceiling.
+
+--------------------------------------------------------------------------------
+14. WHAT DOES NOT HAPPEN HERE
+--------------------------------------------------------------------------------
+- No automatic dropping. Decision is human and documented.
+- No CSV feeds a script. The relevance table is a report artefact.
+- No cross-validation. That is Phase 2.
+- No modification of dataset.csv. It stays at 23 features forever.
+- No "deletion" of features. retained_features.txt is a filter, not a
+  delete.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.6.3 Compute correlations
+    -> type:           diagnostic (not a producer)
+    -> analyses:       (a) feature-feature Pearson correlation
+                       (b) feature-label ANOVA F + mutual information
+    -> idiom:          23 x 23 annotated heatmap + relevance table
+    -> threshold:      flag |r| >= 0.9 as redundancy candidates
+    -> human step:     classify pairs (structural / redundant / fine),
+                       write retained_features.txt
+    -> output:         corr_heatmap.png,
+                       feature_label_relevance.csv,
+                       retained_features.txt (human-written config)
+    -> report:         Preliminary ML §3 (independence evidence)
+[ ] 1.7.1 Data cleaning (missing values, outliers)
+
+================================================================================
+END OF NOTE
+================================================================================

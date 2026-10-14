@@ -14,3 +14,6 @@ i don't understand. explain them first, one by one in terms:
 
 i have made a decision. If mitigating the issue of orientation fails, ie. non of the method works or the code becomes too complex, we will be ignoring 6, and only recognizing 9, as it matters for 9-ball game rule, and during 8-ball game rule, 6 doesn't really count. so both 6 & 9 could be mapped to a 9. 
 do a txt writeup. will be saved as 'IAI-gpt-explains-6vs9_fails.txt'
+
+[1.5.3]
+you have written a good explanatory article without having it mentioned or included in the .txt writeup. include it & redo the .txt writeup
