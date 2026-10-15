@@ -54,10 +54,10 @@ PHASE 1 - DATA ACQUISITION & FEATURE ENGINEERING & Preliminary ML Report
     [x] 1.6.1 Check class balance
     [x] 1.6.2 Plot feature distributions
     [x] 1.6.3 Compute correlations
-[ ] 1.7 Preprocessing: cleaning, scaling, pipeline.
-    [ ] 1.7.1 Data cleaning (missing values, outliers)
-    [ ] 1.7.2 Feature scaling
-    [ ] 1.7.3 Build preprocessing pipeline
+[x] 1.7 Preprocessing: cleaning, scaling, pipeline.
+    [x] 1.7.1 Data cleaning (missing values, outliers)
+    [x] 1.7.2 Feature scaling
+    [x] 1.7.3 Build preprocessing pipeline
 [ ] 1.8 Preliminary ML report lifecycle (draft → submit → peer review → incorporate).
     [ ] 1.8.1 Draft Sections 1-3
     [ ] 1.8.2 Submit preliminary ML report (wk 40)

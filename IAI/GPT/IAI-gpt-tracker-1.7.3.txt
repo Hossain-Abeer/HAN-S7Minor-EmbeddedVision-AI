@@ -1,0 +1,556 @@
+================================================================================
+1.7.3 BUILD PREPROCESSING PIPELINE
+================================================================================
+
+DECISION SUMMARY
+----------------
+Type:             Code-level artefact. No data written.
+Input:            Decision from 1.7.2 (StandardScaler),
+                  retained_features.txt (from 1.6.3) as context only.
+Outputs:          build_pipeline(classifier) function in a shared module
+                  (e.g. src/pipeline.py),
+                  optional smoke-test printout confirming step order.
+Libraries:        sklearn.pipeline.Pipeline,
+                  sklearn.preprocessing.StandardScaler
+                  (all already installed).
+New dependencies: none.
+Feeds:            Phase 2 (2.1, 2.2, 2.3) instantiates the Pipeline with
+                  each classifier candidate.
+                  Phase 3 (3.2.2) reuses the Pipeline shape for deployment.
+Does NOT feed:    any script via CSV. This step produces no data artefact.
+                  Phase 4 (CNN) bypasses it entirely.
+
+
+================================================================================
+1. ESSENCE
+================================================================================
+
+WHAT IT IS
+  An sklearn Pipeline: a single object that chains preprocessing
+  (scaling) and the classifier into one estimator-like construct.
+
+  A Pipeline has .fit(X, y), .predict(X), .score(X, y) — externally it
+  looks like any other sklearn estimator. Internally it chains steps:
+      fit()     -> fit_transform() on each intermediate step,
+                   fit() on the final step (classifier)
+      predict() -> transform() on each intermediate step,
+                   predict() on the final step
+
+HOW IT WORKS
+  Steps are (name, object) tuples. For this project, two steps:
+      ("scaler", StandardScaler())
+      ("clf",    <classifier>)
+
+  Instantiation is cheap. Fitting is what runs the chain.
+
+WHY IT EXISTS AS A STEP SEPARATE FROM 1.7.2
+  1.7.2 fitted a StandardScaler on the FULL training set (one-shot fit
+  for inspection). That is correct for the report figures it produces,
+  but NOT correct for cross-validation.
+
+  Phase 2 runs CV. CV splits the training set into K folds. For each
+  fold:
+      - fit on K-1 folds
+      - evaluate on the held-out fold
+
+  If scaling is done BEFORE CV (as 1.7.2 does for inspection), then
+  each fold's held-out portion was already scaled using statistics that
+  include that fold. The fold's test data influenced its own scaling.
+  This is DATA LEAKAGE. Evaluation is no longer honest.
+
+  The Pipeline solves this. When a Pipeline sits INSIDE
+  cross_val_score or GridSearchCV, sklearn RE-FITS THE ENTIRE PIPELINE
+  — including the scaler — INSIDE EACH FOLD, using only that fold's
+  training portion. The held-out portion is transformed using scaler
+  parameters derived only from the training portion. No leakage.
+
+THE MENTAL MODEL
+  1.7.2's scaler = one-shot fit for inspection.
+  1.7.3's Pipeline = production-grade scaler that refits per CV split.
+
+THE KEY CONSEQUENCE
+  1.7.3 does NOT write a CSV. It produces a Python function /
+  object. Phase 2 instantiates and uses it directly. This is a
+  code-level artefact, not a data-level one.
+
+  Every earlier step in Phase 1 produced a file. 1.7.3 is the first
+  step that produces only code. This is deliberate and correct.
+
+--------------------------------------------------------------------------------
+1.1 SCOPE OF THE PIPELINE
+--------------------------------------------------------------------------------
+The Pipeline contains exactly two steps:
+
+    Step 1: scaling      (StandardScaler)
+    Step 2: classifier   (SVM / k-NN / RF — supplied by Phase 2)
+
+It does NOT contain cleaning (1.7.1). Reasoning:
+
+  - 1.7.1's cleaning is conditional (clip / remove / keep) and its
+    thresholds were derived from the full train set. Strict CV
+    correctness would require cleaning to refit inside each fold too.
+  - The practical impact on this dataset is small: clipping alters
+    only the tails of 5 continuous features, and the thresholds were
+    derived from train only (per 1.7.1 R1 correction).
+  - Wrapping cleaning in a custom sklearn transformer adds complexity
+    and test burden for marginal benefit.
+
+  Decision: cleaning stays OUTSIDE the Pipeline. Documented as an
+  accepted simplification in Preliminary §3 and Full ML §6.
+
+  If a future revision wants strict CV correctness for cleaning, add
+  a FunctionTransformer wrapping the 1.7.1 clip logic as step 0.
+
+--------------------------------------------------------------------------------
+1.2 WHAT THE PIPELINE IS NOT
+--------------------------------------------------------------------------------
+  - NOT a data file. No CSV is written.
+  - NOT a trained model. It is a factory: build_pipeline(classifier)
+    returns a fresh, unfitted Pipeline on each call.
+  - NOT a replacement for 1.7.2's diagnostic figures. Those remain
+    valid for the report.
+  - NOT a component of Phase 4. The CNN branch reads crops directly.
+
+
+================================================================================
+2. WHERE
+================================================================================
+
+WHO FEEDS 1.7.3
+    1.7.2  the scaler decision (StandardScaler).
+    1.6.3  retained_features.txt — context only; the Pipeline does not
+           read it, but the caller (Phase 2) uses it to slice columns
+           before passing X to the Pipeline.
+    1.7.1  cleaned dataset — read by Phase 2, not by 1.7.3 itself.
+    1.4.1  role column — used by Phase 2 to slice train/val/test.
+
+WHO 1.7.3 FEEDS
+    Phase 2 (2.1.x)  instantiates build_pipeline(SVC()),
+                     build_pipeline(KNeighborsClassifier()),
+                     build_pipeline(RandomForestClassifier()).
+    Phase 2 (2.2.x)  wraps the Pipeline in GridSearchCV or
+                     cross_val_score. The scaler refits inside each
+                     fold automatically.
+    Phase 2 (2.3.x)  evaluates the fitted Pipeline on val/test.
+    Phase 3 (3.2.2)  reuses the Pipeline shape for deployment.
+
+WHO 1.7.3 DOES NOT FEED
+    1.6.x  EDA runs on the raw dataset, not through the Pipeline.
+    1.7.1, 1.7.2  already ran; the Pipeline wraps their decisions,
+                  it does not re-run them.
+    Phase 4  CNN bypasses 1.7.x entirely.
+
+PIPELINE POSITION
+
+    1.7.1  data cleaning
+             |
+             v
+    1.7.2  feature scaling (diagnostic; one-shot fit)
+             |
+             v
+    1.7.3  build preprocessing pipeline       [THIS STEP]
+             |  -> defines build_pipeline(classifier)
+             v
+    Phase 2  instantiate + fit + tune + evaluate
+             |
+             v
+    Phase 3  persist fitted Pipeline for deployment
+
+TWO-CHANNEL FRAMING (inherited from 1.7.1 / 1.7.2)
+    DATA channel:      none. No CSV.
+    CODE channel:      build_pipeline() function.
+    DECISION channel:  documented in this note and in the report; the
+                       Pipeline shape is the decision made concrete.
+
+
+================================================================================
+3. WHEN - SEQUENCE OF EVENTS
+================================================================================
+
+    1. 1.7.1 has produced dataset_clean.csv (or dataset.csv).
+    2. 1.7.2 has chosen StandardScaler and produced inspection figures.
+    3. 1.7.3 runs:
+       - define build_pipeline(classifier) -> Pipeline
+       - (optional) smoke test: instantiate with DummyClassifier,
+         print the Pipeline, confirm two steps in correct order.
+       - no data loaded. no fitting. no CSVs written.
+    4. Phase 2 (2.1.x):
+       - calls build_pipeline(SVC())
+       - calls build_pipeline(KNeighborsClassifier())
+       - calls build_pipeline(RandomForestClassifier())
+       - one Pipeline per classifier candidate.
+    5. Phase 2 (2.2.x):
+       - wraps each Pipeline in GridSearchCV or cross_val_score.
+       - scaler refits inside each fold.
+    6. Phase 2 (2.3.x):
+       - evaluates best Pipeline on val, then test.
+    7. Phase 3 (3.2.2):
+       - retrains best Pipeline on full training set.
+       - persists with joblib.dump().
+
+BEFORE 1.7.3: preprocessing exists as separate scripts that each
+              produce files (or in-memory matrices for 1.7.2).
+AFTER 1.7.3:  preprocessing is encapsulated in one reusable object.
+              Phase 2 no longer touches feature files directly — it
+              instantiates the Pipeline and fits.
+
+
+================================================================================
+4. CODEBASE
+================================================================================
+
+LIBRARIES
+    sklearn.pipeline.Pipeline        the chain
+    sklearn.preprocessing.StandardScaler   the scaler (from 1.7.2)
+    No new dependencies.
+
+SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+    # src/pipeline.py
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    # ========================================================================
+    # [PARAMETERS - FILL IN BEFORE RUN]
+    # ========================================================================
+    SCALER_CLASS           = [SCALER_CLASS]        # StandardScaler
+    FEATURE_STEP_NAME      = "scaler"              # step name inside Pipeline
+    CLASSIFIER_STEP_NAME   = "clf"                 # step name inside Pipeline
+
+    # ========================================================================
+    # FACTORY
+    # ========================================================================
+    def build_pipeline(classifier):
+        """
+        Return an sklearn Pipeline: scaler -> classifier.
+
+        The scaler refits inside each CV fold, preventing leakage.
+        Caller supplies the classifier (SVC, KNeighborsClassifier,
+        RandomForestClassifier, etc.).
+
+        Do NOT pass a fitted scaler. The Pipeline must own it.
+        """
+        return Pipeline([
+            (FEATURE_STEP_NAME,    SCALER_CLASS()),
+            (CLASSIFIER_STEP_NAME, classifier),
+        ])
+
+    # ========================================================================
+    # OPTIONAL SMOKE TEST (run once before Phase 2 commits)
+    # ========================================================================
+    if __name__ == "__main__":
+        from sklearn.dummy import DummyClassifier
+        pipe = build_pipeline(DummyClassifier())
+        print(pipe)
+        # Expect: Pipeline(steps=[('scaler', StandardScaler()),
+        #                         ('clf',    DummyClassifier())])
+
+--------------------------------------------------------------------------------
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+    Placeholder            | Example            | Purpose
+    -----------------------|--------------------|--------------------------
+    [SCALER_CLASS]         | StandardScaler     | Chosen in 1.7.2
+    FEATURE_STEP_NAME      | "scaler"           | Routes scaler params
+    CLASSIFIER_STEP_NAME   | "clf"              | Routes classifier params
+
+
+================================================================================
+5. RECOMMENDATIONS FOR THIS PROJECT
+================================================================================
+
+RECOMMENDATION 1 - KEEP CLEANING OUTSIDE THE PIPELINE
+    Pipeline = [StandardScaler, Classifier]. Cleaning is a once-only
+    operation (1.7.1). Document this as an accepted simplification in
+    Preliminary §3 and Full ML §6.
+
+    Strict CV correctness for cleaning is a possible refinement. It is
+    not worth the complexity for this dataset.
+
+RECOMMENDATION 2 - ONE PIPELINE PER CLASSIFIER
+    Phase 2 compares SVM, k-NN, RF. Each gets its own Pipeline, because
+    the classifier is the last step of the chain. Do not share one
+    Pipeline across classifiers.
+
+RECOMMENDATION 3 - TUNE THROUGH THE PIPELINE, NOT AROUND IT
+    In Phase 2's grid search, hyperparameters are addressed with a
+    step-name prefix:
+        param_grid = {
+            "clf__C":     [0.1, 1, 10],
+            "clf__gamma": ["scale", 0.01, 0.1],
+        }
+    The "clf__" prefix routes the parameter to the classifier inside
+    the Pipeline. "scaler__*" would route to the scaler (StandardScaler
+    has no tunable parameters for this project, so it will not appear
+    in the grid).
+
+    Do NOT pass the classifier separately to GridSearchCV. Always wrap
+    it in the Pipeline.
+
+RECOMMENDATION 4 - PERSIST THE FITTED FINAL PIPELINE IN PHASE 3
+    After Phase 2 picks the best classifier and retrains the Pipeline
+    on the full training set, serialize it:
+        import joblib
+        joblib.dump(fitted_pipeline, "models/best_pipeline.joblib")
+    For inference in Phase 3:
+        import joblib
+        pipe = joblib.load("models/best_pipeline.joblib")
+        y_pred = pipe.predict(X_new)
+    The scaler parameters travel with the model, so inference uses
+    exactly the same scaling as training. This is the practical payoff
+    of using a Pipeline.
+
+WHY THIS MATTERS FOR THE ASSESSMENT
+    The IAI rubric explicitly rewards:
+      Level 3: "Preprocessing pipeline discussed and implemented"
+      Level 4: "at least one alternative preprocessing method"
+
+    A real sklearn Pipeline, correctly refitting inside CV, cleanly
+    satisfies Level 3. Level 4 can be reached with a one-line change
+    (swap StandardScaler for MinMaxScaler) and a comparison run.
+
+    The report can honestly claim "no data leakage across folds"
+    because the Pipeline structure guarantees it. Without a Pipeline,
+    a reviewer will ask how the scaler avoided leakage. The note and
+    code answer that question.
+
+WHAT TO AVOID
+    - Do not add the classifier OUTSIDE the Pipeline and pass a
+      pre-scaled dataset to cross_val_score. That reintroduces the
+      1.7.2 leakage.
+    - Do not feed 1.7.2's dataset_*_scaled.csv into the Pipeline.
+      Double-scaling.
+    - Do not include cleaning as a custom transformer unless you have
+      time to implement and test it. Marginal benefit, real
+      complexity cost.
+    - Do not cache the fitted Pipeline across CV folds. Each fold
+      must refit. sklearn does this automatically when the Pipeline
+      is inside GridSearchCV / cross_val_score.
+
+TIMEBOX
+    10 minutes to write the factory function and smoke-test it. No
+    reading of output is required. No report paragraph is dedicated
+    to 1.7.3; it is covered by the §3 preprocessing narrative.
+
+--------------------------------------------------------------------------------
+6. REPORT SURFACE
+--------------------------------------------------------------------------------
+PRELIMINARY ML §3 (preprocessing)
+    One sentence naming the Pipeline. Example:
+    "Preprocessing and classification are encapsulated in an sklearn
+     Pipeline so that the scaler refits inside each cross-validation
+     fold, preventing data leakage. Cleaning remains a once-only
+     operation preceding the Pipeline."
+
+FULL ML §6 (methodology)
+    One sentence confirming the same Pipeline is used for tuning and
+    final training. Mention the clf__ prefix for hyperparameter grids.
+
+FULL ML §8 / DL REPORT (limitations)
+    Only if relevant: cleaning is outside the Pipeline, so its
+    thresholds are shared across folds. Note as a minor accepted
+    simplification.
+
+--------------------------------------------------------------------------------
+7. DESIGN DECISIONS - ALL CONFIRMED
+--------------------------------------------------------------------------------
+(a) Pipeline shape: [StandardScaler, Classifier]. Two steps.
+(b) Cleaning stays outside the Pipeline (accepted simplification).
+(c) One Pipeline instance per classifier candidate (SVM / k-NN / RF).
+(d) Hyperparameters tuned through the Pipeline with step-name prefixes.
+(e) Fitted final Pipeline serialized in Phase 3 for deployment.
+(f) No CSV output. No data-level artefact from this step.
+(g) Code-level artefact: build_pipeline(classifier) function.
+
+--------------------------------------------------------------------------------
+8. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+    - If a Pipeline fails to fit inside GridSearchCV:
+        -> check that the classifier is INSIDE the Pipeline, not
+           alongside it. Check param grid keys use clf__ prefix.
+    - If CV scores are suspiciously high (>99% on 15 classes):
+        -> leakage. Confirm the Pipeline is inside cross_val_score /
+           GridSearchCV, not wrapping it.
+    - If Phase 3 inference predictions differ from Phase 2 test
+        predictions on the same inputs:
+        -> the scaler was re-fitted on different data, or the wrong
+           scaler was loaded. Persist and reload the fitted Pipeline
+           as a unit, not the scaler and classifier separately.
+
+--------------------------------------------------------------------------------
+9. NOTES FOR LATER
+--------------------------------------------------------------------------------
+    - Phase 2 instantiates one Pipeline per classifier.
+    - Phase 2 tunes via GridSearchCV with clf__ prefixed params.
+    - Phase 3 retrains best Pipeline on full train set, then
+      joblib.dump().
+    - Phase 4 (CNN) bypasses this step entirely.
+    - Report §3: one sentence naming the Pipeline and the
+      refit-inside-CV rationale.
+    - Timebox: 10 minutes code, no reading, no dedicated report
+      paragraph.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.7.3 Build preprocessing pipeline
+    -> type:          code-level artefact (no data output)
+    -> artefact:      build_pipeline(classifier) function in
+                      src/pipeline.py
+    -> shape:         [StandardScaler, Classifier]
+    -> cleaning:      kept OUTSIDE the Pipeline (documented
+                      simplification)
+    -> rationale:     Pipeline refits scaler inside each CV fold,
+                      preventing leakage; 1.7.2's one-shot scaler
+                      would leak
+    -> consumers:     Phase 2 (2.1.x) instantiates; Phase 3 (3.2.2)
+                      persists fitted Pipeline for deployment
+    -> report:        Preliminary ML §3 (preprocessing rubric line)
+[ ] 1.8.1 Draft Sections 1-3
+
+================================================================================
+END OF NOTE
+================================================================================
+
+
+
+
+================================================================================
+ADDENDUM - VALIDATION NOTES (R1)
+================================================================================
+Appended to IAI-gpt-tracker-1.7.3.txt after initial validation. Records two
+in-scope additions to this note and two carryover items belonging to 1.7.2.
+The tracker checklist for 1.7.3 is unchanged (step remains complete); the
+carryovers affect 1.7.2's writeup and checkbox state, not 1.7.3's.
+
+
+--------------------------------------------------------------------------------
+ADDITION 1 - PRECONDITIONS LINE IN build_pipeline DOCSTRING
+--------------------------------------------------------------------------------
+WHERE IN R0:
+    Section 4 - build_pipeline() docstring lists the caller's
+    responsibility ("Caller supplies the classifier") but does not
+    state the shape constraints on X.
+
+WHY IT MATTERS:
+    The factory assumes X contains only numeric feature columns
+    (the retained set from 1.6.3). If the caller accidentally passes
+    the full dataframe — with filename, label, or role columns
+    included — the scaler will raise a ValueError at fit time with a
+    message that points at the scaler, not at the actual mistake.
+    Common slip when copying X from a pandas dataframe without
+    dropping non-feature columns.
+
+FIX:
+    Extend the docstring with an explicit PRECONDITIONS block.
+    No code change required.
+
+SECTION REFERENCES:
+    Section 4  - build_pipeline() docstring, new PRECONDITIONS block
+    Section 5  - "WHAT TO AVOID" gains one reinforcing bullet
+
+
+--------------------------------------------------------------------------------
+ADDITION 2 - DO NOT PASS A PRE-FITTED CLASSIFIER
+--------------------------------------------------------------------------------
+WHERE IN R0:
+    Section 4 - docstring includes "Do NOT pass a fitted scaler."
+    It does not similarly forbid a pre-fitted classifier.
+
+WHY IT MATTERS:
+    Symmetric failure to the pre-fitted-scaler case. If the caller
+    passes a classifier that has already been fitted on the full
+    training set, the Pipeline will contain a pre-committed final step.
+    When GridSearchCV / cross_val_score refits the Pipeline per fold,
+    sklearn will call .fit() on the classifier again — which typically
+    reinitialises it — but a caller who passes a fitted estimator and
+    then inspects parameters may misinterpret the state. More
+    importantly, some sklearn versions do not refit an already-fitted
+    estimator cleanly in certain CV configurations. The Pipeline must
+    own both steps in an unfitted state.
+
+FIX:
+    Extend the docstring and the "WHAT TO AVOID" list with the
+    symmetric rule. No code change required.
+
+SECTION REFERENCES:
+    Section 4  - docstring, extends existing "Do NOT" line
+    Section 5  - "WHAT TO AVOID" gains the symmetric bullet
+
+
+--------------------------------------------------------------------------------
+CARRYOVER 1 - 1.7.2 DECISION SUMMARY CONTRADICTS DESIGN B1
+--------------------------------------------------------------------------------
+WHERE IN 1.7.2 (R0):
+    DECISION SUMMARY block, first paragraph:
+        "Outputs: in-memory scaled matrices X_train_s, X_val_s,
+         X_test_s (consumed by 1.7.3),"
+
+PROBLEM:
+    Contradicts section 2 of the same note, which correctly states:
+        "In design B1, the Pipeline re-fits its scaler inside each CV
+         fold; the persisted CSVs are for inspection only."
+    Under B1, 1.7.3 does not consume 1.7.2's in-memory matrices. The
+    Pipeline builds its own scaler and refits inside each CV fold. The
+    in-memory matrices produced by 1.7.2 are used only within 1.7.2
+    itself, to generate the before/after figures and the scaler
+    parameter table.
+
+    As written, the DECISION SUMMARY tells a future reader that 1.7.3
+    depends on 1.7.2's in-memory output — which would encourage the
+    exact anti-pattern (Design B2) that 1.7.2 explicitly rejects.
+
+FIX IN 1.7.2 (R1):
+    Rewrite the DECISION SUMMARY line to:
+        "Outputs: in-memory scaled matrices X_train_s, X_val_s,
+         X_test_s (used within 1.7.2 for figures and parameter
+         reporting; NOT consumed by 1.7.3, which refits inside CV
+         per design B1),"
+
+    No other section of 1.7.2 requires a change.
+
+SECTION REFERENCES (in 1.7.2):
+    DECISION SUMMARY  - the corrected line above
+    Section 2         - already correct; keep as-is
+    Section 7(d)      - already correct; keep as-is
+
+
+--------------------------------------------------------------------------------
+CARRYOVER 2 - 1.7.2 TRACKER CHECKBOX UNTICKED
+--------------------------------------------------------------------------------
+WHERE:
+    IAI-gpt-roadmap-tracker.txt, line:
+        [ ] 1.7.2 Feature scaling
+
+PROBLEM:
+    1.7.2 has been validated. The checkbox was left unticked in the
+    tracker pasted after validation. Only the DECISION SUMMARY text
+    fix (Carryover 1) is pending; the step itself is complete.
+
+FIX:
+    After applying Carryover 1, tick the checkbox:
+        [x] 1.7.2 Feature scaling
+
+
+--------------------------------------------------------------------------------
+NOTES FOR THE HUMAN+GPT PHASE
+--------------------------------------------------------------------------------
+1. Additions 1 and 2 are additive, not corrective. They tighten the
+   docstring against two common usage mistakes. Safe to defer to
+   execution time if 1.7.3 is not yet being coded.
+2. Carryovers 1 and 2 belong to 1.7.2. Apply them when next editing
+   that note. Neither affects the correctness of the current 1.7.3
+   design.
+3. Combined effect of the four items: no change to the tracker's
+   sequence, no change to any downstream note's dependency, no new
+   CSV or config file introduced. Pure text hygiene plus one checkbox
+   tick.
+4. When 1.7.3 is implemented at execution time, the docstring should
+   carry both PRECONDITIONS and both "Do NOT pass a pre-fitted..."
+   rules. This addendum records the intent; the implementation must
+   carry it.
+
+================================================================================
+END OF ADDENDUM
+================================================================================

@@ -1,0 +1,971 @@
+================================================================================
+1.7.2 FEATURE SCALING
+================================================================================
+
+DECISION SUMMARY
+----------------
+Type:             Conditional transform (in-memory for CV; optional persist
+                  for inspection).
+Input:            dataset_clean.csv (from 1.7.1) OR dataset.csv if no
+                  cleaning applied,
+                  retained_features.txt (from 1.6.3).
+Outputs:          in-memory scaled matrices X_train_s, X_val_s, X_test_s
+                  (consumed by 1.7.3),
+                  dataset_{train,val,test}_scaled.csv (CONDITIONAL: only
+                  if SAVE_SCALED_CSV = True; for inspection and report
+                  figures, NOT for re-feeding into 1.7.3's Pipeline),
+                  figures/scaling/scaling_<feature>.png (before/after),
+                  logs/1.7.2_scaling_report.txt (always written).
+Libraries:        pandas, numpy, matplotlib, sklearn.preprocessing
+                  (all already installed).
+New dependencies: none.
+Feeds:            1.7.3 (build pipeline) reads the fitted scaler OR the
+                  scaled matrices; design choice B1 places the scaler
+                  inside 1.7.3's Pipeline for CV correctness.
+                  Preliminary ML §3 reads the figures + parameters.
+Does NOT feed:    any downstream script via the persisted CSVs. They are
+                  inspection artefacts.
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+WHAT IT IS
+  Feature scaling transforms each numeric feature column so that all
+  features sit on a comparable numerical range. Values change; information
+  does not.
+
+WHY IT MATTERS
+  SVM (RBF kernel) and k-NN are distance-based. Without scaling, features
+  with larger numeric range dominate distance computations and bias the
+  decision boundary. Random Forest is scale-invariant (splits on
+  thresholds), but scaling it too keeps the shared pipeline uniform.
+
+  Convergence of gradient-based training is also faster on scaled inputs.
+  Even though Phase 2 uses closed-form / tree-based classifiers, the same
+  scaling applies to Phase 4's CNN if reused.
+
+HOW IT WORKS
+  A scaler is a transformer with two methods:
+      scaler.fit(X_train)          # learn parameters from TRAIN only
+      X_scaled = scaler.transform(X)  # apply to ANY data
+
+  Parameters (mean/std, min/max, median/IQR) are learned from X_train,
+  then reused for X_val and X_test. This is the same train-only rule
+  enforced in 1.7.1 for outlier thresholds.
+
+THE ONE RULE THAT MATTERS MOST
+  Fit on train. Transform everything.
+  Violating this leaks val/test statistics into training and breaks the
+  group-by-clip integrity from 1.4.1. The skeleton enforces it.
+
+THREE STANDARD SCALERS
+  StandardScaler:  (x - mean) / std    -> roughly -3..+3, mean 0, std 1
+  MinMaxScaler:    (x - min) / range   -> exactly 0..1
+  RobustScaler:    (x - median) / IQR  -> roughly -2..+2
+
+  Default: StandardScaler. See section 5 for rationale.
+
+--------------------------------------------------------------------------------
+2. WHERE
+--------------------------------------------------------------------------------
+WHO FEEDS 1.7.2
+    1.7.1  dataset_clean.csv (if cleaning applied) OR dataset.csv
+           (if no cleaning).
+    1.6.3  retained_features.txt (which columns to scale).
+    1.4.1  the role column inside the dataset (splits into train/val/test
+           for fit/transform separation).
+
+WHO 1.7.2 FEEDS
+    1.7.3 (build pipeline)  -- wraps cleaning + scaling into a reusable
+                               sklearn Pipeline for CV inside Phase 2.
+                               In design B1, the Pipeline re-fits its
+                               scaler inside each CV fold; the persisted
+                               CSVs are for inspection only.
+    Phase 2                 -- consumes via 1.7.3's Pipeline.
+    Preliminary ML §3       -- before/after figures + scaler parameters.
+
+TWO CHANNELS - DATA VS LOG/FIGURE
+    DATA channel (conditional):
+        dataset_{train,val,test}_scaled.csv exist only if
+        SAVE_SCALED_CSV = True. They are INSPECTION artefacts, not the
+        pipeline's data source. The pipeline reads raw features + refits
+        its own scaler inside CV.
+    LOG/FIGURE channel (always):
+        logs/1.7.2_scaling_report.txt + figures/scaling/*.png
+        No script reads them. Human/report evidence.
+    DECISION channel:
+        Chosen scaler + fit-on-train-only rationale, recorded in this
+        note and Preliminary §3. Not stored as a file the pipeline reads.
+
+PIPELINE POSITION
+
+    1.7.1  data cleaning
+             |
+             v
+    1.7.2  feature scaling                   [THIS STEP]
+             |
+             v
+    1.7.3  build pipeline (cleaning + scaling + classifier)
+             |
+             v
+    Phase 2  train SVM / k-NN / RF
+             |
+             v
+    (Phase 4 CNN bypasses 1.7.x; reads raw crops directly)
+
+--------------------------------------------------------------------------------
+3. WHEN - SEQUENCE OF EVENTS
+--------------------------------------------------------------------------------
+    1. dataset_clean.csv (or dataset.csv) exists from 1.7.1.
+    2. retained_features.txt exists from 1.6.3.
+    3. 1.7.2 runs:
+       - load dataset
+       - filter to retained feature columns
+       - split by role: train / val / test
+       - instantiate chosen scaler
+       - FIT on train rows only
+       - TRANSFORM train, val, test
+       - print scaler parameters (mean/std or min/max or median/IQR)
+       - save before/after histograms per feature
+       - (optional) persist scaled CSVs for inspection
+    4. HUMAN STEP:
+       - inspect before/after figures
+       - confirm scaled ranges look reasonable for the chosen scaler
+       - note any surprises (e.g. discrete features looking non-integer)
+    5. Proceed to 1.7.3.
+
+BEFORE 1.7.2: features on native scales.
+AFTER 1.7.2:  features comparable in magnitude; scaler parameters known;
+              figures + log stored for the report.
+
+--------------------------------------------------------------------------------
+4. CODEBASE
+--------------------------------------------------------------------------------
+LIBRARIES
+    pandas                       load, split by role, filter
+    numpy                        array ops
+    matplotlib                   before/after histograms
+    sklearn.preprocessing        StandardScaler, MinMaxScaler, RobustScaler
+    No new dependencies.
+
+SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+    import os
+    import sys
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+
+    # ========================================================================
+    # [PARAMETERS - FILL IN BEFORE RUN]
+    # ========================================================================
+    DATASET_CSV      = r"[DATASET_CSV]"       # ...\dataset_clean.csv OR dataset.csv
+    RETAINED_TXT     = r"[RETAINED_TXT]"      # ...\retained_features.txt
+    OUT_DIR          = r"[OUT_DIR]"           # ...\billiards-game-clips
+    FIG_DIR          = r"[FIG_DIR]"           # ...\figures\scaling\
+    LOG_PATH         = r"[LOG_PATH]"          # ...\logs\1.7.2_scaling_report.txt
+
+    SCALER_CHOICE    = [SCALER_CHOICE]        # "standard" | "minmax" | "robust"
+    SAVE_SCALED_CSV  = [SAVE_SCALED_CSV]      # True | False (see section 5)
+
+    # ========================================================================
+    # TEE STDOUT (same pattern as 1.7.1)
+    # ========================================================================
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+    class Tee:
+        def __init__(self, path): self.f = open(path, "w")
+        def write(self, s): self.f.write(s); sys.__stdout__.write(s)
+        def flush(self):     self.f.flush();   sys.__stdout__.flush()
+    sys.stdout = Tee(LOG_PATH)
+
+    # ========================================================================
+    # LOAD
+    # ========================================================================
+    df = pd.read_csv(DATASET_CSV)
+    retained = [l.strip() for l in open(RETAINED_TXT)
+                if l.strip() and not l.startswith("#")]
+    feats = [f for f in retained if f in df.columns]
+
+    missing = [f for f in retained if f not in df.columns]
+    if missing:
+        print(f"[WARNING] retained_features.txt names absent columns: "
+              f"{missing}")
+
+    print(f"[INFO] Scaling {len(feats)} retained feature columns.")
+
+    # ========================================================================
+    # SPLIT BY ROLE
+    # ========================================================================
+    train = df[df["role"] == "train"]
+    val   = df[df["role"] == "val"]
+    test  = df[df["role"] == "test"]
+
+    X_train = train[feats]
+    X_val   = val[feats]
+    X_test  = test[feats]
+
+    print(f"[INFO] Train rows: {len(X_train)}")
+    print(f"[INFO] Val rows:   {len(X_val)}")
+    print(f"[INFO] Test rows:  {len(X_test)}")
+
+    # ========================================================================
+    # SCALER - FIT ON TRAIN ONLY
+    # ========================================================================
+    if SCALER_CHOICE == "standard":
+        scaler = StandardScaler()
+    elif SCALER_CHOICE == "minmax":
+        scaler = MinMaxScaler()
+    elif SCALER_CHOICE == "robust":
+        scaler = RobustScaler()
+    else:
+        raise ValueError(f"Unknown SCALER_CHOICE: {SCALER_CHOICE}")
+
+    scaler.fit(X_train)                 # <- TRAIN ONLY
+
+    X_train_s = scaler.transform(X_train)
+    X_val_s   = scaler.transform(X_val)
+    X_test_s  = scaler.transform(X_test)
+
+    # ========================================================================
+    # REPORT LEARNED PARAMETERS
+    # ========================================================================
+    if SCALER_CHOICE == "standard":
+        print("\nLearned per-feature mean and std (from train):")
+        for f, mu, sd in zip(feats, scaler.mean_, scaler.scale_):
+            print(f"  {f:30s}  mean={mu:+.4f}  std={sd:.4f}")
+    elif SCALER_CHOICE == "minmax":
+        print("\nLearned per-feature min and max (from train):")
+        for f, mn, mx in zip(feats, scaler.data_min_, scaler.data_max_):
+            print(f"  {f:30s}  min={mn:+.4f}  max={mx:.4f}")
+    elif SCALER_CHOICE == "robust":
+        print("\nLearned per-feature median and IQR (from train):")
+        for f, med, iqr in zip(feats, scaler.center_, scaler.scale_):
+            print(f"  {f:30s}  median={med:+.4f}  iqr={iqr:.4f}")
+
+    # ========================================================================
+    # BEFORE / AFTER HISTOGRAMS - one figure per feature
+    # ========================================================================
+    os.makedirs(FIG_DIR, exist_ok=True)
+    for i, f in enumerate(feats):
+        fig, ax = plt.subplots(1, 2, figsize=(10, 3))
+
+        ax[0].hist(X_train[f], bins=20, color="steelblue")
+        ax[0].set_title(f"BEFORE: {f}")
+        ax[0].set_xlabel("raw value")
+
+        ax[1].hist(X_train_s[:, i], bins=20, color="darkorange")
+        ax[1].set_title(f"AFTER: {f}  ({SCALER_CHOICE})")
+        ax[1].set_xlabel("scaled value")
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(FIG_DIR, f"scaling_{f}.png"), dpi=150)
+        plt.close(fig)
+
+    print(f"\nWrote before/after figures to {FIG_DIR}")
+
+    # ========================================================================
+    # OPTIONAL PERSIST (inspection only; NOT for re-feeding into 1.7.3)
+    # ========================================================================
+    if SAVE_SCALED_CSV:
+        for role, X_s in [("train", X_train_s),
+                          ("val",   X_val_s),
+                          ("test",  X_test_s)]:
+            sub = df[df["role"] == role][["filename", "label", "role"]].copy()
+            for j, f in enumerate(feats):
+                sub[f] = X_s[:, j]
+            out_path = os.path.join(OUT_DIR, f"dataset_{role}_scaled.csv")
+            sub.to_csv(out_path, index=False)
+            print(f"[INFO] Wrote {out_path}")
+    else:
+        print("[INFO] Scaled matrices kept in memory only.")
+
+    sys.stdout.flush()
+
+--------------------------------------------------------------------------------
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+    Placeholder          | Example                              | Purpose
+    ---------------------|--------------------------------------|----------
+    [DATASET_CSV]        | ...\dataset_clean.csv                | Input
+    [RETAINED_TXT]       | ...\retained_features.txt            | Column filter
+    [OUT_DIR]            | ...\billiards-game-clips             | Scaled CSV dir
+    [FIG_DIR]            | ...\figures\scaling\                 | Figures
+    [LOG_PATH]           | ...\logs\1.7.2_scaling_report.txt    | Log
+    [SCALER_CHOICE]      | "standard"                           | Which scaler
+    [SAVE_SCALED_CSV]    | True                                 | Persist CSVs?
+
+--------------------------------------------------------------------------------
+5. RECOMMENDATIONS FOR THIS PROJECT
+--------------------------------------------------------------------------------
+SCALER CHOICE
+    Use StandardScaler.
+
+    Reasons:
+      - Feature ranges differ (hole_count 0-2; blob_area_ratio 0-~0.5;
+        projections 0-1; hole_centroid -0.5-+0.5). StandardScaler
+        normalises all to mean 0 / std 1.
+      - SVM with RBF kernel is the textbook pairing with StandardScaler.
+      - k-NN is distance-based and benefits.
+      - RF is scale-invariant, but scaling it too keeps the pipeline
+        uniform.
+
+    Rejected:
+      - MinMaxScaler: sensitive to outliers. After 1.7.1's clipping, the
+        boundary values persist and would compress the distribution.
+      - RobustScaler: overkill. 1.7.1 already handled tails.
+
+FIT-ON-TRAIN-ONLY
+    Non-negotiable. Same rule as 1.7.1. The skeleton enforces it.
+
+SAVE-SCALED-CSV - DESIGN CHOICE
+    Two viable designs:
+
+      Design A - memory only:
+        Scaled matrices stay in memory. No CSV output. 1.7.3's Pipeline
+        refits its scaler inside CV.
+        + No stale artefacts on disk.
+        + No risk of someone re-feeding a pre-scaled CSV into the
+          Pipeline and double-scaling.
+        - No persisted artefact to cite in §3 beyond figures and log.
+
+      Design B1 - persist for inspection only (RECOMMENDED):
+        Write dataset_{train,val,test}_scaled.csv for the report and
+        human inspection.
+        + §3 gets tangible artefacts.
+        + Reproducibility across laptops: same numbers on disk.
+        - Requires discipline: do NOT read these into 1.7.3's Pipeline.
+          The Pipeline must refit inside CV for correctness.
+
+      Design B2 - persist and consume directly (REJECTED):
+        Read scaled CSVs into 1.7.3 without a scaler in the Pipeline.
+        Breaks CV: each fold would use full-train statistics, leaking
+        val folds into scaling.
+
+    RECOMMENDATION: Design B1. Persist for inspection; Pipeline refits
+    for CV.
+
+SPECIAL CASE - PROJECTION BINS
+    proj_x_0..7 and proj_y_0..7 sum to 1 in raw form. After
+    StandardScaler, the sum-to-1 invariant BREAKS.
+
+    Does this matter?
+      - For the model: no. SVM/RF/k-NN treat features independently.
+      - For interpretation: yes, in reports showing scaled feature
+        vectors as "distributions". Note it.
+      - For §3 narrative: yes, one sentence. "The projection sum-to-1
+        invariant holds on raw values (used in 1.6.3's heatmap
+        interpretation) and is intentionally broken by scaling. The
+        classifier does not rely on it."
+
+    Do NOT exclude projections from scaling. Unlike 1.7.1's clipping
+    (which destroys raw values), scaling is a linear transform; no
+    information is lost.
+
+SPECIAL CASE - DISCRETE FEATURES
+    hole_count and connected_component_count after StandardScaler become
+    non-integer values (e.g. raw {0,1,2} -> scaled {-0.7, +0.2, +1.1}).
+    This is mathematically fine. SVM/k-NN do not require integer inputs.
+    Do NOT exclude them from scaling; they benefit from being on the
+    same scale as the other features.
+
+WHAT NOT TO DO
+    - Do not fit on the full dataset before splitting. Fit on train only.
+    - Do not scale the label or role columns. Features only.
+    - Do not apply the scaler twice. If 1.7.3 wraps scaling in a
+      Pipeline, do not feed it a pre-scaled CSV (Design B2 trap).
+    - Do not skip scaling "because RF doesn't need it". The pipeline is
+      shared across SVM/k-NN/RF. Scale once for all.
+    - Do not renormalise the scaled projection bins. They will not sum
+      to anything meaningful after scaling; leave them alone.
+
+REPORT SURFACE (PRELIMINARY ML §3)
+    - One sentence naming the scaler and why (preprocessing rubric line).
+    - 3-5 before/after histogram figures.
+    - Sentence stating fit-on-train-only and why (prevents leakage).
+    - Sentence noting the projection sum-to-1 invariant break after
+      scaling (intentional, harmless for the model).
+    - Path to logs/1.7.2_scaling_report.txt.
+
+TIMEBOX
+    15 minutes code, 10 minutes reading plots, half a paragraph in §3.
+
+--------------------------------------------------------------------------------
+6. REPORT SURFACE - FULL
+--------------------------------------------------------------------------------
+PRELIMINARY ML §3 (preprocessing)
+    - Scaler choice with rationale.
+    - 3-5 before/after figures.
+    - Fit-on-train-only statement.
+    - Projection invariant note.
+    - Optional: scalar parameter table (μ, σ per feature) as an
+      appendix table.
+
+FULL ML §6 (methodology)
+    - One sentence confirming the same scaler is used inside CV folds
+      via 1.7.3's Pipeline.
+
+FULL ML §8 / DL REPORT (limitations)
+    - Only if scaling is suspected of affecting model behaviour on a
+      specific class. Rare.
+
+--------------------------------------------------------------------------------
+7. DESIGN DECISIONS - ALL CONFIRMED
+--------------------------------------------------------------------------------
+(a) Scaler: StandardScaler. Rejected: MinMaxScaler (outlier-sensitive),
+    RobustScaler (unnecessary after 1.7.1).
+(b) Fit on TRAIN only. Enforced in code (scaler.fit(X_train)).
+(c) Transform all three roles.
+(d) Persist scaled CSVs for inspection (Design B1). Not consumed by
+    1.7.3's Pipeline.
+(e) 1.7.3's Pipeline refits scaler inside CV folds for correct
+    cross-validation.
+(f) No exclusion of projections or discrete features from scaling.
+(g) Log always written. Figures always saved. CSVs conditional on
+    SAVE_SCALED_CSV.
+(h) Two-channel framing maintained: data (conditional, inspection) vs
+    log/figures (always).
+
+--------------------------------------------------------------------------------
+8. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+    - If any scaled feature has range far beyond [-5, +5] after
+      StandardScaler:
+        -> an extreme outlier survived 1.7.1's clipping.
+           Investigate the offending row. Prefer revisiting 1.7.1
+           thresholds over post-hoc correction here.
+    - If MANY features look unchanged in before/after figures:
+        -> check the correct columns were passed. Silent typo in
+           retained_features.txt would produce this symptom.
+    - If StandardScaler on discrete features produces values that look
+      "wrong" to a reader:
+        -> expected. Document in §3. Do not "fix".
+    - If scaled CSVs are accidentally loaded back into 1.7.3's Pipeline:
+        -> double-scaling. Symptoms: distribution narrower than
+           expected; model performance degraded. Fix: Pipeline must
+           read raw dataset_clean.csv, not the persisted scaled CSVs.
+
+--------------------------------------------------------------------------------
+9. NOTES FOR LATER
+--------------------------------------------------------------------------------
+    - 1.7.3 wraps 1.7.1 + 1.7.2 into one sklearn Pipeline. For CV to be
+      correct, the scaler must be refit inside each fold. sklearn's
+      Pipeline handles this automatically when used in GridSearchCV.
+    - Phase 2 reads via 1.7.3. It does not see the scaler's parameters
+      directly; it only sees the Pipeline.
+    - Phase 4 (CNN) bypasses 1.7.x entirely. Independent branch from
+      1.5 onward.
+    - Preliminary §3: 3-5 curated before/after figures + one sentence on
+      scaler choice + one sentence on fit-on-train-only.
+    - Timebox: 15 minutes code, 10 minutes plots, half a paragraph.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.7.2 Feature scaling
+    -> type:            conditional transform + diagnostic
+    -> input:           dataset_clean.csv (or dataset.csv),
+                        retained_features.txt
+    -> scaler:          StandardScaler (default)
+    -> fit rule:        fit on TRAIN only; transform all roles
+    -> outputs:         in-memory scaled matrices (consumed by 1.7.3),
+                        dataset_{train,val,test}_scaled.csv (conditional,
+                        inspection only),
+                        figures/scaling/*.png (always),
+                        logs/1.7.2_scaling_report.txt (always)
+    -> design:          B1 (persist for inspection; Pipeline refits for CV)
+    -> caveats:         projection sum-to-1 invariant broken by scaling
+                        (intentional); discrete features become
+                        non-integer (harmless)
+    -> report:          Preliminary ML §3 (preprocessing rubric line)
+[ ] 1.7.3 Build preprocessing pipeline
+
+================================================================================
+END OF NOTE
+================================================================================================================================================================
+1.7.2 FEATURE SCALING
+================================================================================
+
+DECISION SUMMARY
+----------------
+Type:             Conditional transform (in-memory for CV; optional persist
+                  for inspection).
+Input:            dataset_clean.csv (from 1.7.1) OR dataset.csv if no
+                  cleaning applied,
+                  retained_features.txt (from 1.6.3).
+Outputs:          in-memory scaled matrices X_train_s, X_val_s, X_test_s
+                  (consumed by 1.7.3),
+                  dataset_{train,val,test}_scaled.csv (CONDITIONAL: only
+                  if SAVE_SCALED_CSV = True; for inspection and report
+                  figures, NOT for re-feeding into 1.7.3's Pipeline),
+                  figures/scaling/scaling_<feature>.png (before/after),
+                  logs/1.7.2_scaling_report.txt (always written).
+Libraries:        pandas, numpy, matplotlib, sklearn.preprocessing
+                  (all already installed).
+New dependencies: none.
+Feeds:            1.7.3 (build pipeline) reads the fitted scaler OR the
+                  scaled matrices; design choice B1 places the scaler
+                  inside 1.7.3's Pipeline for CV correctness.
+                  Preliminary ML §3 reads the figures + parameters.
+Does NOT feed:    any downstream script via the persisted CSVs. They are
+                  inspection artefacts.
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+WHAT IT IS
+  Feature scaling transforms each numeric feature column so that all
+  features sit on a comparable numerical range. Values change; information
+  does not.
+
+WHY IT MATTERS
+  SVM (RBF kernel) and k-NN are distance-based. Without scaling, features
+  with larger numeric range dominate distance computations and bias the
+  decision boundary. Random Forest is scale-invariant (splits on
+  thresholds), but scaling it too keeps the shared pipeline uniform.
+
+  Convergence of gradient-based training is also faster on scaled inputs.
+  Even though Phase 2 uses closed-form / tree-based classifiers, the same
+  scaling applies to Phase 4's CNN if reused.
+
+HOW IT WORKS
+  A scaler is a transformer with two methods:
+      scaler.fit(X_train)          # learn parameters from TRAIN only
+      X_scaled = scaler.transform(X)  # apply to ANY data
+
+  Parameters (mean/std, min/max, median/IQR) are learned from X_train,
+  then reused for X_val and X_test. This is the same train-only rule
+  enforced in 1.7.1 for outlier thresholds.
+
+THE ONE RULE THAT MATTERS MOST
+  Fit on train. Transform everything.
+  Violating this leaks val/test statistics into training and breaks the
+  group-by-clip integrity from 1.4.1. The skeleton enforces it.
+
+THREE STANDARD SCALERS
+  StandardScaler:  (x - mean) / std    -> roughly -3..+3, mean 0, std 1
+  MinMaxScaler:    (x - min) / range   -> exactly 0..1
+  RobustScaler:    (x - median) / IQR  -> roughly -2..+2
+
+  Default: StandardScaler. See section 5 for rationale.
+
+--------------------------------------------------------------------------------
+2. WHERE
+--------------------------------------------------------------------------------
+WHO FEEDS 1.7.2
+    1.7.1  dataset_clean.csv (if cleaning applied) OR dataset.csv
+           (if no cleaning).
+    1.6.3  retained_features.txt (which columns to scale).
+    1.4.1  the role column inside the dataset (splits into train/val/test
+           for fit/transform separation).
+
+WHO 1.7.2 FEEDS
+    1.7.3 (build pipeline)  -- wraps cleaning + scaling into a reusable
+                               sklearn Pipeline for CV inside Phase 2.
+                               In design B1, the Pipeline re-fits its
+                               scaler inside each CV fold; the persisted
+                               CSVs are for inspection only.
+    Phase 2                 -- consumes via 1.7.3's Pipeline.
+    Preliminary ML §3       -- before/after figures + scaler parameters.
+
+TWO CHANNELS - DATA VS LOG/FIGURE
+    DATA channel (conditional):
+        dataset_{train,val,test}_scaled.csv exist only if
+        SAVE_SCALED_CSV = True. They are INSPECTION artefacts, not the
+        pipeline's data source. The pipeline reads raw features + refits
+        its own scaler inside CV.
+    LOG/FIGURE channel (always):
+        logs/1.7.2_scaling_report.txt + figures/scaling/*.png
+        No script reads them. Human/report evidence.
+    DECISION channel:
+        Chosen scaler + fit-on-train-only rationale, recorded in this
+        note and Preliminary §3. Not stored as a file the pipeline reads.
+
+PIPELINE POSITION
+
+    1.7.1  data cleaning
+             |
+             v
+    1.7.2  feature scaling                   [THIS STEP]
+             |
+             v
+    1.7.3  build pipeline (cleaning + scaling + classifier)
+             |
+             v
+    Phase 2  train SVM / k-NN / RF
+             |
+             v
+    (Phase 4 CNN bypasses 1.7.x; reads raw crops directly)
+
+--------------------------------------------------------------------------------
+3. WHEN - SEQUENCE OF EVENTS
+--------------------------------------------------------------------------------
+    1. dataset_clean.csv (or dataset.csv) exists from 1.7.1.
+    2. retained_features.txt exists from 1.6.3.
+    3. 1.7.2 runs:
+       - load dataset
+       - filter to retained feature columns
+       - split by role: train / val / test
+       - instantiate chosen scaler
+       - FIT on train rows only
+       - TRANSFORM train, val, test
+       - print scaler parameters (mean/std or min/max or median/IQR)
+       - save before/after histograms per feature
+       - (optional) persist scaled CSVs for inspection
+    4. HUMAN STEP:
+       - inspect before/after figures
+       - confirm scaled ranges look reasonable for the chosen scaler
+       - note any surprises (e.g. discrete features looking non-integer)
+    5. Proceed to 1.7.3.
+
+BEFORE 1.7.2: features on native scales.
+AFTER 1.7.2:  features comparable in magnitude; scaler parameters known;
+              figures + log stored for the report.
+
+--------------------------------------------------------------------------------
+4. CODEBASE
+--------------------------------------------------------------------------------
+LIBRARIES
+    pandas                       load, split by role, filter
+    numpy                        array ops
+    matplotlib                   before/after histograms
+    sklearn.preprocessing        StandardScaler, MinMaxScaler, RobustScaler
+    No new dependencies.
+
+SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+
+    import os
+    import sys
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+
+    # ========================================================================
+    # [PARAMETERS - FILL IN BEFORE RUN]
+    # ========================================================================
+    DATASET_CSV      = r"[DATASET_CSV]"       # ...\dataset_clean.csv OR dataset.csv
+    RETAINED_TXT     = r"[RETAINED_TXT]"      # ...\retained_features.txt
+    OUT_DIR          = r"[OUT_DIR]"           # ...\billiards-game-clips
+    FIG_DIR          = r"[FIG_DIR]"           # ...\figures\scaling\
+    LOG_PATH         = r"[LOG_PATH]"          # ...\logs\1.7.2_scaling_report.txt
+
+    SCALER_CHOICE    = [SCALER_CHOICE]        # "standard" | "minmax" | "robust"
+    SAVE_SCALED_CSV  = [SAVE_SCALED_CSV]      # True | False (see section 5)
+
+    # ========================================================================
+    # TEE STDOUT (same pattern as 1.7.1)
+    # ========================================================================
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+    class Tee:
+        def __init__(self, path): self.f = open(path, "w")
+        def write(self, s): self.f.write(s); sys.__stdout__.write(s)
+        def flush(self):     self.f.flush();   sys.__stdout__.flush()
+    sys.stdout = Tee(LOG_PATH)
+
+    # ========================================================================
+    # LOAD
+    # ========================================================================
+    df = pd.read_csv(DATASET_CSV)
+    retained = [l.strip() for l in open(RETAINED_TXT)
+                if l.strip() and not l.startswith("#")]
+    feats = [f for f in retained if f in df.columns]
+
+    missing = [f for f in retained if f not in df.columns]
+    if missing:
+        print(f"[WARNING] retained_features.txt names absent columns: "
+              f"{missing}")
+
+    print(f"[INFO] Scaling {len(feats)} retained feature columns.")
+
+    # ========================================================================
+    # SPLIT BY ROLE
+    # ========================================================================
+    train = df[df["role"] == "train"]
+    val   = df[df["role"] == "val"]
+    test  = df[df["role"] == "test"]
+
+    X_train = train[feats]
+    X_val   = val[feats]
+    X_test  = test[feats]
+
+    print(f"[INFO] Train rows: {len(X_train)}")
+    print(f"[INFO] Val rows:   {len(X_val)}")
+    print(f"[INFO] Test rows:  {len(X_test)}")
+
+    # ========================================================================
+    # SCALER - FIT ON TRAIN ONLY
+    # ========================================================================
+    if SCALER_CHOICE == "standard":
+        scaler = StandardScaler()
+    elif SCALER_CHOICE == "minmax":
+        scaler = MinMaxScaler()
+    elif SCALER_CHOICE == "robust":
+        scaler = RobustScaler()
+    else:
+        raise ValueError(f"Unknown SCALER_CHOICE: {SCALER_CHOICE}")
+
+    scaler.fit(X_train)                 # <- TRAIN ONLY
+
+    X_train_s = scaler.transform(X_train)
+    X_val_s   = scaler.transform(X_val)
+    X_test_s  = scaler.transform(X_test)
+
+    # ========================================================================
+    # REPORT LEARNED PARAMETERS
+    # ========================================================================
+    if SCALER_CHOICE == "standard":
+        print("\nLearned per-feature mean and std (from train):")
+        for f, mu, sd in zip(feats, scaler.mean_, scaler.scale_):
+            print(f"  {f:30s}  mean={mu:+.4f}  std={sd:.4f}")
+    elif SCALER_CHOICE == "minmax":
+        print("\nLearned per-feature min and max (from train):")
+        for f, mn, mx in zip(feats, scaler.data_min_, scaler.data_max_):
+            print(f"  {f:30s}  min={mn:+.4f}  max={mx:.4f}")
+    elif SCALER_CHOICE == "robust":
+        print("\nLearned per-feature median and IQR (from train):")
+        for f, med, iqr in zip(feats, scaler.center_, scaler.scale_):
+            print(f"  {f:30s}  median={med:+.4f}  iqr={iqr:.4f}")
+
+    # ========================================================================
+    # BEFORE / AFTER HISTOGRAMS - one figure per feature
+    # ========================================================================
+    os.makedirs(FIG_DIR, exist_ok=True)
+    for i, f in enumerate(feats):
+        fig, ax = plt.subplots(1, 2, figsize=(10, 3))
+
+        ax[0].hist(X_train[f], bins=20, color="steelblue")
+        ax[0].set_title(f"BEFORE: {f}")
+        ax[0].set_xlabel("raw value")
+
+        ax[1].hist(X_train_s[:, i], bins=20, color="darkorange")
+        ax[1].set_title(f"AFTER: {f}  ({SCALER_CHOICE})")
+        ax[1].set_xlabel("scaled value")
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(FIG_DIR, f"scaling_{f}.png"), dpi=150)
+        plt.close(fig)
+
+    print(f"\nWrote before/after figures to {FIG_DIR}")
+
+    # ========================================================================
+    # OPTIONAL PERSIST (inspection only; NOT for re-feeding into 1.7.3)
+    # ========================================================================
+    if SAVE_SCALED_CSV:
+        for role, X_s in [("train", X_train_s),
+                          ("val",   X_val_s),
+                          ("test",  X_test_s)]:
+            sub = df[df["role"] == role][["filename", "label", "role"]].copy()
+            for j, f in enumerate(feats):
+                sub[f] = X_s[:, j]
+            out_path = os.path.join(OUT_DIR, f"dataset_{role}_scaled.csv")
+            sub.to_csv(out_path, index=False)
+            print(f"[INFO] Wrote {out_path}")
+    else:
+        print("[INFO] Scaled matrices kept in memory only.")
+
+    sys.stdout.flush()
+
+--------------------------------------------------------------------------------
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+    Placeholder          | Example                              | Purpose
+    ---------------------|--------------------------------------|----------
+    [DATASET_CSV]        | ...\dataset_clean.csv                | Input
+    [RETAINED_TXT]       | ...\retained_features.txt            | Column filter
+    [OUT_DIR]            | ...\billiards-game-clips             | Scaled CSV dir
+    [FIG_DIR]            | ...\figures\scaling\                 | Figures
+    [LOG_PATH]           | ...\logs\1.7.2_scaling_report.txt    | Log
+    [SCALER_CHOICE]      | "standard"                           | Which scaler
+    [SAVE_SCALED_CSV]    | True                                 | Persist CSVs?
+
+--------------------------------------------------------------------------------
+5. RECOMMENDATIONS FOR THIS PROJECT
+--------------------------------------------------------------------------------
+SCALER CHOICE
+    Use StandardScaler.
+
+    Reasons:
+      - Feature ranges differ (hole_count 0-2; blob_area_ratio 0-~0.5;
+        projections 0-1; hole_centroid -0.5-+0.5). StandardScaler
+        normalises all to mean 0 / std 1.
+      - SVM with RBF kernel is the textbook pairing with StandardScaler.
+      - k-NN is distance-based and benefits.
+      - RF is scale-invariant, but scaling it too keeps the pipeline
+        uniform.
+
+    Rejected:
+      - MinMaxScaler: sensitive to outliers. After 1.7.1's clipping, the
+        boundary values persist and would compress the distribution.
+      - RobustScaler: overkill. 1.7.1 already handled tails.
+
+FIT-ON-TRAIN-ONLY
+    Non-negotiable. Same rule as 1.7.1. The skeleton enforces it.
+
+SAVE-SCALED-CSV - DESIGN CHOICE
+    Two viable designs:
+
+      Design A - memory only:
+        Scaled matrices stay in memory. No CSV output. 1.7.3's Pipeline
+        refits its scaler inside CV.
+        + No stale artefacts on disk.
+        + No risk of someone re-feeding a pre-scaled CSV into the
+          Pipeline and double-scaling.
+        - No persisted artefact to cite in §3 beyond figures and log.
+
+      Design B1 - persist for inspection only (RECOMMENDED):
+        Write dataset_{train,val,test}_scaled.csv for the report and
+        human inspection.
+        + §3 gets tangible artefacts.
+        + Reproducibility across laptops: same numbers on disk.
+        - Requires discipline: do NOT read these into 1.7.3's Pipeline.
+          The Pipeline must refit inside CV for correctness.
+
+      Design B2 - persist and consume directly (REJECTED):
+        Read scaled CSVs into 1.7.3 without a scaler in the Pipeline.
+        Breaks CV: each fold would use full-train statistics, leaking
+        val folds into scaling.
+
+    RECOMMENDATION: Design B1. Persist for inspection; Pipeline refits
+    for CV.
+
+SPECIAL CASE - PROJECTION BINS
+    proj_x_0..7 and proj_y_0..7 sum to 1 in raw form. After
+    StandardScaler, the sum-to-1 invariant BREAKS.
+
+    Does this matter?
+      - For the model: no. SVM/RF/k-NN treat features independently.
+      - For interpretation: yes, in reports showing scaled feature
+        vectors as "distributions". Note it.
+      - For §3 narrative: yes, one sentence. "The projection sum-to-1
+        invariant holds on raw values (used in 1.6.3's heatmap
+        interpretation) and is intentionally broken by scaling. The
+        classifier does not rely on it."
+
+    Do NOT exclude projections from scaling. Unlike 1.7.1's clipping
+    (which destroys raw values), scaling is a linear transform; no
+    information is lost.
+
+SPECIAL CASE - DISCRETE FEATURES
+    hole_count and connected_component_count after StandardScaler become
+    non-integer values (e.g. raw {0,1,2} -> scaled {-0.7, +0.2, +1.1}).
+    This is mathematically fine. SVM/k-NN do not require integer inputs.
+    Do NOT exclude them from scaling; they benefit from being on the
+    same scale as the other features.
+
+WHAT NOT TO DO
+    - Do not fit on the full dataset before splitting. Fit on train only.
+    - Do not scale the label or role columns. Features only.
+    - Do not apply the scaler twice. If 1.7.3 wraps scaling in a
+      Pipeline, do not feed it a pre-scaled CSV (Design B2 trap).
+    - Do not skip scaling "because RF doesn't need it". The pipeline is
+      shared across SVM/k-NN/RF. Scale once for all.
+    - Do not renormalise the scaled projection bins. They will not sum
+      to anything meaningful after scaling; leave them alone.
+
+REPORT SURFACE (PRELIMINARY ML §3)
+    - One sentence naming the scaler and why (preprocessing rubric line).
+    - 3-5 before/after histogram figures.
+    - Sentence stating fit-on-train-only and why (prevents leakage).
+    - Sentence noting the projection sum-to-1 invariant break after
+      scaling (intentional, harmless for the model).
+    - Path to logs/1.7.2_scaling_report.txt.
+
+TIMEBOX
+    15 minutes code, 10 minutes reading plots, half a paragraph in §3.
+
+--------------------------------------------------------------------------------
+6. REPORT SURFACE - FULL
+--------------------------------------------------------------------------------
+PRELIMINARY ML §3 (preprocessing)
+    - Scaler choice with rationale.
+    - 3-5 before/after figures.
+    - Fit-on-train-only statement.
+    - Projection invariant note.
+    - Optional: scalar parameter table (μ, σ per feature) as an
+      appendix table.
+
+FULL ML §6 (methodology)
+    - One sentence confirming the same scaler is used inside CV folds
+      via 1.7.3's Pipeline.
+
+FULL ML §8 / DL REPORT (limitations)
+    - Only if scaling is suspected of affecting model behaviour on a
+      specific class. Rare.
+
+--------------------------------------------------------------------------------
+7. DESIGN DECISIONS - ALL CONFIRMED
+--------------------------------------------------------------------------------
+(a) Scaler: StandardScaler. Rejected: MinMaxScaler (outlier-sensitive),
+    RobustScaler (unnecessary after 1.7.1).
+(b) Fit on TRAIN only. Enforced in code (scaler.fit(X_train)).
+(c) Transform all three roles.
+(d) Persist scaled CSVs for inspection (Design B1). Not consumed by
+    1.7.3's Pipeline.
+(e) 1.7.3's Pipeline refits scaler inside CV folds for correct
+    cross-validation.
+(f) No exclusion of projections or discrete features from scaling.
+(g) Log always written. Figures always saved. CSVs conditional on
+    SAVE_SCALED_CSV.
+(h) Two-channel framing maintained: data (conditional, inspection) vs
+    log/figures (always).
+
+--------------------------------------------------------------------------------
+8. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+    - If any scaled feature has range far beyond [-5, +5] after
+      StandardScaler:
+        -> an extreme outlier survived 1.7.1's clipping.
+           Investigate the offending row. Prefer revisiting 1.7.1
+           thresholds over post-hoc correction here.
+    - If MANY features look unchanged in before/after figures:
+        -> check the correct columns were passed. Silent typo in
+           retained_features.txt would produce this symptom.
+    - If StandardScaler on discrete features produces values that look
+      "wrong" to a reader:
+        -> expected. Document in §3. Do not "fix".
+    - If scaled CSVs are accidentally loaded back into 1.7.3's Pipeline:
+        -> double-scaling. Symptoms: distribution narrower than
+           expected; model performance degraded. Fix: Pipeline must
+           read raw dataset_clean.csv, not the persisted scaled CSVs.
+
+--------------------------------------------------------------------------------
+9. NOTES FOR LATER
+--------------------------------------------------------------------------------
+    - 1.7.3 wraps 1.7.1 + 1.7.2 into one sklearn Pipeline. For CV to be
+      correct, the scaler must be refit inside each fold. sklearn's
+      Pipeline handles this automatically when used in GridSearchCV.
+    - Phase 2 reads via 1.7.3. It does not see the scaler's parameters
+      directly; it only sees the Pipeline.
+    - Phase 4 (CNN) bypasses 1.7.x entirely. Independent branch from
+      1.5 onward.
+    - Preliminary §3: 3-5 curated before/after figures + one sentence on
+      scaler choice + one sentence on fit-on-train-only.
+    - Timebox: 15 minutes code, 10 minutes plots, half a paragraph.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.7.2 Feature scaling
+    -> type:            conditional transform + diagnostic
+    -> input:           dataset_clean.csv (or dataset.csv),
+                        retained_features.txt
+    -> scaler:          StandardScaler (default)
+    -> fit rule:        fit on TRAIN only; transform all roles
+    -> outputs:         in-memory scaled matrices (consumed by 1.7.3),
+                        dataset_{train,val,test}_scaled.csv (conditional,
+                        inspection only),
+                        figures/scaling/*.png (always),
+                        logs/1.7.2_scaling_report.txt (always)
+    -> design:          B1 (persist for inspection; Pipeline refits for CV)
+    -> caveats:         projection sum-to-1 invariant broken by scaling
+                        (intentional); discrete features become
+                        non-integer (harmless)
+    -> report:          Preliminary ML §3 (preprocessing rubric line)
+[ ] 1.7.3 Build preprocessing pipeline
+
+================================================================================
+END OF NOTE
+================================================================================

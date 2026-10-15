@@ -1,5 +1,5 @@
 [1.3.5]
-validate. if not valid, prompt for add in order to complete this subsec. if valid, prompt with title of the next one
+validate. if not valid, prompt for data in order to complete this subsec. if valid, prompt with title of the next one
 
 
 [1.5.1] 
@@ -9,6 +9,9 @@ i don't understand. explain them first, one by one in terms:
 3. when - sequence of events of workflow. 
 4. codebase - which libraries are involved, skeletal codesnippets with [params] & description. 
 5. recommendations - relevance to my project, with reasons.
+
+[1.7.3]
+sufficient discussion. do the txt writeup of all that's being discussed
 
 
 

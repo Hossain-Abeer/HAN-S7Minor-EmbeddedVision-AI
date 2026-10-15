@@ -1,0 +1,826 @@
+================================================================================
+1.7.1 DATA CLEANING (MISSING VALUES, OUTLIERS)
+================================================================================
+[REVISION R1 - corrections applied per validation notes; see ADDENDUM at end.
+ Affected sections marked with [R1].]
+================================================================================
+
+DECISION SUMMARY
+----------------
+Type:             Conditional transform + diagnostic.
+Input:            dataset.csv (from 1.5.3),
+                  retained_features.txt (from 1.6.3).
+Outputs:          dataset_clean.csv (disk, WRITTEN ONLY IF cleaning applied;
+                                    otherwise dataset.csv passes through),
+                  logs/1.7.1_cleaning_report.txt (disk, always written),
+                  one written verdict (keep / clip / remove).
+Libraries:        pandas, numpy (already installed).
+New dependencies: none.
+Feeds:            1.7.2 (scaling) reads dataset_clean.csv OR dataset.csv.
+                  Preliminary ML §3 reads the log for evidence.
+Does NOT feed:    any downstream script via a machine-consumed "cleaning
+                  report". The log is human/report evidence, not data.
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+Two checks on the numeric feature table before scaling:
+
+(a) MISSING VALUES
+    Any NaN, None, or empty cells in the retained feature columns.
+    Detect:  df.isna().sum() -> one number per column.
+    If zero everywhere: nothing to fix. Document.
+    If nonzero: do NOT impute. Trace back to the source. See section 7.
+
+(b) OUTLIERS
+    Values far outside the typical range for their column, usually caused
+    by a bad crop, a failed mask, or an edge case in feature extraction.
+    Detect:  IQR (recommended) or z-score.
+    Handle:  clip, remove, or keep-and-document.
+
+WHY IT MATTERS
+    Scaling (1.7.2) is sensitive to extremes. A single blob_area_ratio = 50
+    from a pathological mask can dominate StandardScaler's mean and std,
+    squashing all other values into a narrow band. Outliers also distort
+    SVM decision boundaries and inflate k-NN distances.
+
+[R1] TWO SPECIAL FEATURE CLASSES - READ BEFORE TUNING OUTLIER DETECTION
+    Before choosing IQR thresholds or a clip/remove policy, note that two
+    groups of features in this dataset violate IQR's assumptions and must
+    be handled separately:
+
+    (i)  SMALL-CARDINALITY FEATURES
+         hole_count               (values: {0, 1, 2})
+         connected_component_count (small integers)
+         IQR is often 0 for these columns. lower == upper == Q1. Every
+         non-modal value is then flagged as an outlier, which would clip
+         or delete the informative minority values.
+
+    (ii) BOUNDED-SUM STRUCTURAL FEATURES
+         proj_x_0..7 and proj_y_0..7
+         By construction (1.5.2), each 8-bin group sums to 1. Clipping a
+         single bin breaks the invariant: the vector no longer sums to 1,
+         and downstream heatmap / distance interpretations from 1.6.3
+         become invalid.
+
+    These two classes are EXCLUDED from default cleaning. See sections 5
+    and 6 for how the code and policy handle this.
+
+--------------------------------------------------------------------------------
+2. WHERE
+--------------------------------------------------------------------------------
+WHO FEEDS 1.7.1
+    1.5.3 -> dataset.csv (filename | label | role | 23 features).
+    1.6.3 -> retained_features.txt (which columns survive the EDA verdicts).
+
+WHO 1.7.1 FEEDS
+    1.7.2 (scaling) -> reads dataset_clean.csv IF cleaning was applied,
+                       otherwise reads the unchanged dataset.csv.
+    Phase 2 (via 1.7.2's output) -> trains on the cleaned feature table.
+
+TWO CHANNELS - DATA VS LOG
+    DATA channel (conditional):
+        dataset_clean.csv exists only if clip or remove was applied.
+        If no cleaning was needed, no new data file is written; the
+        original dataset.csv continues downstream unchanged.
+        This is a POINTER, not always a new artefact.
+
+    LOG channel (always):
+        logs/1.7.1_cleaning_report.txt holds the printed diagnostic.
+        No script reads it. It is evidence for Preliminary ML §3 and for
+        the human decision. It is NOT a data feed.
+
+    DECISION channel:
+        The clip / remove / keep choice is recorded in this note and in
+        the report. Not stored as a file the pipeline reads.
+
+PIPELINE POSITION
+
+    1.6.3  retained_features.txt (feature set locked)
+             |
+             v
+    1.7.1  data cleaning                     [THIS STEP]
+             |
+             v
+    1.7.2  feature scaling
+             |
+             v
+    Phase 2  train
+
+--------------------------------------------------------------------------------
+2.1 DISK LAYOUT (CONFIRMED)
+--------------------------------------------------------------------------------
+All dataset-specific artefacts live under one root:
+
+    D:\HAN\Semester 7 Minor\billiards-game-clips\
+    |
+    |-- game1\                 raw clips (source, immutable)
+    |-- unsorted_png\          crops (existing; class folders 1\ ... 15\)
+    |-- mask_png\              masks (existing; parallel class tree)
+    |-- logs\                  diagnostic logs (existing)
+    |-- figures\               report figures
+    |
+    |-- splits.csv             from 1.4.1
+    |-- features.csv           from 1.5.2
+    |-- dataset.csv            from 1.5.3
+    |-- dataset_clean.csv      from 1.7.1 (CONDITIONAL: only if cleaned)
+    |-- retained_features.txt  from 1.6.3 (HUMAN-WRITTEN config)
+    |-- rejects.csv            from 1.2.4
+
+DESIGN RULES FOR THIS LAYOUT
+    - Flat where possible; folders only where volume or category demands.
+    - CSVs at top level. They are the primary machine-consumed data path;
+      adding a folder level would add a path segment for zero benefit and
+      force an update to every prior tracker note.
+    - logs\ and figures\ hold HUMAN-READ evidence. No script reads them.
+      Category distinction from the CSVs is deliberate.
+    - Source code (src\) and saved models (models\) do NOT live here.
+      They belong in the git repo mirror; data never enters git.
+    - Future inference on new clips uses a SIBLING folder
+      (..\inference-targets\), not a subfolder, so training and inference
+      sets never mix.
+
+RELEVANCE TO 1.7.1
+    This step writes to:
+        - dataset_clean.csv (conditional, top level)
+        - logs\1.7.1_cleaning_report.txt (always)
+    This step reads from:
+        - dataset.csv (top level)
+        - retained_features.txt (top level)
+
+IN YOUR PROJECT SPECIFICALLY
+    Missing values are unlikely. Every feature in 1.5.2's
+    features_from_mask() returns either a real value or a 0.0 default.
+    Rows with unusable masks were dropped at 1.5.1. The NaN check is a
+    defensive verification, not a fix.
+
+    Outliers are more plausible. A crop where the numeral was partially
+    occluded, or where a stripe leaked into the mask, can produce
+    blob_area_ratio or hole_area_ratio values far outside the typical
+    range. These deserve a look.
+
+--------------------------------------------------------------------------------
+3. WHEN - SEQUENCE OF EVENTS
+--------------------------------------------------------------------------------
+    1. retained_features.txt exists (from 1.6.3). Feature set locked.
+
+    2. 1.7.1 runs:
+       - load dataset.csv, filter to retained columns
+       - check for NaN per column
+       - [R1] split features into CLEANABLE and EXCLUDED (see section 6)
+       - [R1] filter to role == "train" BEFORE computing quantiles
+       - compute per-column min, max, Q1, Q3, IQR on CLEANABLE features
+       - flag outliers by chosen method (IQR recommended)
+       - print summary table: column | n_outliers | min | max | Q1 | Q3
+       - write the printed diagnostic to logs/1.7.1_cleaning_report.txt
+
+    3. HUMAN STEP:
+       - if no NaN and outliers < ~2% per column
+           -> document "no cleaning needed", proceed
+       - if outliers > ~5% in any column
+           -> decide: clip, remove, or document as legitimate
+
+    4. If clip or remove was chosen:
+       - re-run 1.7.1 with the handle branch enabled
+       - dataset_clean.csv is written
+
+    5. 1.7.2 scales dataset_clean.csv (if written) or dataset.csv.
+
+BEFORE 1.7.1: raw feature columns in whatever units each feature uses.
+AFTER 1.7.1:  range and tail behaviour of each column known; cleaned table
+              written if needed; log stored for the report.
+
+--------------------------------------------------------------------------------
+4. CODEBASE
+--------------------------------------------------------------------------------
+LIBRARIES
+    pandas    - read, filter, quantile, isna
+    numpy     - clip, where
+    No new dependencies.
+
+SKELETAL CODE - WITH [PARAMETERS] TO FILL IN
+--------------------------------------------------------------------------------
+[R1] Changes from R0:
+    - NEW: EXCLUDED_FEATURES parameter (features skipped by outlier
+      detection: discrete + projection-sum features)
+    - NEW: warn-and-continue on retained_features.txt typos
+    - NEW: quantile computation restricted to role == "train"
+    - NEW: guard against IQR == 0 on discrete features (belt + braces)
+    - NEW: post-clip renormalisation of projection bins (if any were
+      clipped - which they should not be, since they are excluded)
+    - NEW: assertion that after clip, no invariant was broken
+
+--------------------------------------------------------------------------------
+
+    import os
+    import sys
+    import pandas as pd
+    import numpy as np
+
+    # ========================================================================
+    # [PARAMETERS - FILL IN BEFORE RUN]
+    # ========================================================================
+    DATASET_CSV      = r"[DATASET_CSV]"       # ...\dataset.csv
+    RETAINED_TXT     = r"[RETAINED_TXT]"      # ...\retained_features.txt
+    OUT_DIR          = r"[OUT_DIR]"           # ...\billiards-game-clips
+    LOG_PATH         = r"[LOG_PATH]"          # ...\logs\1.7.1_cleaning_report.txt
+
+    # [R1] Features excluded from outlier detection.
+    # Rationale:
+    #   - discrete features: IQR often 0, would flag every minority value
+    #   - projection bins: sum-to-1 invariant would break under clip
+    EXCLUDED_FEATURES = [
+        "hole_count",
+        "connected_component_count",
+        "proj_x_0", "proj_x_1", "proj_x_2", "proj_x_3",
+        "proj_x_4", "proj_x_5", "proj_x_6", "proj_x_7",
+        "proj_y_0", "proj_y_1", "proj_y_2", "proj_y_3",
+        "proj_y_4", "proj_y_5", "proj_y_6", "proj_y_7",
+    ]
+
+    OUTLIER_METHOD   = [OUTLIER_METHOD]       # "iqr" | "zscore"
+    IQR_K            = [IQR_K]                # 1.5
+    ZSCORE_THR       = [ZSCORE_THR]           # 3.0
+    CLIP_OR_REMOVE   = [CLIP_OR_REMOVE]       # "clip" | "remove" | "keep"
+    MIN_IQR_FLOOR    = [MIN_IQR_FLOOR]        # 1e-6  (guard against IQR==0)
+
+    # ========================================================================
+    # TEE STDOUT TO LOG
+    # ========================================================================
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+    class Tee:
+        def __init__(self, path): self.f = open(path, "w")
+        def write(self, s): self.f.write(s); sys.__stdout__.write(s)
+        def flush(self):     self.f.flush();   sys.__stdout__.flush()
+    sys.stdout = Tee(LOG_PATH)
+
+    # ========================================================================
+    # LOAD
+    # ========================================================================
+    df = pd.read_csv(DATASET_CSV)
+    retained = [line.strip() for line in open(RETAINED_TXT)
+                if line.strip() and not line.startswith("#")]
+
+    # [R1] Warn on typos silently dropped from retained_features.txt.
+    missing_from_df = [f for f in retained if f not in df.columns]
+    if missing_from_df:
+        print(f"[WARNING] retained_features.txt names columns not in "
+              f"dataset.csv: {missing_from_df}")
+        print(f"[WARNING] These will be ignored. Fix the config and "
+              f"re-run if unintended.")
+
+    feats = [f for f in retained if f in df.columns]
+    print(f"[INFO] Retained features loaded: {len(feats)}")
+    print(f"[INFO] Excluded from outlier detection: {len(EXCLUDED_FEATURES)}")
+
+    # [R1] Split the retained set into cleanable vs excluded.
+    cleanable = [f for f in feats if f not in EXCLUDED_FEATURES]
+    print(f"[INFO] Cleanable features: {len(cleanable)}")
+    print(f"       {cleanable}")
+
+    # ========================================================================
+    # MISSING VALUES
+    # ========================================================================
+    X_all = df[feats]
+    nan_counts = X_all.isna().sum()
+    print("\nMissing values per column (retained set):")
+    print(nan_counts)
+
+    # ========================================================================
+    # OUTLIERS - TRAIN ONLY FOR THRESHOLD DERIVATION
+    # ========================================================================
+    # [R1] Derive thresholds from TRAIN only. Applying the bounds to all
+    # roles preserves the group-by-clip split integrity from 1.4.1.
+    # Deriving from the full dataset would leak val/test information into
+    # the cleaning decision.
+    train_df = df[df["role"] == "train"]
+    X_clean_train = train_df[cleanable]
+
+    if OUTLIER_METHOD == "iqr":
+        q1 = X_clean_train.quantile(0.25)
+        q3 = X_clean_train.quantile(0.75)
+        iqr = q3 - q1
+
+        # [R1] IQR floor: guard against discrete features sneaking through
+        # even if EXCLUDED_FEATURES is mis-configured. An IQR below the
+        # floor is widened to the floor, preventing lower == upper.
+        iqr_safe = iqr.clip(lower=MIN_IQR_FLOOR)
+
+        if (iqr < MIN_IQR_FLOOR).any():
+            warned = list(iqr[iqr < MIN_IQR_FLOOR].index)
+            print(f"\n[WARNING] IQR near zero for: {warned}")
+            print(f"          Widening to floor {MIN_IQR_FLOOR}. "
+                  f"Check EXCLUDED_FEATURES.")
+
+        lower = q1 - IQR_K * iqr_safe
+        upper = q3 + IQR_K * iqr_safe
+
+    else:
+        mean = X_clean_train.mean()
+        std  = X_clean_train.std()
+        lower = mean - ZSCORE_THR * std
+        upper = mean + ZSCORE_THR * std
+
+    # Apply bounds to ALL roles (thresholds derived from train only).
+    X_clean_all = df[cleanable]
+    outlier_mask = (X_clean_all < lower) | (X_clean_all > upper)
+
+    print("\nOutliers per cleanable column (bounds from train):")
+    print(outlier_mask.sum())
+    print("\nPer-column min / max / Q1 / Q3 (on train, cleanable only):")
+    print(X_clean_train.describe().T[["min", "max", "25%", "75%"]])
+
+    # ========================================================================
+    # HANDLE
+    # ========================================================================
+    if CLIP_OR_REMOVE == "clip":
+        df[cleanable] = X_clean_all.clip(lower=lower, upper=upper, axis=1)
+
+        # [R1] Invariant check: projections excluded from clip, so they
+        # should still sum to 1. Assert to catch future mis-configuration.
+        proj_x_cols = [c for c in feats if c.startswith("proj_x_")]
+        proj_y_cols = [c for c in feats if c.startswith("proj_y_")]
+        if proj_x_cols:
+            sx = df[proj_x_cols].sum(axis=1)
+            assert np.allclose(sx, 1.0, atol=1e-3), \
+                f"proj_x sum-to-1 invariant broken after clip " \
+                f"(min={sx.min():.4f}, max={sx.max():.4f})"
+        if proj_y_cols:
+            sy = df[proj_y_cols].sum(axis=1)
+            assert np.allclose(sy, 1.0, atol=1e-3), \
+                f"proj_y sum-to-1 invariant broken after clip " \
+                f"(min={sy.min():.4f}, max={sy.max():.4f})"
+
+        df.to_csv(os.path.join(OUT_DIR, "dataset_clean.csv"), index=False)
+        print("\nClipped cleanable columns; wrote dataset_clean.csv")
+
+    elif CLIP_OR_REMOVE == "remove":
+        keep = ~outlier_mask.any(axis=1)
+        df[keep].to_csv(os.path.join(OUT_DIR, "dataset_clean.csv"),
+                        index=False)
+        print(f"\nRemoved {int((~keep).sum())} rows; wrote dataset_clean.csv")
+
+    else:
+        print("\nOutliers kept. Document in report section 3.")
+
+    sys.stdout.flush()
+
+--------------------------------------------------------------------------------
+FILL-IN TABLE
+--------------------------------------------------------------------------------
+    Placeholder         | Example                          | Purpose
+    --------------------|----------------------------------|----------
+    [DATASET_CSV]       | ...\dataset.csv                  | Input
+    [RETAINED_TXT]      | ...\retained_features.txt        | Column filter
+    [OUT_DIR]           | ...\billiards-game-clips         | Cleaned output
+    [LOG_PATH]          | ...\logs\1.7.1_cleaning_report.txt | Log
+    [OUTLIER_METHOD]    | "iqr"                            | Detection rule
+    [IQR_K]             | 1.5                              | IQR multiplier
+    [ZSCORE_THR]        | 3.0                              | Z threshold
+    [CLIP_OR_REMOVE]    | "clip"                           | Handling policy
+    [MIN_IQR_FLOOR]     | 1e-6                             | Zero-IQR guard  [R1]
+
+--------------------------------------------------------------------------------
+5. RECOMMENDATIONS FOR THIS PROJECT
+--------------------------------------------------------------------------------
+MISSING VALUES
+    Run the check. Expect zero. Document "no missing values" in §3.
+    Reason: 1.5.2 returns 0.0 defaults instead of NaN; rows are only
+    dropped at 1.5.1, and those never reach features.csv.
+
+OUTLIER METHOD
+    Use IQR with K=1.5. Do NOT use z-score.
+    Reason: your features are not normally distributed. hole_count is a
+    small integer (0/1/2); projections are bounded [0,1] and sum-
+    constrained; blob_area_ratio is bounded by construction. Z-score
+    assumes normality and will either miss outliers or flag non-outliers.
+
+[R1] FEATURE CLASSES - HANDLING POLICY
+    Three classes of feature, three policies:
+
+    Class 1 - CONTINUOUS, UNBOUNDED
+        blob_area_ratio, hole_area_ratio, hole_aspect, hole_centroid_dx,
+        hole_centroid_dy
+        Policy: standard IQR detection; clip or keep.
+
+    Class 2 - DISCRETE / SMALL-CARDINALITY
+        hole_count, connected_component_count
+        Policy: EXCLUDED from outlier detection. Not clipped, not removed.
+        Reason: IQR is unstable on these; minority values (e.g. a "2-hole
+        numeral" in a dataset dominated by "1-hole") are legitimate signal,
+        not noise.
+
+    Class 3 - BOUNDED-SUM STRUCTURAL
+        proj_x_0..7, proj_y_0..7
+        Policy: EXCLUDED from outlier detection.
+        Reason: clipping one bin breaks the sum-to-1 invariant. An outlier
+        bin is not an error; it is a distribution shape.
+
+    The EXCLUDED_FEATURES parameter encodes all of this. Only Class 1
+    features are subject to IQR detection in R1.
+
+HANDLING POLICY (Class 1 only)
+    Prefer CLIP over REMOVE.
+    Reason: clipping preserves all rows, compresses the tails without
+    deleting data, and keeps the stratified split intact. Removing rows
+    silently shifts class balance and can break the group-by-clip split.
+
+    Or use KEEP-and-document if outliers are < 2% per column.
+    Reason: reviewers accept "outliers retained and documented" more
+    readily than silent deletion.
+
+WHAT NOT TO DO
+    - Do not use Isolation Forest or ML-based outlier detection. Overkill
+      for 23 bounded features on ~500 samples.
+    - Do not impute missing values. If NaN appears, that is a bug upstream
+      at 1.5.2. Fix at the source; do not patch here.
+    - [R1] Do not derive cleaning thresholds from val/test. If you clip or
+      remove, derive thresholds from TRAIN ONLY, then apply to all roles.
+      Otherwise the group-by-clip integrity from 1.4.1 is broken.
+      This is now enforced in the code (train_df filter before quantile).
+    - [R1] Do not clip the projection bins. Their sum-to-1 invariant is
+      what makes them interpretable. See Class 3 above.
+    - [R1] Do not clip small-integer counts. A minority value like "2" in
+      hole_count is signal, not noise. See Class 2 above.
+
+REPORT SURFACE (PRELIMINARY ML §3)
+    One sentence naming the method and result:
+    "Checked for missing values (none found) and outliers (IQR K=1.5 on
+     continuous features only; discrete and projection-sum features
+     excluded by design). N outliers detected across continuous features.
+     Clipped at train-derived bounds. Distribution unaffected downstream."
+    Plus: logs/1.7.1_cleaning_report.txt as supporting artefact.
+
+TIMEBOX
+    30 minutes of code, 15 minutes of reading, 1 paragraph in the report.
+
+--------------------------------------------------------------------------------
+6. WHAT CAUSES MISSING VALUES
+--------------------------------------------------------------------------------
+Human / manual sources:
+    - data entry errors (skipped fields)
+    - non-response in surveys
+    - deliberate omission (redaction, privacy)
+    - transcription loss
+    Not applicable to this project (machine-produced data).
+
+Sensor / measurement sources:
+    - sensor dropout mid-recording
+    - out-of-range readings
+    - corrupted video frames -> silent skip, no row written
+    Partially applicable. cv2.VideoCapture.read() returning False causes
+    the loop to skip, not to write NaN. Silent skip, not missing value.
+
+Merge / join sources:
+    - key mismatch on a join
+    - left join with missing right side
+    - schemas differ on concatenation
+    Relevant. See section 7.
+
+Computation sources:
+    - divide by zero
+    - log or sqrt of a negative number
+    - mean() of an empty list
+    - library defaults returning NaN
+    Most relevant to this project. See section 7.
+
+--------------------------------------------------------------------------------
+7. WHERE NaN WOULD COME FROM IN THIS PIPELINE
+--------------------------------------------------------------------------------
+    Cause                          | Where                       | Detect
+    -------------------------------|-----------------------------|-------
+    Divide-by-zero in features     | 1.5.2 features_from_mask    | NaN in
+                                   |                             | X
+    Join mismatch at 1.5.3         | filename format disagreement| row count
+                                   | between splits and features | short
+    Empty mask survived to 1.5.2   | 1.5.1 MIN_MASK_AREA guard   | count in
+                                   | failure                     | mask_png
+                                   |                             | vs
+                                   |                             | features
+    CSV corruption                 | disk full, process killed   | read_csv
+                                   |                             | raises
+
+WHY THIS PIPELINE PROBABLY WILL NOT HAVE NaN
+    1.5.2 returns None instead of NaN; caller skips the row.
+    1.5.1 pre-filters empty masks via mask_is_usable().
+    1.5.2 uses max(1.0, blob_area) guards on divisions.
+
+WHAT TO DO IF NaN APPEARS
+    1. Identify the column with NaN.
+    2. Trace back to the 1.5.2 function producing it.
+    3. Look for an unguarded division or an empty-list operation.
+    4. Check whether 1.5.1's mask_is_usable() filter is working.
+    5. Fix at the source, re-run 1.5.1 -> 1.5.2 -> 1.5.3.
+    Do NOT impute at 1.7.1.
+
+--------------------------------------------------------------------------------
+8. LOGGING - CONSOLE OUTPUT VS SAVED LOG
+--------------------------------------------------------------------------------
+PROBLEM
+    Console output is ephemeral. If a reviewer asks "how many outliers did
+    you have?" six weeks after the run, the number is gone.
+
+SOLUTION
+    Redirect stdout to a log file while also printing to console (tee).
+    One small Tee class at the top of the script. See section 4.
+
+WHY THE LOG IS NOT A DATA FEED
+    A data feed is a file a downstream script MUST read to function.
+    dataset_clean.csv is a data feed (conditional). features.csv and
+    dataset.csv are data feeds.
+    A log is human/report evidence. No script reads it. Same category as
+    a screenshot or a printed table pasted into Word.
+
+WHICH STEPS PRODUCE CONSOLE-ONLY OUTPUT (audit)
+    Primary (4) - report evidence, currently unsaved:
+        1.3.5  class count table
+        1.4.2  stratification verification table
+        1.6.1  balance table + verdict (PNG saved; table not)
+        1.7.1  cleaning report (this step)
+
+    Minor (2) - console duplicates something already on disk:
+        1.5.3  join count matrix (derivable from dataset.csv)
+        1.6.3  flagged-pairs list (visible on corr_heatmap.png)
+
+SUGGESTED LOG DIRECTORY
+    ...\billiards-game-clips\logs\
+    |-- 1.3.5_class_count.txt
+    |-- 1.4.2_stratification_check.txt
+    |-- 1.5.3_join_report.txt          (optional)
+    |-- 1.6.1_balance_report.txt
+    |-- 1.6.3_redundancy_flags.txt     (optional)
+    |-- 1.7.1_cleaning_report.txt
+
+IMPLEMENTATION
+    Add a Tee helper at the top of each script, or use
+    sys.stdout = open(log_path, "w") if console visibility is not needed.
+
+--------------------------------------------------------------------------------
+9. DATA CHANNEL VS LOG CHANNEL - FORMAL DISTINCTION
+--------------------------------------------------------------------------------
+For every diagnostic step in Phase 1.6 and 1.7.1, two channels exist.
+They must not be conflated.
+
+    Channel  | What it is                    | Persists?   | Read by
+    ---------|-------------------------------|-------------|------------
+    Data     | dataset_clean.csv OR          | Conditional | 1.7.2,
+             | pass-through dataset.csv      |             | Phase 2
+    Log      | logs/<step>_report.txt        | Always      | Human,
+             |                               |             | report
+    Decision | clip / remove / keep          | In note     | Human,
+             |                               |             | section 3
+
+DIAGNOSTICS HAVE NO DATA CHANNEL OF THEIR OWN
+    Steps 1.3.5, 1.4.2, 1.6.1, 1.6.2, 1.6.3 do not transform the data
+    that flows downstream. Their only output is a log (for the report)
+    and a human verdict (for decisions taken at later steps).
+
+    1.7.1 is the exception among diagnostics: it CONDITIONALLY writes a
+    new data file (dataset_clean.csv) if clip or remove was chosen. If
+    no cleaning was applied, no new data file appears and dataset.csv
+    continues unchanged.
+
+CORRECTED STATEMENT OF FEEDS
+    Earlier drafts of this note said "1.7.1 feeds 1.7.2 and Phase 2".
+    The precise statement is:
+        1.7.1 conditionally modifies the data table that 1.7.2 consumes,
+        and always produces a log for the report.
+
+--------------------------------------------------------------------------------
+10. RESCALE / FALLBACK TRIGGERS
+--------------------------------------------------------------------------------
+    - NaN in any retained column:
+        -> bug upstream at 1.5.2; fix at source; do NOT impute.
+    - Any column with > 5% outliers:
+        -> inspect a sample of offending rows; decide clip / remove.
+    - Any role loses more than 5% of rows due to remove:
+        -> prefer clip instead; removing shifts class balance and risks
+           breaking the group-by-clip split.
+    - ALL cleanable features show heavy tails (many outliers in every
+      column):
+        -> revisit 1.5.1 thresholds or 1.5.2 normalisation guards.
+    - [R1] IQR near zero for any cleanable column:
+        -> the feature likely belongs in EXCLUDED_FEATURES. Review
+           cardinality and add it. See section 5 Class 2.
+    - [R1] Projection sum-to-1 assertion fails after clip:
+        -> EXCLUDED_FEATURES was mis-configured; projections were clipped.
+           Restore the exclusion list and re-run. This is a code bug, not
+           a data issue.
+
+--------------------------------------------------------------------------------
+11. NOTES FOR LATER
+--------------------------------------------------------------------------------
+    - 1.7.2 reads dataset_clean.csv if written, else dataset.csv.
+    - Phase 2 reads via 1.7.2; the cleaning decision is invisible to it
+      except through the numerical values of the features.
+    - Preliminary ML §3: one sentence + log file path.
+    - Full ML §6: only if clip or remove was applied; note which and why.
+    - Full ML §8 / DL report: if outliers were kept, note the decision
+      and the reasoning.
+    - Timebox: 30 minutes code, 15 minutes reading, 1 paragraph in §3.
+
+--------------------------------------------------------------------------------
+12. DESIGN DECISIONS - ALL CONFIRMED
+--------------------------------------------------------------------------------
+(a) Outlier method: IQR (K=1.5). Rejected: z-score (non-normal features).
+(b) Handling: clip preferred; remove only on evidence; keep acceptable if
+    outlier rate is low and documented.
+(c) Thresholds derived from TRAIN only, applied to all roles.
+    [R1] ENFORCED in code: quantiles computed on train_df only.
+(d) No imputation. NaN is a bug indicator, not a fix target.
+(e) No ML-based outlier detection.
+(f) Log file always written. Data file written only if action taken.
+(g) Two-channel framing: log is human evidence, not a data feed.
+(h) Disk layout is flat (see section 2.1). CSVs at top level; logs and
+    figures in dedicated folders; source code and models live in the git
+    repo mirror, not with the data.
+[R1] (i) Feature classes: continuous (cleaned), discrete (excluded),
+    bounded-sum structural (excluded). Only continuous features are
+    subject to IQR detection.
+[R1] (j) Invariant preservation: projection sum-to-1 asserted after any
+    cleaning operation. Prevents silent breakage of 1.6.3's heatmap
+    interpretation.
+[R1] (k) Typo detection: retained_features.txt entries not present in
+    dataset.csv are reported, not silently dropped.
+
+--------------------------------------------------------------------------------
+13. REPORT SURFACE
+--------------------------------------------------------------------------------
+PRELIMINARY ML §3 (data quality - cleaned)
+    - One-sentence summary of the check and its result.
+    - Path to logs/1.7.1_cleaning_report.txt.
+    - If clipping applied: state method, threshold source (train), and
+      number of cells affected.
+    - If outliers kept: state the decision and its rationale.
+    - [R1] State the feature-class policy: continuous vs discrete vs
+      bounded-sum; which were cleaned, which were excluded by design.
+
+FULL ML §6 (methodology)
+    - Only if clip or remove was applied. One sentence naming the method.
+    - No further detail needed unless a model underperforms on a specific
+      class and cleaning is suspected as a cause.
+
+FULL ML §8 / DL REPORT (limitations)
+    - Only if outliers were kept and shown to affect downstream results.
+
+--------------------------------------------------------------------------------
+CHECKLIST STATUS
+--------------------------------------------------------------------------------
+[x] 1.7.1 Data cleaning (missing values, outliers)
+    -> type:          conditional transform + diagnostic
+    -> input:         dataset.csv, retained_features.txt
+    -> missing:       check via df.isna(); expect zero; no imputation
+    -> outliers:      IQR K=1.5 on CONTINUOUS features only;
+                      discrete + projection features excluded by design
+    -> thresholds:    derived from TRAIN role only [R1]
+    -> outputs:       dataset_clean.csv (conditional),
+                      logs/1.7.1_cleaning_report.txt (always)
+    -> channels:      data (conditional) vs log (always); not conflated
+    -> layout:        flat dataset root, CSVs at top level,
+                      logs\ and figures\ as dedicated folders,
+                      source code + models in git repo mirror
+    -> report:        Preliminary ML §3
+[ ] 1.7.2 Feature scaling
+
+================================================================================
+ADDENDUM - VALIDATION NOTES AND CORRECTIONS (R1)
+================================================================================
+
+This addendum is written for the human+GPT development phase. It records
+what changed between R0 (initial draft) and R1 (this revision), and why.
+The tracker step is unchanged; only the note content is corrected.
+
+--------------------------------------------------------------------------------
+CORRECTION 1 - TRAIN-ONLY THRESHOLD DERIVATION (BLOCKING)
+--------------------------------------------------------------------------------
+WHERE IN R0:
+    Section 4 (skeleton code), line:
+        X = df[feats]
+        q1 = X.quantile(0.25); q3 = X.quantile(0.75); iqr = q3 - q1
+
+PROBLEM:
+    Section 12(c) states thresholds must be derived from TRAIN only.
+    The R0 code derives them from the FULL dataset. This silently
+    leaks val/test information into the cleaning decision, breaking
+    the group-by-clip split integrity established at 1.4.1.
+
+FIX IN R1:
+    Section 4:
+        train_df = df[df["role"] == "train"]
+        X_clean_train = train_df[cleanable]
+        q1 = X_clean_train.quantile(0.25)
+        ...
+    Bounds are then applied to all roles via X_clean_all.
+
+SECTION REFERENCES:
+    Section 3, step 2  - "[R1] filter to role == 'train' BEFORE
+                          computing quantiles"
+    Section 4          - new train_df / X_clean_train split
+    Section 12(c)      - "[R1] ENFORCED in code"
+    Section 5          - "WHAT NOT TO DO" bullet reinforced
+
+--------------------------------------------------------------------------------
+CORRECTION 2 - DISCRETE FEATURES BREAK IQR (BLOCKING)
+--------------------------------------------------------------------------------
+WHERE IN R0:
+    Section 4 - IQR applied uniformly to all retained features.
+
+PROBLEM:
+    hole_count and connected_component_count are small-cardinality
+    integers. IQR is frequently 0. When IQR = 0, lower == upper == Q1,
+    so EVERY non-modal value is flagged as an outlier. Clipping or
+    removing these values destroys legitimate minority signal
+    (e.g. a "2-hole" numeral in a dataset dominated by "1-hole").
+
+FIX IN R1:
+    Section 4:
+        EXCLUDED_FEATURES = ["hole_count",
+                             "connected_component_count", ...]
+        cleanable = [f for f in feats if f not in EXCLUDED_FEATURES]
+        iqr_safe = iqr.clip(lower=MIN_IQR_FLOOR)
+    Discrete features are never touched by IQR detection.
+
+SECTION REFERENCES:
+    Section 1        - "[R1] TWO SPECIAL FEATURE CLASSES" preamble
+    Section 3        - step 2 now splits cleanable vs excluded
+    Section 4        - EXCLUDED_FEATURES parameter + IQR floor guard
+    Section 5        - new "FEATURE CLASSES - HANDLING POLICY"
+    Section 10       - new trigger for zero-IQR cleanable columns
+    Section 12(i)    - "Feature classes" design decision
+
+--------------------------------------------------------------------------------
+CORRECTION 3 - CLIPPING BREAKS PROJECTION SUM-TO-1 (BLOCKING)
+--------------------------------------------------------------------------------
+WHERE IN R0:
+    Section 4 - clip applied to all retained features.
+
+PROBLEM:
+    proj_x_0..7 and proj_y_0..7 sum to 1 by construction (1.5.2). If
+    a single bin is clipped, the vector no longer sums to 1. This
+    invalidates:
+        - the heatmap interpretation recorded at 1.6.3,
+        - distance metrics used by SVM/k-NN in Phase 2,
+        - the structural-correlation argument in Preliminary ML §3.
+
+FIX IN R1:
+    Section 4:
+        EXCLUDED_FEATURES includes all proj_x_* and proj_y_* names.
+        After clip, an assertion verifies sum-to-1 for both groups.
+
+SECTION REFERENCES:
+    Section 1        - "[R1] TWO SPECIAL FEATURE CLASSES" class (ii)
+    Section 4        - EXCLUDED_FEATURES + post-clip assertion block
+    Section 5        - class (iii) "BOUNDED-SUM STRUCTURAL"
+    Section 10       - new trigger for sum-to-1 assertion failure
+    Section 12(j)    - "Invariant preservation" design decision
+
+--------------------------------------------------------------------------------
+POLISH 4 - SILENT TYPO DROP IN retained_features.txt
+--------------------------------------------------------------------------------
+WHERE IN R0:
+    Section 4 - "feats = [f for f in retained if f in df.columns]"
+
+PROBLEM:
+    A mistyped feature name in retained_features.txt is silently
+    ignored. Symptom would appear much later as "why is feature X
+    missing from the model?"
+
+FIX IN R1:
+    Section 4 - warning printed when retained features are absent:
+        missing_from_df = [f for f in retained if f not in df.columns]
+        if missing_from_df: print("[WARNING] ...")
+
+SECTION REFERENCE:
+    Section 4        - warning block after load
+    Section 12(k)    - "Typo detection" design decision
+
+--------------------------------------------------------------------------------
+NOTES FOR THE HUMAN+GPT PHASE
+--------------------------------------------------------------------------------
+1. All four changes are incorporated in the note text above. Search for
+   the marker "[R1]" to find insertion points.
+2. The tracker checklist at the bottom reflects the updated content;
+   the checkbox state is unchanged (step remains complete).
+3. Corrections 1-3 are correctness fixes that would have produced
+   silently wrong data if R0 had been implemented as written. They are
+   not optional polish.
+4. Polish 4 is a usability improvement; safe to defer to execution if
+   time is tight.
+5. Downstream implications for other notes:
+   - 1.6.3's heatmap interpretation relies on the projection sum-to-1
+     invariant. Correction 3 preserves it. No revision needed to 1.6.3.
+   - 1.7.2 (scaling) will now receive a dataset in which discrete and
+     projection features were never touched. StandardScaler will still
+     scale them by their observed variance. Correct behaviour; no
+     revision needed to 1.7.2's design.
+   - Phase 2's feature importance interpretation is now cleaner: any
+     apparent importance of a discrete or projection feature is real,
+     not an artefact of adversarial clipping.
+6. Recommended next action before execution: sanity-check
+   EXCLUDED_FEATURES against the actual retained_features.txt produced
+   by 1.6.3. If a feature is dropped there, remove it from
+   EXCLUDED_FEATURES too. Keep the two lists consistent.
+
+================================================================================
+END OF ADDENDUM
+================================================================================
