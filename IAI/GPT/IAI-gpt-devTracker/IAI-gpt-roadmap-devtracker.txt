@@ -1,0 +1,740 @@
+```
+================================================================================
+IAI-GPT ROADMAP - DEVTRACKER
+================================================================================
+
+PURPOSE
+-------
+Sequential build guide for IAI Phase 1. Companion to two existing files:
+
+  IAI-gpt-roadmap-tracker.txt        - overview of all design steps.
+  IAI-gpt-designtracker-<step>.txt   - design note per step.
+
+This file answers a different question: what ORDER do I write and run code
+in, and how do I know each build step succeeded?
+
+A design step can be complete in the designtracker and still unbuilt here.
+Example: designtracker-1.3.1 fully specifies detect_balls(). The function
+does not exist on disk until devtracker step 3.1 is done.
+
+HOW TO USE
+----------
+  - Work top to bottom. Most steps depend on the one above.
+  - Before writing any script, open the designtracker note(s) referenced.
+  - Tick [x] only after the Verify line passes.
+  - If Verify fails, work through the Debug lines before advancing.
+  - This file contains NO code. It describes what to write, not how.
+
+LEGEND
+------
+  [ ]   not started
+  [~]   in progress
+  [x]   done + verified
+  [!]   blocked (dependency unresolved)
+
+TYPE MARKERS
+------------
+  Type: code          write or modify a script
+  Type: decision      choose a value that unblocks downstream work
+  Type: manual        human action (sorting, review, reading figures)
+  Type: run           execute an existing script and inspect output
+  Type: verification  confirm an earlier step produced expected output
+  Type: writing       produce report prose
+  Type: submission    deliver to instructor or peer team
+
+CONVENTIONS
+-----------
+  ~        D:\HAN\Semester 7 Minor\billiards-game-clips
+  repo     D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI
+  venv     C:\dev\envs\IAI-env
+
+  Activate the venv before every session:
+      C:\dev\envs\IAI-env\Scripts\Activate.ps1
+
+  Run scripts from repo root:
+      cd $repo
+      python src/<script>.py
+
+  Design references use short names:
+      "designtracker-1.2.3"  refers to IAI-gpt-designtracker-1-1.2.3.txt
+      "designtracker-0.1.1"  refers to IAI-gpt-designtracker-0-0.1.1.txt
+
+
+================================================================================
+SECTION 1 - PREFLIGHT
+================================================================================
+
+[ ] 1.1  VERIFY ENVIRONMENT
+    Type: verification
+    Design: none (environment sanity)
+    Prereq: none
+    Action: Open PowerShell. Activate venv. Run python -c to import cv2,
+            sklearn, tensorflow, numpy, pandas. All must import.
+    Verify: All imports succeed. No version warnings.
+    Debug:  ImportError -> re-activate venv. If still failing, reinstall
+            from repo/IAI/requirements.txt (design note 0.1.3).
+
+[ ] 1.2  VERIFY DATA PATHS EXIST
+    Type: verification
+    Prereq: 1.1
+    Action: Confirm the following exist:
+                ~\game1\billiards-game-clip1.mp4 ... clip5.mp4
+                ~\unsorted_png\  (empty is fine)
+                ~\mask_png\      (empty is fine)
+                ~\logs\
+                ~\figures\
+    Verify: All five clips present. Folders exist.
+    Debug:  Missing clips -> re-acquire per designtracker-1.1.2.
+            Missing folders -> create manually.
+
+[ ] 1.3  VERIFY REPO LAYOUT
+    Type: verification
+    Prereq: 1.1
+    Action: Confirm repo/IAI/src/ exists.
+    Verify: src/ present (may be empty).
+    Debug:  If missing, create it before Section 2.
+
+
+================================================================================
+SECTION 2 - FOUNDATION
+================================================================================
+
+[ ] 2.1  LOCK CLOTH COLOUR  (BLOCKING)
+    Type: decision
+    Design: designtracker-0.1.1 (C3, currently UNDECIDED)
+    Prereq: 1.2
+    Action: Open billiards-game-clip1.mp4 in a player. Pause on a frame
+            showing bare cloth. Sample 5-10 cloth pixels with a colour
+            picker. Record HSV triple (H: 0-179, S and V: 0-255 in
+            OpenCV). Widen bounds slightly to tolerate lighting drift.
+    Verify:  HSV range decided and written to config (see 2.3). Update
+             designtracker-0.1.1 C3 from UNDECIDED to locked.
+    Debug:   Cloth gradient (darker near rails) -> sample centre AND edge,
+             merge ranges, widen V lower bound.
+             Pale cloth (low S) -> may overlap numeral white. Flag now,
+             expect tighter V_MIN in Section 6.
+
+[ ] 2.2  CREATE MODULE STRUCTURE
+    Type: code
+    Design: none (standard layout)
+    Prereq: 2.1
+    Action: Create repo/IAI/src/ and repo/IAI/models/.
+            Placeholder file list (contents written in later sections):
+                src/config.py         (2.3)
+                src/extract_crop.py   (3.1)
+                src/audit.py          (4.3)
+                src/split.py          (5.1)
+                src/verify_split.py   (5.3)
+                src/mask.py           (6.1)
+                src/features.py       (7.1)
+                src/assemble.py       (7.3)
+                src/balance.py        (8.1)
+                src/distributions.py  (8.2)
+                src/correlations.py   (8.3)
+                src/clean.py          (9.1)
+                src/scale.py          (9.2)
+                src/pipeline.py       (9.3)
+    Verify:  ls repo/IAI/src shows the layout.
+    Debug:   None.
+
+[ ] 2.3  WRITE config.py
+    Type: code
+    Design: parameter blocks from designtracker-0.1.1, 0.2.1, 1.2.3,
+            1.2.4, 1.3.1, 1.3.2, 1.5.1
+    Prereq: 2.2
+    Deliver: src/config.py
+    Content: Single Python module holding all shared constants. Groups:
+                Paths             (clip, crop, mask, logs, figures, CSVs)
+                Cloth HSV         (from 2.1 decision)
+                Extraction        (stride, blur, dup thresholds)
+                Detection         (area, circularity, morphology)
+                Crop              (padding)
+                Mask              (S_MAX, V_MIN, min area)
+                General           (N_CLIPS, CLASS_IDS, RETAINED_TARGET)
+    Verify:  python -c "import sys; sys.path.insert(0,'src');
+             import config; print(config.CLOTH_H_LO)"
+             Prints the value without error.
+    Debug:   ImportError -> file saved as .txt or wrong name.
+
+
+================================================================================
+SECTION 3 - EXTRACTION PIPELINE
+================================================================================
+
+Design note 1.2.3 fused four design steps into one runtime script.
+Designtracker steps 1.2.3, 1.2.4, 1.3.1, 1.3.2 all execute in this single
+script. Frames never touch disk; only crops do.
+
+[ ] 3.1  WRITE extract_crop.py
+    Type: code
+    Design: designtracker-1.2.3, 1.2.4, 1.3.1, 1.3.2 (read in this order)
+    Prereq: 2.3
+    Deliver: src/extract_crop.py
+    Content: Four functions plus a main loop.
+                passes_filter(frame, clip_id, frame_idx) -> bool
+                    Laplacian variance for blur; abs-diff for duplicates.
+                    Module-level state for last-kept frame.
+                detect_balls(frame) -> list of (x, y, w, h)
+                    Cloth HSV mask -> invert -> morphology -> contours
+                    -> area and circularity filter.
+                crop_and_save(frame, regions, clip_id, frame_idx)
+                    Padded crop per region; write PNG to unsorted_png/.
+                main()
+                    Loop clips -> loop frames -> gate -> detect -> crop.
+    Key rules:
+        - Reset _last_kept_frame at the start of each clip.
+        - Rejection log written to REJECT_LOG (CSV). One row per rejected
+          frame: reason, clip_id, frame_idx, metric value.
+        - Crop filenames: clip{id}_frame{idx}_ball{k}.png
+    Verify:  Imports cleanly: python -c "import sys; sys.path.insert(0,
+             'src'); import extract_crop"
+    Debug:   ImportError -> missing import in config or wrong path.
+
+[ ] 3.2  DRY RUN ON 100 FRAMES OF CLIP 1
+    Type: run
+    Design: verifies 3.1
+    Prereq: 3.1
+    Action: Temporarily cap clip loop to clip1, first 100 frames.
+            Run: python src/extract_crop.py
+    Verify:
+        - Script completes without crash
+        - unsorted_png\ contains crops
+        - rejects.csv has rows
+        - RAM stays flat (Task Manager)
+        - Open 3-5 crops in Windows Photos: numerals visible?
+    Debug (in order):
+        0 crops: cloth HSV wrong (re-sample), or MIN_CIRCULARITY too high
+                 (lower to 0.6)
+        Many crops per frame: HSV range too wide, or MIN_BALL_AREA too low
+                 (raise to 3000)
+        Blurry crops: BLUR_THRESHOLD too low (raise to 150)
+        Duplicate-looking crops: DUP_THRESHOLD too high (lower to 3)
+        Cross-clip dupes: last-kept-frame not reset between clips
+    Cost:    ~2 minutes.
+
+[ ] 3.3  FULL RUN ON ALL 5 CLIPS
+    Type: run
+    Prereq: 3.2 passes verification
+    Action: Remove cap. Full extraction run.
+    Verify:
+        - unsorted_png\ contains 3000-9000 crops (design estimate)
+        - rejects.csv has rows for both blur and duplicate reasons
+        - No file larger than ~100 KB (would indicate full-frame write)
+    Record: Total crop count and rejection rate per reason. These feed
+            Preliminary ML Section 3.
+    Cost:   ~10-30 minutes.
+    Debug:  If total < 2000, revisit 3.2 debug list.
+
+
+================================================================================
+SECTION 4 - SORTING AND AUDIT
+================================================================================
+
+[ ] 4.1  CONFIRM CLASS FOLDERS EXIST
+    Type: manual
+    Design: designtracker-1.3.3
+    Prereq: 3.3
+    Action: Confirm folders 1\ through 15\ exist under ~.
+    Verify: Folder tree shows 1\ through 15\.
+    Debug:  Create missing folders manually.
+
+[ ] 4.2  SORT CROPS BY VISIBLE NUMERAL
+    Type: manual
+    Design: designtracker-1.3.4
+    Prereq: 4.1
+    Action:
+        1. Back up first: copy unsorted_png\ to unsorted_png_backup\.
+        2. Open unsorted_png\ in Explorer with preview pane enabled (Alt+P).
+        3. For each crop: read the numeral, drag into the matching
+           numbered folder.
+        4. Delete if: illegible, occluded, merged blob, false positive
+           (HUD, pocket, chalk), duplicate.
+        5. When in doubt, delete. Wrong label > missing sample.
+    Warnings:
+        - 6 / 9 and 3 / 8 are the classic confusions. Zoom before deciding.
+        - Solid 1-8 vs striped 9-15: colour is a sanity check, numeral is
+          truth.
+        - Sort in short sessions. Fatigue causes misclicks.
+    Verify: unsorted_png\ empty; 1\ through 15\ populated.
+    Cost:   1-2 hours for ~2000 crops. Split across 3-4 sessions.
+    Debug:  Mis-sorted crops -> restore from unsorted_png_backup\, retry.
+
+[ ] 4.3  WRITE audit.py
+    Type: code
+    Design: designtracker-1.3.5
+    Prereq: 4.2
+    Deliver: src/audit.py
+    Content: Two functions.
+                count_per_class(crop_root, class_ids) -> dict
+                report_counts(counts, min_per_class)
+             Plus a main that prints the table and flags any class below
+             the minimum.
+    Verify: Imports cleanly.
+
+[ ] 4.4  RUN audit.py
+    Type: run
+    Prereq: 4.3
+    Action: python src/audit.py
+    Verify:
+        - Table has 15 rows (one per class)
+        - min / max / total printed
+        - SHORT flags appear if any class < 50
+    Save:   logs/1.3.5_class_count.txt (redirect or Tee).
+    Decision:
+        min >= 50:  proceed to Section 5.
+        min <  50:  re-run 3.3 with FRAME_STRIDE = 3 (per designtracker-
+                    1.2.3 rescale trigger). Re-sort new crops. Re-audit.
+                    If still short: document limitation, proceed.
+
+
+================================================================================
+SECTION 5 - SPLIT
+================================================================================
+
+[ ] 5.1  WRITE split.py
+    Type: code
+    Design: designtracker-1.4.1
+    Prereq: 4.4 passes
+    Deliver: src/split.py
+    Content: Four functions plus main.
+                scan_crops(crop_root, class_ids) -> list of records
+                score_clips_by_coverage(records) -> dict
+                assign_roles(scores) -> dict  (best -> val, next -> test,
+                                               rest -> train)
+                write_splits_csv(records, roles, out_path)
+    Output: ~\splits.csv with columns filename, role.
+    Verify: Imports cleanly.
+
+[ ] 5.2  RUN split.py
+    Type: run
+    Prereq: 5.1
+    Action: python src/split.py
+    Verify:
+        - splits.csv exists
+        - Printed clip coverage scores
+        - Exactly 3 clips assigned to train, 1 to val, 1 to test
+        - Assignment deterministic (no random seed)
+    Debug:  If roles look wrong, inspect coverage scores.
+
+[ ] 5.3  WRITE AND RUN verify_split.py
+    Type: code + run
+    Design: designtracker-1.4.2
+    Prereq: 5.2
+    Deliver: src/verify_split.py
+    Content: Read splits.csv and class folders. Print per-role per-class
+             count matrix. Flag any zero cell.
+    Run:     python src/verify_split.py
+    Verify:
+        - Every role (train / val / test) covers all 15 classes
+        - Train has >= 5 per class
+        - Val / test have >= 1 per class (soft target >= 3)
+    Save:    logs/1.4.2_stratification.txt
+    Debug:   Zero cell -> escalate to 4.4 stride-3 re-extraction, then
+             re-run Section 5.
+
+
+================================================================================
+SECTION 6 - MASK EXTRACTION
+================================================================================
+
+[ ] 6.1  WRITE mask.py
+    Type: code
+    Design: designtracker-1.5.1
+    Prereq: 5.3 passes
+    Deliver: src/mask.py
+    Content: Four functions plus main.
+                extract_numeral_mask(crop_bgr) -> mask
+                    Convert to HSV, threshold high-V low-S, intersect
+                    with non-cloth, apply morphology (open only).
+                mask_is_usable(mask) -> bool
+                    Pixel count >= MIN_MASK_AREA.
+                log_reject(class_id, filename)
+                    Append to a mask-reject log (CSV).
+                build_masks(crop_root, mask_root, class_ids)
+                    Loop class folders, extract masks, write to parallel
+                    tree under mask_png\.
+    Key rules:
+        - Reuse [CLOTH_*] from config.
+        - MORPH_CLOSE_ITER = 0 (closing would fill numeral holes).
+    Verify: Imports cleanly.
+
+[ ] 6.2  DRY RUN ON 20 CROPS
+    Type: run
+    Prereq: 6.1
+    Action: Cap to first 20 crops across 2-3 classes.
+            Run: python src/mask.py
+    Verify:
+        - Masks written to mask_png\<class>\
+        - Open 2-3 masks in an image viewer
+        - Numeral appears as a HOLE inside a white blob
+        - Cloth ring is black (masked out)
+    Debug:
+        Empty masks everywhere:
+            V_MIN too high -> lower to 150. Confirm cloth sample in HSV.
+        Cloth leaking into mask:
+            [CLOTH_*] range wrong -> re-sample from a fresh frame.
+        Numeral not visible as a hole:
+            MORPH_CLOSE_ITER > 0 -> set to 0.
+
+[ ] 6.3  FULL RUN
+    Type: run
+    Prereq: 6.2 passes
+    Action: Remove cap. Full run.
+    Verify:
+        - Mask count = crop count minus rejects
+        - Reject count printed and logged
+    Record: Rejection rate per class -> Preliminary ML Section 3.
+    Debug:  High rejection (>10%) -> revisit 6.2 debug list.
+
+
+================================================================================
+SECTION 7 - FEATURE EXTRACTION AND ASSEMBLY
+================================================================================
+
+[ ] 7.1  WRITE features.py
+    Type: code
+    Design: designtracker-1.5.2
+    Prereq: 6.3
+    Deliver: src/features.py
+    Content: Helpers and main.
+                largest_blob(mask) -> blob mask + stat
+                find_holes(blob, min_area_px) -> list of hole stats
+                projections_binned(blob, n_bins, blob_area) -> two vectors
+                features_from_mask(...) -> dict
+                build_features(...) -> writes features.csv
+    Parameters (from config):
+        USE_FEATURES (default 7 categories = 23 sub-features)
+        PROJ_BINS = 8
+        KEEP_HU_MOMENTS = False
+        MIN_HOLE_AREA_PX = 5
+    Extra rule:
+        Add a startup check comparing USE_FEATURES against the known
+        feature set. Warn on unknown names.
+    Output: ~\features.csv
+    Verify: Imports cleanly.
+
+[ ] 7.2  RUN features.py
+    Type: run
+    Prereq: 7.1
+    Action: python src/features.py
+    Verify:
+        - features.csv exists
+        - Row count approximately equal to mask count
+        - Column count = 1 (filename) + 23 features
+        - Spot-check 3 rows in the CSV:
+            hole_count in {0, 1, 2}
+            blob_area_ratio in [0, 0.5]
+            proj_x_0..7 sum to 1 per row
+    Debug:
+        NaN anywhere -> bug in 7.1. Fix at source. Do not impute.
+        Missing columns -> USE_FEATURES typo. Check the warning printed.
+
+[ ] 7.3  WRITE AND RUN assemble.py
+    Type: code + run
+    Design: designtracker-1.5.3
+    Prereq: 7.2
+    Deliver: src/assemble.py
+    Content:
+        Read features.csv and splits.csv.
+        Inner merge on filename.
+        Extract label from filename prefix (parent folder name).
+        Reorder columns: filename | label | role | <23 features>
+        Write dataset.csv.
+        Print drop count = len(splits) - len(merged).
+        Print per-role per-class count matrix. Flag any zero cell.
+    Run:    python src/assemble.py
+    Verify:
+        - dataset.csv exists at ~
+        - Drop count is 0 or negligible; recorded either way
+        - No zero cells in the role x class matrix
+    Save:   logs/1.5.3_join_report.txt
+    Debug:  Many drops -> filename format mismatch between features and
+            splits. Inspect 3 rows side by side.
+
+
+================================================================================
+SECTION 8 - EDA
+================================================================================
+
+[ ] 8.1  WRITE AND RUN balance.py
+    Type: code + run
+    Design: designtracker-1.6.1
+    Prereq: 7.3
+    Deliver: src/balance.py
+    Content:
+        Load dataset.csv.
+        Print per-class overall counts.
+        Print per-role / per-class count matrix.
+        Compute train-only max/min ratio.
+        Branch: SEVERE (>=3.0), MODERATE (>=1.5), BALANCED.
+        Save class_balance.png.
+        Tee stdout to log.
+    Run:     python src/balance.py
+    Verify:
+        - Printed table
+        - Verdict printed
+        - class_balance.png saved in FIG_DIR
+    Save:    logs/1.6.1_balance_report.txt
+    Decision:
+        SEVERE -> plan class_weight='balanced' in Phase 2 for SVC and RF.
+                  Document in report Section 3.
+
+[ ] 8.2  WRITE AND RUN distributions.py
+    Type: code + run
+    Design: designtracker-1.6.2
+    Prereq: 8.1
+    Deliver: src/distributions.py
+    Content:
+        Filter to role == "train".
+        For each feature: boxplot of feature vs class (1-15).
+        Save one figure per feature.
+        Save one grid overview figure.
+    Run:     python src/distributions.py
+    Verify:
+        - 23 individual figures in FIG_DIR/feature_dist/
+        - 1 grid overview figure
+    Human step:
+        Open the grid. Scan for dead features (flat across all classes).
+        Write a verdict per feature: informative / weak / dead.
+        These verdicts feed Preliminary ML Section 3's feature-quality
+        table.
+
+[ ] 8.3  WRITE AND RUN correlations.py
+    Type: code + run
+    Design: designtracker-1.6.3
+    Prereq: 8.2
+    Deliver: src/correlations.py
+    Content:
+        Feature-feature Pearson heatmap (23 x 23, annotated).
+        Feature-label ANOVA F + mutual information.
+        Flag pairs with |r| >= 0.9.
+        Save corr_heatmap.png and feature_label_relevance.csv.
+        Tee stdout to log.
+    Run:     python src/correlations.py
+    Verify:
+        - corr_heatmap.png in FIG_DIR
+        - feature_label_relevance.csv at ~
+        - Flagged pairs printed
+    Human step:
+        Read heatmap. Classify each flagged pair as:
+            structural  (projection bins; keep)
+            redundant   (drop weaker)
+            fine        (keep both)
+        Write retained_features.txt: one feature per line.
+    Save:    ~\retained_features.txt
+             logs/1.6.3_redundancy_flags.txt
+
+
+================================================================================
+SECTION 9 - PREPROCESSING
+================================================================================
+
+[ ] 9.1  WRITE AND RUN clean.py
+    Type: code + run
+    Design: designtracker-1.7.1 (apply R1 addendum corrections)
+    Prereq: 8.3
+    Deliver: src/clean.py
+    Content:
+        Load dataset.csv and retained_features.txt.
+        Warn on any retained feature missing from the dataset.
+        Split retained set into CLEANABLE and EXCLUDED.
+            EXCLUDED: hole_count, connected_component_count,
+                      all proj_x_*, all proj_y_*
+        Compute IQR thresholds on TRAIN rows only.
+        Apply MIN_IQR_FLOOR = 1e-6.
+        Apply bounds to all roles.
+        Print NaN counts, outlier counts, per-column stats.
+        Handle branch: clip | remove | keep.
+        If clip: assert projections still sum to 1.
+        Tee stdout to log.
+    Run:     python src/clean.py
+    Verify:
+        - logs/1.7.1_cleaning_report.txt exists
+        - NaN count = 0 (expected)
+        - Outlier count per continuous column printed
+        - No IQR-near-zero warnings
+        - No assertion failures
+    Decision:
+        clip    -> re-run with CLIP_OR_REMOVE='clip'; dataset_clean.csv
+        remove  -> same, with 'remove'
+        keep    -> dataset.csv continues unchanged
+    Record:  Method, threshold source (train), affected cell count.
+             All feed Preliminary ML Section 3.
+
+[ ] 9.2  WRITE AND RUN scale.py
+    Type: code + run
+    Design: designtracker-1.7.2
+    Prereq: 9.1
+    Deliver: src/scale.py
+    Content:
+        Load dataset_clean.csv (or dataset.csv).
+        Split by role: train / val / test.
+        Instantiate StandardScaler.
+        Fit on train rows only.
+        Transform all three roles.
+        Save before / after histograms per feature.
+        Optional: persist dataset_{role}_scaled.csv (Design B1, for
+        inspection only).
+        Tee stdout to log.
+    Run:     python src/scale.py
+    Verify:
+        - 23 before / after figures in FIG_DIR/scaling/
+        - logs/1.7.2_scaling_report.txt contains scaler parameters
+        - Scaled ranges roughly [-3, +3]
+    Debug:
+        Scaled range > 5 -> outlier escaped 9.1. Revisit thresholds.
+                          Do not post-hoc correct here.
+
+[ ] 9.3  WRITE pipeline.py
+    Type: code
+    Design: designtracker-1.7.3 (apply R1 addendum docstring rules)
+    Prereq: 9.2
+    Deliver: src/pipeline.py
+    Content:
+        One factory function: build_pipeline(classifier).
+            Returns sklearn Pipeline with two steps:
+                ("scaler", StandardScaler())
+                ("clf",    classifier)
+        Docstring must state:
+            PRECONDITIONS: caller passes numeric-only X; no filename,
+            label, or role columns.
+            Do NOT pass a pre-fitted scaler.
+            Do NOT pass a pre-fitted classifier.
+    Verify: Imports cleanly.
+
+[ ] 9.4  SMOKE TEST pipeline.py
+    Type: run
+    Prereq: 9.3
+    Action: Run pipeline.py with __main__ block that builds a Pipeline
+            around a DummyClassifier and prints it.
+    Verify:
+        - Pipeline shows two steps: scaler, clf
+        - No warnings
+    Debug:  Missing step -> tuple format wrong. Step names must be
+            ("scaler", ...) and ("clf", ...).
+
+
+================================================================================
+SECTION 10 - PRELIMINARY ML REPORT
+================================================================================
+
+[ ] 10.1  DRAFT SECTIONS 1-3
+    Type: writing
+    Design: report template in support materials
+    Prereq: Sections 1 through 9 complete
+    Deliver: repo\IAI\Docs\preliminary_ML_report_v1.docx
+    Source mapping:
+        Section 1 Introduction       <- pre-1.5.1 note; IAI/Project
+                                        relationship
+        Section 2 Problem Statement  <- designtracker-0.4 + SMART framing
+        Section 3 Data Acquisition   <- logs + figures from Sections 3-9
+    Length: max 5 A4.
+    Section 3 checklist:
+        - Class count table (from 4.4)
+        - Class balance figure + verdict (from 8.1)
+        - 5-10 curated feature distribution figures (from 8.2)
+        - Feature verdict table (informative / weak / dead)
+        - Correlation heatmap + relevance table (from 8.3)
+        - Redundancy verdict table (structural / redundant / fine)
+        - Scaling figure + narrative (from 9.2)
+        - Cleaning summary (from 9.1)
+        - Projection invariant note (from 7.1 and 9.2)
+        - NDA statement (features + crops not published)
+
+[ ] 10.2  SUBMIT PRELIMINARY REPORT (wk 40)
+    Type: submission
+    Prereq: 10.1
+    Action: Email to instructor AND peer-review partner team.
+
+[ ] 10.3  PEER REVIEW ANOTHER TEAM (wk 41)
+    Type: manual
+    Prereq: 10.2
+    Action: Use Excel template. Comment on:
+                problem specificity
+                data quality argument (representative / sufficient /
+                balanced / unbiased)
+                feature engineering choices
+                visualisation selection
+            Sharp but constructive.
+
+[ ] 10.4  PROVIDE FEEDBACK VIA EXCEL TEMPLATE
+    Type: submission
+    Prereq: 10.3
+    Action: Send completed Excel sheet to the other team.
+
+[ ] 10.5  REVIEW RECEIVED FEEDBACK
+    Type: manual
+    Prereq: 10.4
+    Action: Read critically. Do not adopt blindly.
+            Per suggestion: accept / modify / reject with reason.
+
+[ ] 10.6  INCORPORATE INTO REPORT / MODEL
+    Type: manual
+    Prereq: 10.5
+    Action: Apply accepted changes. Document decisions.
+            These feed Full ML Report Sections 4-5 later.
+
+
+================================================================================
+SECTION 11 - DEBUG REFERENCE
+================================================================================
+
+Ordered by likelihood. Consult when a Verify line fails.
+
+  1. Empty detections (Section 3)
+     -> Cloth HSV bounds wrong. Sample a real frame.
+     -> MIN_CIRCULARITY too high. Lower to 0.6.
+
+  2. Too many detections (Section 3)
+     -> HSV range too wide. Tighten cloth bounds.
+     -> MIN_BALL_AREA too low. Raise to 3000.
+
+  3. Blurry crops in output (Section 3)
+     -> BLUR_THRESHOLD too low. Raise to 150.
+
+  4. Duplicate crops (Section 3)
+     -> DUP_THRESHOLD too high. Lower to 3.
+     -> Cross-clip false dupes: last-kept-frame not reset per clip.
+
+  5. Low crop count after full run (<2000)
+     -> Revisit Section 3 debug list. Consider FRAME_STRIDE = 3.
+
+  6. Class short at 4.4 audit
+     -> Re-extract with FRAME_STRIDE = 3. Re-sort. Re-audit.
+     -> If still short: document as limitation.
+
+  7. Mask empty or cloth leaking (Section 6)
+     -> V_MIN too high, or S_MAX too low. Tune against a real crop.
+     -> Cloth bleed: re-check [CLOTH_*] bounds.
+
+  8. Numeral not visible as hole in mask (Section 6)
+     -> MORPH_CLOSE_ITER > 0. Set to 0.
+
+  9. NaN in features.csv (Section 7)
+     -> Upstream bug in features.py. Unguarded division or empty list.
+        Fix at source. Do NOT impute in Section 9.
+
+ 10. All features flat in boxplots (Section 8)
+     -> Mask extraction failed. Revisit Section 6 V_MIN, S_MAX.
+     -> Or features.py read the wrong folder.
+
+ 11. Correlation heatmap all red
+     -> Expected for proj_x / proj_y (sum-to-1 constraint). Not a bug.
+        Document as structural in report.
+
+ 12. Scaled ranges wild (>5) (Section 9)
+     -> Outlier escaped clean.py. Revisit thresholds.
+
+ 13. CV accuracy suspiciously high (>99%) (Phase 2, watch for it)
+     -> Pipeline not used in GridSearchCV.
+     -> Or pre-scaled CSVs fed into Pipeline. Double-scaling.
+
+ 14. Phase 3 inference differs from Phase 2 test
+     -> Scaler refitted on different data. Persist and reload Pipeline
+        as one unit with joblib.
+
+
+================================================================================
+END OF DEVTRACKER
+================================================================================
+```
