@@ -20,3 +20,8 @@ do a txt writeup. will be saved as 'IAI-gpt-explains-6vs9_fails.txt'
 
 [1.5.3]
 you have written a good explanatory article without having it mentioned or included in the .txt writeup. include it & redo the .txt writeup
+
+
+ok, let's get started. you'll walk me through each of the subsections. but before you start, first list out all the subsections. for example - 
+0.1.1 install python 3.11 
+use a box like [ ] for each subsection, such that once it's complete, i will tick it with 'x' then proceed to the next. 
