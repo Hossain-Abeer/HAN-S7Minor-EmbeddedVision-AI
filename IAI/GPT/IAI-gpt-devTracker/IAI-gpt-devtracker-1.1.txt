@@ -1,0 +1,37 @@
+**VALID.**
+
+```
+================================================================================
+1.1 VERIFY ENVIRONMENT - PASS
+================================================================================
+
+Venv:        C:\dev\envs\IAI-env  (activated, prompt shows (IAI-env))
+Python:      3.11.9
+
+Core imports OK:
+  cv2       4.11.0
+  sklearn   1.4.2
+  tf        2.15.1
+  numpy     1.26.4
+  pandas    2.1.4
+
+Extended imports OK:
+  matplotlib, seaborn, torch, transformers, imutils, joblib, pytest
+
+Warnings (informational, non-blocking):
+  - oneDNN custom operations on (expected, Intel CPU)
+  - tf.losses.sparse_softmax_cross_entropy deprecation
+    (triggered by import keras; not used by course code)
+
+Notes:
+  - Physical devices check not run this session (CPU-only expected).
+  - All version pins match requirements.txt constraints.
+
+Status: 1.1 COMPLETE.
+Next:   1.2 Verify data paths exist.
+================================================================================
+END OF NOTE
+================================================================================
+```
+
+Ready for 1.2.

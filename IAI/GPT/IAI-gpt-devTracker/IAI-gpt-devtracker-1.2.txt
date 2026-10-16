@@ -1,0 +1,170 @@
+
+================================================================================
+1.2 VERIFY DATA PATHS EXIST - PASS
+================================================================================
+
+PURPOSE
+-------
+Confirm all five clips and all required folders exist before any code
+touches them. Also record the clip-trimming decision made at this point,
+since it affects the effective dataset size that Sections 3-9 will see.
+
+PREREQ
+------
+1.1 (environment verified).
+
+
+================================================================================
+PART A - VERIFICATION
+================================================================================
+
+A1. CLIPS PRESENT
+    Command:
+        Get-ChildItem "D:\HAN\Semester 7 Minor\billiards-game-clips\game1\*.mp4"
+    Result:
+        billiards-game-clip1.mp4   380,063,929 bytes
+        billiards-game-clip2.mp4   255,517,877 bytes
+        billiards-game-clip3.mp4   349,842,843 bytes
+        billiards-game-clip4.mp4   218,920,520 bytes
+        billiards-game-clip5.mp4   249,547,955 bytes
+    Status: PASS (5 of 5 present, filenames match C9 convention)
+
+A2. ROOT FOLDERS PRESENT
+    Command:
+        "unsorted_png","mask_png","logs","figures" | ForEach-Object {
+            "$_ : " + (Test-Path (Join-Path $root $_))
+        }
+    Result:
+        unsorted_png : True
+        mask_png     : True
+        logs         : True
+        figures      : True
+    Status: PASS
+
+A3. CLASS FOLDERS 1-15 PRESENT
+    Command:
+        1..15 | ForEach-Object {
+            "$_ : " + (Test-Path (Join-Path $root "unsorted_png\$_"))
+        }
+    Result: all 15 return True.
+    Status: PASS
+
+OVERALL 1.2: PASS.
+Next: 1.3 Verify repo layout.
+
+
+================================================================================
+PART B - CLIP TRIMMING DECISION (RECORDED HERE)
+================================================================================
+
+CONTEXT
+-------
+Source clips are ~5 minutes each (~250-380 MB). The designtracker 1.2.3
+design assumed ~60 s per clip. Untrimmed, the extraction-and-sort burden
+becomes 5x the budgeted workload, with the manual sort at 1.3.4 becoming
+the dominant cost.
+
+DECISION
+--------
+Each clip is trimmed to 1 minute of content, starting right after the
+break. Originals in game1\ are REPLACED by the trimmed versions (single
+set on disk, not a sibling folder).
+
+RATIONALE
+---------
+  - Aligns clip length with design budget (1.2.3 assumed ~60 s).
+  - Caps raw frames at ~9,000 (5 x 60 x 30 fps), stride-5 gives ~1,800
+    candidate frames, expected yield 3,000-9,000 crops.
+  - Keeps manual sort at 1.3.4 within 1-2 hours instead of 6-15.
+  - Trimming at the break captures maximum ball spread: most classes
+    visible per frame, best OCR yield.
+
+TRIM METHOD (mandatory)
+-----------------------
+Lossless stream copy, no re-encode:
+    ffmpeg -ss <start> -i clipN.mp4 -t 60 -c copy clipN.mp4
+Re-encoding would introduce compression artifacts that degrade the tiny
+numerals - the OCR target. -c copy preserves every original pixel.
+
+REPLACEMENT CONSEQUENCE
+-----------------------
+The 5-minute originals are not retained. If a class under-delivers at
+1.3.5, fallback options in order of preference are:
+    1. Re-run extraction at FRAME_STRIDE = 3
+    2. Loosen BLUR_THRESHOLD / DUP_THRESHOLD
+    3. Document the short class as a limitation
+Re-recording is not a fallback (source gameplay not archived).
+
+
+================================================================================
+PART C - POSITIONAL SHORTCUT RISK (RECORDED HERE)
+================================================================================
+
+WHAT IT IS
+----------
+A model can learn to associate a numeral with WHERE it appears inside
+the crop (fixed spatial position), rather than with the numeral's SHAPE.
+Symptoms:
+  - Near-perfect accuracy on train/val/test
+  - Failure at deployment when the numeral appears elsewhere or rotated
+  - Root cause: Flatten() + Dense() in Keras, or position-carrying
+    features (hole_centroid_*, proj_x_*, proj_y_*) in scikit-learn
+
+WHY THE BREAK-START TRIM RAISES THE RISK
+-----------------------------------------
+Every clip now begins at the same gameplay phase (post-break, balls
+spreading from the rack apex). Early frames of each clip therefore
+contain near-identical rack geometry. If most crops originate from these
+early frames, position correlates with class across the dataset.
+
+MITIGATIONS APPLIED
+-------------------
+1. START OFFSETS WILL BE STAGGERED (to be enforced at trim time).
+   Clip 1: start at the break.
+   Clip 2: break + ~15 s.
+   Clip 3: break + ~30 s.
+   Clip 4: break + ~45 s.
+   Clip 5: break + ~60 s (or as late as the raw clip allows).
+   Effect: the same numeral appears at many different positions across
+   the dataset, so position stops predicting class.
+
+   NOTE: If the trim is executed with all clips starting at the same
+   relative phase (i.e. every clip at "break + 0 s"), this mitigation
+   is lost. Flag in Preliminary ML section 3 either way: state whether
+   staggering was applied or not.
+
+2. FEATURE SELECTION (deferred to 1.6.3).
+   The correlation heatmap and mutual-information table will reveal
+   whether hole_centroid_dx, hole_centroid_dy, and the projection bins
+   carry label-correlated position signal. If they do, drop them from
+   retained_features.txt.
+
+3. AUGMENTATION (deferred to Phase 4).
+   Rotation, translation, and zoom will break any residual spatial
+   correlation the classical features missed. This is required for the
+   DL report regardless; the shortcut concern is an additional reason.
+
+NO LIBRARY-LEVEL FIX
+--------------------
+No setting in scikit-learn, TensorFlow, or Keras disables this. The
+libraries minimise loss on the data provided. The fix lives in data
+design, feature selection, and augmentation. Documented here so that
+Section 10.1 (Preliminary ML section 3) can cite the concern and the
+mitigations coherently.
+
+
+================================================================================
+CHECKLIST STATUS
+================================================================================
+[x] 1.2  Verify data paths exist
+         - 5 clips present
+         - 4 root folders present
+         - 15 class folders present
+         - Trim decision recorded (1 min, post-break, lossless, replace)
+         - Positional shortcut risk recorded with mitigations
+
+[ ] 1.3  Verify repo layout
+
+================================================================================
+END OF NOTE
+================================================================================
