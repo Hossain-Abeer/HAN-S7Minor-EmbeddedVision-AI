@@ -1,0 +1,65 @@
+================================================================================
+2.3a WRITE constants.py - PASS
+================================================================================
+
+PURPOSE
+-------
+Domain facts and fixed data targets. Describes "what the world looks like",
+not how the program runs. Values sourced from 2.1 (locked cloth HSV),
+designtracker-0.4.1 (class count), and change-note 50cropsperclass.
+
+PREREQ
+------
+2.2 (module structure), 2.1 (cloth HSV locked).
+
+
+================================================================================
+PART A - CONTENT
+================================================================================
+
+CLOTH_* values taken verbatim from devtracker-2.1 Part D. No re-derivation.
+
+    NUM_CLASSES          = 15
+    CLASS_IDS            = [1, 2, ..., 15]
+    CLOTH_H_LO           = 80
+    CLOTH_H_HI           = 100
+    CLOTH_S_LO           = 100
+    CLOTH_S_HI           = 255
+    CLOTH_V_LO           = 30
+    CLOTH_V_HI           = 255
+    MIN_CROPS_PER_CLASS  = 50
+    TARGET_TOTAL_CROPS   = 750   (= 50 x 15)
+
+
+================================================================================
+PART B - VERIFICATION
+================================================================================
+
+Command:
+    python -c "import sys; sys.path.insert(0,'src'); import constants as c;
+    print(c.CLOTH_H_LO, c.CLOTH_H_HI, c.CLOTH_S_LO, c.CLOTH_S_HI,
+    c.CLOTH_V_LO, c.CLOTH_V_HI);
+    print(c.NUM_CLASSES, c.CLASS_IDS, c.MIN_CROPS_PER_CLASS,
+    c.TARGET_TOTAL_CROPS)"
+
+Result:
+    80 100 100 255 30 255
+    15 [1..15] 50 750
+
+Status: PASS. All 10 constants print correctly. No import errors.
+Scope extension: devtracker's Verify line only checked CLOTH_H_LO;
+extended to full set to catch typos in H_HI / S_LO / S_HI / V_LO / CLASS_IDS
+before they surface at 3.2 dry run.
+
+
+================================================================================
+CHECKLIST STATUS
+================================================================================
+[x] 2.3a Write constants.py
+    - Sourced from 2.1 Part D (no re-derivation)
+    - 10 constants verified by execution
+[ ] 2.3b Write config.py
+
+================================================================================
+END OF NOTE
+================================================================================
