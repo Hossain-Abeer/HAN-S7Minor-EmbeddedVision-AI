@@ -1,0 +1,146 @@
+================================================================================
+2.1 LOCK CLOTH COLOUR - PASS
+================================================================================
+
+PURPOSE
+-------
+Establish the exact HSV color boundaries for the billiard table cloth. This is a 
+BLOCKING dependency for Section 3 (extraction) and Section 6 (masking). Without 
+locked bounds, the script cannot separate the background (cloth) from the 
+foreground (balls).
+
+PREREQ
+------
+1.2 (data paths verified).
+
+
+================================================================================
+PART A - DESIGN DECISIONS & TEACHING CONCEPTS
+================================================================================
+
+A1. STATIC IMAGE OVER VIDEO
+    Decision: Use a high-quality static image (clothColor_noAspectRatio.png) 
+    rather than extracting a frame from a video.
+    Rationale: Static images are uncompressed, yield perfectly stable pixel 
+    values, and allow for rapid, precision-based sampling via OpenCV mouse 
+    callbacks. The HSV bounds derived from a static render apply identically 
+    to the video frames.
+
+A2. THE CUE BALL PROBLEM (WHY WE DON'T USE PHOTOSHOP)
+    Decision: Leave the cue ball in the image. Ignore it during sampling.
+    Rationale: The cue ball is pure white/grey. In HSV, this means Saturation 
+    (S) is near 0 and Value (V) is near 255. The cloth is highly saturated teal 
+    (S > 160). By locking the cloth's S_LO (Saturation lower bound) to a high 
+    value (e.g., 100), the cue ball mathematically falls outside the cloth mask. 
+    It is automatically rejected by the code. Healing it out in Photoshop would 
+    create unnecessary inconsistencies.
+
+A3. ASPECT RATIO IRRELEVANCE
+    HSV color extraction is a pixel-by-pixel operation. It does not care about 
+    image dimensions, scaling, or aspect ratio. The bounds will work on any 
+    frame size as long as the game's rendering engine does not dynamically 
+    alter the color palette.
+
+A4. HANDLING THE CLOTH GRADIENT
+    The cloth has a bright center and dark shadows near the pockets. 
+    To capture this, a large rectangular bounding box is drawn over the entire 
+    cloth. The script flattens the HSV region and calculates the absolute 
+    minimum and maximum for each channel. The resulting 3D HSV "box" envelops 
+    the entire gradient (from bright center to dark edges).
+
+
+================================================================================
+PART B - HOW THE SAMPLER SCRIPT WORKS (MECHANICS)
+================================================================================
+
+Tool: src/clothColor_sampler.py
+
+B1. TAKING INPUT (Event-Driven Programming)
+    The script uses OpenCV's mouse callback. It waits for events:
+    - EVENT_LBUTTONDOWN: Records starting X,Y. Sets drawing flag.
+    - EVENT_MOUSEMOVE: Draws a temporary rectangle.
+    - EVENT_LBUTTONUP: Records ending X,Y.
+      * If the movement is < 3 pixels, it treats it as a single click.
+      * If the movement is larger, it treats it as a drag (Region of Interest).
+
+B2. PROCESSING (The Math)
+    When a box is drawn, the script slices the HSV image array:
+        roi_hsv = hsv[y_min:y_max, x_min:x_max]
+    It then flattens the 2D image into a 1D list of pixels:
+        flat_roi = roi_hsv.reshape(-1, 3)
+    It uses np.min() and np.max() to find the absolute lowest and highest 
+    values for H, S, and V within that box.
+
+B3. OUTPUT & PIPELINE FEED
+    The script outputs to the terminal (stdout). It produces NO files.
+    The human reads the terminal, applies the "Widening Rules" (Part C), and 
+    manually types the final numbers into src/constants.py. 
+    The pipeline (Section 3) will then import these constants to build the 
+    mask: cv2.inRange(hsv, lower_bounds, upper_bounds).
+
+
+================================================================================
+PART C - WIDENING RULES & FINAL BOUNDS
+================================================================================
+
+Raw bounds from a single image are too strict for video processing due to 
+compression artifacts and lighting variations. The raw data is documented in:
+game1\clothColor_rawPixelValueSet.txt
+
+C1. RAW DATA EXTRACTED
+    - Whole Cloth Box: H(0-174), S(0-255), V(51-255) -> POLLUTED by wood/cue ball.
+    - Cue Ball Box:    H(0-174), S(0-255), V(71-255) -> Mixed with background.
+    - Dark Shadow Box: H(89-92), S(163-255), V(39-77) -> PURE CLOTH.
+
+C2. APPLIED WIDENING RULES (Stored in src/widening_rules.md)
+    1. HUE (H): Center around true cloth (90). Widen by +/- 10.
+       Final: 80 to 100.
+       Reason: Teal is H=90. Safely rejects red/brown rails (H~0 or ~174) and 
+       prevents collisions with other ball hues.
+    2. SATURATION (S): Drop lower bound to 100. Keep upper at 255.
+       Final: 100 to 255.
+       Reason: The cue ball has S=0. Setting S_LO=100 completely rejects white 
+       balls and white stripe bands, while safely capturing the cloth (raw S=163+).
+    3. VALUE (V): Drop lower bound to 30. Keep upper at 255.
+       Final: 30 to 255.
+       Reason: Darkest cloth shadow was V=39. Dropping to 30 captures the 
+       shadows but stops before pure black (V=0), preventing the 8-ball and 
+       pockets from being misclassified as cloth.
+
+
+================================================================================
+PART D - ARCHITECTURE UPDATE (CONSTANTS VS CONFIG)
+================================================================================
+To maintain clean separation of concerns, the codebase is split:
+
+- src/constants.py  : Stores domain facts (CLOTH_H_LO, CLASS_IDS). What the 
+                      world looks like.
+- src/config.py     : Stores programmatic variables (FRAME_STRIDE, paths). 
+                      How the program should run.
+- src/widening_rules.md : Documents the padding math for the report.
+
+FINAL LOCKED VALUES (To be placed in constants.py):
+    CLOTH_H_LO = 80
+    CLOTH_H_HI = 100
+    CLOTH_S_LO = 100
+    CLOTH_S_HI = 255
+    CLOTH_V_LO = 30
+    CLOTH_V_HI = 255
+
+
+================================================================================
+CHECKLIST STATUS
+================================================================================
+[x] 2.1 Lock cloth colour
+    - Method: Static image + OpenCV mouse sampler
+    - Cue Ball: Ignored (mathematically excluded via S_LO)
+    - Gradient: Handled via large regional min/max extraction
+    - Widening: H(80-100), S(100-255), V(30-255)
+    - Documentation: Saved in widening_rules.md
+[ ] 2.2 Create module structure
+[ ] 2.3a Write constants.py
+[ ] 2.3b Write config.py
+
+================================================================================
+END OF NOTE
+================================================================================

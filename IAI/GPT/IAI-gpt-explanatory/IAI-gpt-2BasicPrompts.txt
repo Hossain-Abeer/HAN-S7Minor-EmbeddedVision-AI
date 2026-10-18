@@ -3,6 +3,8 @@ brief. step-by-step walkthrough. wait for me to upload results. validate results
 
 validate. if valid, do a really short .txt writeup. if not, explain & prompt for relevant data that'd be required to get this done.
 
+teach me how to use it, and how it works - how it takes input from me, how it processes (the mechanics of it), what output it produces, how's the output stored or if not stored theb how's the output fed in the pipeline.
+
 
 
 
@@ -21,7 +23,7 @@ i don't understand. explain them first, one by one in terms:
 5. recommendations - relevance to my project, with reasons.
 
 [1.7.3]
-sufficient discussion. do the txt writeup of all that's being discussed
+sufficient discussion. do the txt writeup of all that's being discussed, including all that was explained as a part of teaching me
 
 
 
