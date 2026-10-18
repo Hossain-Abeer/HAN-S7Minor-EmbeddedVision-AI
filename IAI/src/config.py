@@ -14,14 +14,14 @@ MASK_REJECT_LOG = LOGS_DIR + r"\rejects_mask.csv"
 # ===== Extraction (1.2.3 + 1.2.4) =====
 N_CLIPS          = 5
 FRAME_STRIDE     = 5
-BLUR_THRESHOLD   = 100.0
-DUP_THRESHOLD    = 5.0
+BLUR_THRESHOLD   = 50.0
+DUP_THRESHOLD    = 3.0
 DUP_RESIZE_W     = 160
 DUP_RESIZE_H     = 90
 
 # ===== Detection (1.3.1) =====
-MIN_BALL_AREA    = 2000
-MAX_BALL_AREA    = 20000
+MIN_BALL_AREA    = 800
+MAX_BALL_AREA    = 6000
 MIN_CIRCULARITY  = 0.7
 DET_MORPH_KERNEL = 5
 DET_MORPH_OPEN   = 2

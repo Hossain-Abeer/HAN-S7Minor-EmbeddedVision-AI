@@ -1,0 +1,75 @@
+================================================================================
+3.2 DRY RUN ON 100 FRAMES OF CLIP 1 - PASS
+================================================================================
+
+PURPOSE
+-------
+Verify that the extraction pipeline (3.1) runs without crashing, correctly 
+filters frames, detects balls, and writes crops to disk. Tune parameters 
+empirically based on the dry run output.
+
+PREREQ
+------
+3.1 (extract_crop.py written and importable).
+
+================================================================================
+PART A - THE DEBUGGING JOURNEY (TUNING PARAMETERS)
+================================================================================
+
+The dry run was executed multiple times, requiring three distinct parameter 
+fixes in `config.py` to accommodate the Clipchamp-exported video.
+
+ISSUE 1: BLUR FILTER REJECTED EVERYTHING
+  - Result: kept=0, crops=0.
+  - Diagnosis: The Laplacian Variance (sharpness) of the first frame was 97.73. 
+    The default `BLUR_THRESHOLD` was 100.0. Clipchamp's re-encoding slightly 
+    softened the pixels, falling below the threshold.
+  - Fix: Changed `BLUR_THRESHOLD = 50.0` in config.py. (Still high enough to 
+    reject genuine blur, but accepts the Clipchamp export).
+
+ISSUE 2: DUPLICATE FILTER REJECTED STATIC SCENES
+  - Result: kept=1, crops=0.
+  - Diagnosis: The log showed metric_value hovering around 3.3. The 
+    `DUP_THRESHOLD` was 5.0. The video started with a completely static scene 
+    (before the break), so the pixel difference was too low.
+  - Fix: Retrimmed the video in Clipchamp to start *after* the break (balls 
+    moving). Lowered `DUP_THRESHOLD = 3.0` in config.py to catch slow-moving 
+    balls while still rejecting true duplicates.
+
+ISSUE 3: NO BALLS DETECTED
+  - Result: kept=1, crops=0. (The surviving frame yielded nothing).
+  - Diagnosis: As detailed in 3.1 Part B, `RETR_EXTERNAL` caused OpenCV to 
+    ignore the balls. 
+  - Fix: Changed to `RETR_LIST` in the Python code. 
+  - Follow-up: Once contours were found, the balls had an Area of ~1796. The 
+    config had `MIN_BALL_AREA = 2000`. 
+  - Fix: Updated `MIN_BALL_AREA = 800` and `MAX_BALL_AREA = 6000` in config.py.
+
+================================================================================
+PART B - FINAL RESULTS
+================================================================================
+
+After applying the fixes above, the dry run (100 frames, Clip 1) was executed 
+using `src/extract_dry_run.ps1`.
+
+Command Output:
+  [INFO] Processing clip 1...
+  [INFO] clip 1: frames=100 kept=4 crops=38
+  [DONE] total kept frames=4 total crops=38
+
+VERIFICATION:
+  - Script completed without crash.
+  - 4 frames passed the blur and duplicate gates.
+  - 38 crops were successfully written to `unsorted_png`.
+  - RAM stayed flat (no memory leaks).
+  - Visual check of the crops confirms they contain padded, circular billiard 
+    balls with visible numerals.
+
+================================================================================
+CHECKLIST STATUS
+================================================================================
+[x] 3.2 Dry run on 100 frames of Clip 1
+    - Script runs successfully.
+    - Parameters tuned (BLUR_THRESHOLD=50, DUP_THRESHOLD=3.0, MIN_BALL_AREA=800).
+    - Crops generated and visually verified.
+[ ] 3.3 Full run on all 5 clips (Requires Clips 2-5 to be trimmed and cropped in Clipchamp first)

@@ -1,0 +1,79 @@
+================================================================================
+3.1 WRITE extract_crop.py - PASS
+================================================================================
+
+PURPOSE
+-------
+Write the fused extraction script that performs frame extraction (1.2.3), 
+filtering (1.2.4), ball detection (1.3.1), and cropping (1.3.2) in a single 
+runtime loop. Frames never touch disk; only crops do.
+
+PREREQ
+------
+2.3b (config.py written), 2.3a (constants.py written).
+
+================================================================================
+PART A - CONTENT & ARCHITECTURE
+================================================================================
+
+The script `src/extract_crop.py` was created. It imports parameters from 
+`config.py` and domain facts (HSV bounds, class counts) from `constants.py`.
+
+Key functions implemented:
+  - passes_filter(frame, clip_id, frame_idx): Applies the blur gate (Laplacian 
+    variance) and duplicate gate (mean absolute difference to the last kept frame).
+  - detect_balls(frame): Uses the Cloth HSV mask, inverts it to isolate 
+    foreground, applies morphology (open/close), and extracts contours. Filters 
+    contours by area and circularity.
+  - crop_and_save(frame, regions, clip_id, frame_idx): Crops a padded region 
+    around each detected ball and writes it to `unsorted_png`.
+  - main(): Loops through clips, resets `_last_kept_frame` per clip to prevent 
+    cross-clip false duplicates, and respects dry-run environment variables 
+    (`EVML_DRY_RUN_CLIPS` and `EVML_DRY_RUN_FRAMES`).
+
+================================================================================
+PART B - DEBUGGING & CRITICAL BUG FIX
+================================================================================
+
+During the initial execution, `detect_balls` returned 0 crops. A diagnostic 
+script (`src/debug_mask.py`) was created to visualize the mask and print contour 
+statistics.
+
+THE BUG:
+The diagnostic revealed exactly one massive contour: 
+  Contour 0: Area=2070601.0, WxH=1920x1080
+
+This happened because `cv2.findContours` was originally called with 
+`cv2.RETR_EXTERNAL`. This flag only retrieves the extreme outer contours. 
+Because the table is surrounded by a white border (the UI), `RETR_EXTERNAL` 
+treated the entire screen border as the only object and ignored the balls 
+(which were enclosed "holes" inside the border).
+
+THE FIX:
+Changed `cv2.RETR_EXTERNAL` to `cv2.RETR_LIST` in `extract_crop.py`. This 
+retrieves ALL contours. The area and circularity filters subsequently ignore 
+the giant screen border and keep only the round billiard balls.
+
+================================================================================
+PART C - NEW FILES CREATED
+================================================================================
+
+1. src/debug_mask.py
+   - Purpose: Saves `debug_mask.png` to the `logs/` folder and prints area, 
+     circularity, and bounding box stats for the top 10 contours.
+   - Helps visualize what the HSV mask is seeing.
+
+2. src/extract_dry_run.ps1
+   - Purpose: A convenience PowerShell script that sets the dry-run environment 
+     variables, runs `python src/extract_crop.py`, and cleans up the env vars 
+     afterward.
+
+================================================================================
+CHECKLIST STATUS
+================================================================================
+[x] 3.1 Write extract_crop.py
+    - Script written and imports cleanly.
+    - Uses RETR_LIST for contour extraction to find balls inside the table.
+    - Env vars implemented for safe dry runs.
+    - Diagnostic script and PowerShell runner created.
+[ ] 3.2 Dry run on 100 frames of Clip 1
