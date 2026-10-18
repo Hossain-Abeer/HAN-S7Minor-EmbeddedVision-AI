@@ -8,6 +8,16 @@ validate. if valid, do a really short .txt writeup. if not, explain & prompt for
 teach me how to use it, and how it works - how it takes input from me, how it processes (the mechanics of it), what output it produces, how's the output stored or if not stored theb how's the output fed in the pipeline.
 
 
+brief.
+position in supply chain. 
+input, process & output.
+mechanism of how this particular component works. 
+step-by-step walkthrough.
+provide the relevant skeletal code with [params] (this i will copy-paste), with recommended values that I should put in as the params. 
+wait for me to upload results. validate results.
+
+
+
 
 
 
