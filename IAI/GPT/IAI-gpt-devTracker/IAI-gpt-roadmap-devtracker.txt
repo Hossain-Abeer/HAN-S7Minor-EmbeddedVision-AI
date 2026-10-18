@@ -114,7 +114,7 @@ SECTION 2 - FOUNDATION
              Pale cloth (low S) -> may overlap numeral white. Flag now,
              expect tighter V_MIN in Section 6.
 
-[ ] 2.2  CREATE MODULE STRUCTURE
+[x] 2.2  CREATE MODULE STRUCTURE
     Type: code
     Design: none (standard layout)
     Prereq: 2.1
