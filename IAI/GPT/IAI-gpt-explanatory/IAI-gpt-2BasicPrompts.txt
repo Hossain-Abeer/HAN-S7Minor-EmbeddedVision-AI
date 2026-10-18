@@ -1,6 +1,8 @@
 [1.1]
 brief. step-by-step walkthrough. wait for me to upload results. validate results.
 
+if valid, do a really short .txt writeup
+
 validate. if valid, do a really short .txt writeup. if not, explain & prompt for relevant data that'd be required to get this done.
 
 teach me how to use it, and how it works - how it takes input from me, how it processes (the mechanics of it), what output it produces, how's the output stored or if not stored theb how's the output fed in the pipeline.
@@ -37,3 +39,24 @@ you have written a good explanatory article without having it mentioned or inclu
 ok, let's get started. you'll walk me through each of the subsections. but before you start, first list out all the subsections. for example - 
 0.1.1 install python 3.11 
 use a box like [ ] for each subsection, such that once it's complete, i will tick it with 'x' then proceed to the next. 
+
+
+
+
+
+
+
+
+
+
+
+
+ here are all the files. express your understanding. now, mention:
+1. overview of the entire module.
+2. a very short summary of each of the week. 
+3. objectives of the exercises.
+4. assessment. it should be in terms of two periods - period 1 has two reports and quizes as part of its assessment, the preliminary ML report & the full ML report. period 2 has the DL report.. this is the root structure of the module. 
+5. class schedule
+6. phases (starting with phase 0 software installation)
+
+Then propose a roadmap for me, mentioning the sequence of events, and then anything else you'd mention additionally

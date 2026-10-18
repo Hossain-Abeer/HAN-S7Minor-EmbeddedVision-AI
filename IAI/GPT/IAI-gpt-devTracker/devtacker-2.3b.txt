@@ -1,0 +1,70 @@
+================================================================================
+2.3b WRITE config.py - PASS
+================================================================================
+
+PURPOSE
+-------
+Program parameters. Describes "how the program runs", not what the world
+looks like (that is constants.py).
+
+PREREQ
+------
+2.2 (module structure), 2.3a (constants.py).
+
+
+================================================================================
+PART A - CONTENT
+================================================================================
+
+Five groups, sourced from designtracker-1.2.3, 1.2.4, 1.3.1, 1.3.2, 1.5.1.
+
+  Paths        DATA_ROOT, CLIP_DIR, CROP_ROOT (= unsorted_png),
+               MASK_ROOT, LOGS_DIR, FIGURES_DIR, SPLITS_CSV,
+               FEATURES_CSV, DATASET_CSV, REJECT_LOG, MASK_REJECT_LOG
+  Extraction   N_CLIPS=5, FRAME_STRIDE=5, BLUR_THRESHOLD=100.0,
+               DUP_THRESHOLD=5.0, DUP_RESIZE_W=160, DUP_RESIZE_H=90
+  Detection    MIN_BALL_AREA=2000, MAX_BALL_AREA=20000,
+               MIN_CIRCULARITY=0.7, DET_MORPH_KERNEL=5,
+               DET_MORPH_OPEN=2, DET_MORPH_CLOSE=2
+  Crop         PADDING_PCT=0.15
+  Mask         MASK_S_MAX=60, MASK_V_MIN=180, MASK_MORPH_KERNEL=3,
+               MASK_MORPH_OPEN=1, MASK_MORPH_CLOSE=0, MIN_MASK_AREA=30
+
+Naming rule: DET_* vs MASK_* prefixes keep the two morphology stages
+separate. Cloth HSV lives in constants.py, not duplicated here.
+CROP_ROOT points to unsorted_png (per 1.5.2 correction).
+
+
+================================================================================
+PART B - VERIFICATION
+================================================================================
+
+Command:
+    python -c "import sys; sys.path.insert(0,'src'); import config as c;
+    print(c.FRAME_STRIDE, c.BLUR_THRESHOLD, c.MIN_BALL_AREA,
+    c.PADDING_PCT, c.MASK_V_MIN, c.CROP_ROOT)"
+
+Result:
+    5 100.0 2000 0.15 180
+    D:\HAN\Semester 7 Minor\billiards-game-clips\unsorted_png
+
+Status: PASS. Import clean. Six representative constants span all five
+groups; FRAME_STRIDE (devtracker's explicit check) confirms.
+
+
+================================================================================
+CHECKLIST STATUS
+================================================================================
+[x] 2.3b Write config.py
+    - 5 groups present
+    - DET_* / MASK_* prefix separation applied
+    - CROP_ROOT = unsorted_png
+    - Import + print verified
+
+SECTION 2 (FOUNDATION) COMPLETE.
+
+[ ] 3.1  Write extract_crop.py
+
+================================================================================
+END OF NOTE
+================================================================================
