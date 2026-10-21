@@ -1,0 +1,109 @@
+================================================================================
+DEVTRACKER PRE-3.3: EXTRACTION PIPELINE TUNING & MOTION GATING
+================================================================================
+
+PURPOSE
+-------
+Document the debugging, architectural pivot, and parameter tuning that 
+occurred during Steps [3.1] (Write extract_crop.py) and [3.2] (Dry Run). 
+This captures the journey from the original devtracker specification to 
+the final, stable pipeline ready for the [3.3] Full Run.
+
+================================================================================
+1. WHAT REQUIRED THE CHANGES
+================================================================================
+
+During the initial implementation of 3.1 and execution of 3.2, four major 
+issues surfaced:
+
+A. THE CONTOUR HIERARCHY BUG (3.1)
+   OpenCV's findContours was originally specified with `cv2.RETR_EXTERNAL`. 
+   Because the billiard game UI has a bright white border framing the table, 
+   OpenCV treated the entire screen border as the only external object. 
+   The actual balls were treated as interior "holes" and ignored.
+
+B. VIDEO COMPRESSION VS. BLUR FILTER (3.2)
+   The original `BLUR_THRESHOLD` was too high (100.0). Clipchamp's MP4 
+   compression inherently softens the video slightly, causing the Laplacian 
+   variance to hover around 78-86. The filter was rejecting 100% of frames.
+
+C. STATIC SCENES VS. DUPLICATE FILTER (3.2)
+   During aiming/planning phases, the scene is visually static. The duplicate 
+   filter (`DUP_THRESHOLD`) was rejecting these, but because the original 
+   `FRAME_STRIDE` was high, the script would skip the actual ball movement 
+   entirely.
+
+D. MANUAL TRIMMING BURDEN (Architectural Pivot)
+   Manually trimming the 5-minute clips in Clipchamp to find 1-minute 
+   windows of "action" was tedious. We needed a script-level solution to 
+   automatically ignore the static aiming phases and only extract frames 
+   when the balls had settled after a shot.
+
+================================================================================
+2. WHAT CHANGES WERE IMPLEMENTED
+================================================================================
+
+A. CONTOUR FIX (Code)
+   Changed `cv2.RETR_EXTERNAL` to `cv2.RETR_LIST` in `detect_balls()`. This 
+   retrieves all contours, allowing the area/circularity filters to keep the 
+   round balls and ignore the giant UI border.
+
+B. AREA BOUNDS UPDATE (config.py)
+   `MIN_BALL_AREA` lowered to 800 and `MAX_BALL_AREA` raised to 6000 to 
+   accommodate the actual pixel footprint of the balls in 1080p.
+
+C. MOTION GATE IMPLEMENTATION (Code)
+   Rewrote the `main()` loop in `extract_crop.py` to introduce a state machine.
+   - Added a `MOTION_THRESHOLD` to `config.py`.
+   - The script now downsamples consecutive frames to 160x90 grayscale and 
+     calculates the mean pixel difference (`motion_diff`).
+   - The script waits for motion to drop below `MOTION_THRESHOLD`, then waits 
+     for 3 consecutive frames to ensure motion blur has cleared, and ONLY 
+     THEN triggers `passes_filter()`.
+   - Set `FRAME_STRIDE = 1` so the motion detector doesn't miss the exact 
+     moment of settling.
+
+D. FINAL THRESHOLD TUNING (config.py)
+   After iterative dry runs, the following values were locked in:
+   - `BLUR_THRESHOLD = 75.0` (Accepts compressed but sharp video; rejects active roll).
+   - `DUP_THRESHOLD = 3.0` (Catches static aiming pauses; allows balls moving to new positions).
+   - `MOTION_THRESHOLD = 4.0` (Reliably detects when balls stop moving).
+
+================================================================================
+3. YIELDS OF THE CHANGE (The Tuning Journey)
+================================================================================
+
+The iterative tuning on a 100-frame dry run of Clip 1 produced the following:
+
+- Run 1 (Original Params, RETR_EXTERNAL): 0 crops.
+- Run 2 (RETR_LIST fix): 38 crops / 4 frames. (Visuals blurry).
+- Run 3 (Motion Gate added, BLUR 87.0, DUP 5.0): 10 crops / 1 frame. 
+  (Over-filtered; blur gate rejected 80% of the clip).
+- Run 4 (BLUR 70.0, DUP 1.5): 34 crops / 3 frames.
+- Run 5 (BLUR 75.0, DUP 3.0, Motion 4.0): 108 crops / 8 frames. 
+  [SELECTED AS FINAL]
+
+VISUAL VERIFICATION
+The crops generated in Run 5 were manually inspected via the Windows Explorer 
+screenshot. The numerals (e.g., 8, 11, 3) are crisp, well-lit, and centered.
+
+NOTE ON PERCEIVED DUPLICATES
+Because the motion gate extracts the frame AFTER the balls settle, if the 
+8-ball was not pocketed between shots, it will appear in multiple crops. 
+This is EXPECTED and CORRECT behavior. It provides the model with varying 
+lighting and positional contexts for the same numeral. During the Step 4.2 
+Manual Audit, the user will keep the best 50 and cull the rest.
+
+================================================================================
+4. FINAL STATE (READY FOR 3.3)
+================================================================================
+
+- `extract_crop.py` is fully functional, utilizing motion-gating.
+- `config.py` parameters are locked.
+- The pipeline is now robust against static HUDs, video compression blur, 
+  and the white UI border.
+- The script is ready to process all 5 clips in the [3.3] Full Run.
+
+================================================================================
+END OF NOTE
+================================================================================

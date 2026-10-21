@@ -114,7 +114,6 @@ def main():
     if os.path.exists(config.REJECT_LOG):
         os.remove(config.REJECT_LOG)
 
-    # Dry-run caps for Step 3.2
     dry_frames = int(os.environ.get("EVML_DRY_RUN_FRAMES", "0"))
     dry_clips  = int(os.environ.get("EVML_DRY_RUN_CLIPS",  "0"))
 
@@ -137,8 +136,12 @@ def main():
             print(f"[WARN] cannot open clip {clip_id}")
             continue
 
-        # CRITICAL: Reset per-clip to prevent false duplicates across clips
         _last_kept_frame = None
+        
+        # State machine variables
+        prev_gray_small = None
+        is_moving = True # Assume moving at start
+        frames_since_move = 0
 
         frame_idx = 0
         kept = 0
@@ -151,11 +154,32 @@ def main():
             if dry_frames and frame_idx >= dry_frames:
                 break
 
+            # 1. Calculate Motion (Downscaled for speed and robustness)
+            gray_small = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (160, 90))
+            
+            if prev_gray_small is not None:
+                motion_diff = cv2.absdiff(gray_small, prev_gray_small).mean()
+            else:
+                motion_diff = 999.0
+                
+            prev_gray_small = gray_small
+
+            # 2. Update Motion State
+            if motion_diff > config.MOTION_THRESHOLD:
+                frames_since_move = 0
+            else:
+                frames_since_move += 1
+
+            # 3. Trigger Extraction
             if frame_idx % config.FRAME_STRIDE == 0:
-                if passes_filter(frame, clip_id, frame_idx):
-                    kept += 1
-                    regions = detect_balls(frame)
-                    crops += crop_and_save(frame, regions, clip_id, frame_idx)
+                # We check if the scene has been still for AT LEAST 3 frames
+                if frames_since_move >= 3:
+                    # passes_filter will reject if it's a duplicate (cooldown)
+                    # or if it's blurry.
+                    if passes_filter(frame, clip_id, frame_idx):
+                        kept += 1
+                        regions = detect_balls(frame)
+                        crops += crop_and_save(frame, regions, clip_id, frame_idx)
 
             frame_idx += 1
 

@@ -2,7 +2,7 @@
 # Quick test of the extraction pipeline on 100 frames of Clip 1
 
 $env:EVML_DRY_RUN_CLIPS="1"
-$env:EVML_DRY_RUN_FRAMES="100"
+$env:EVML_DRY_RUN_FRAMES="10000"
 
 python src/extract_crop.py
 

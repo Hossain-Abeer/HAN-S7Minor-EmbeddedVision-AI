@@ -140,7 +140,7 @@ SECTION 2 - FOUNDATION
     Verify:  ls repo/IAI/src shows the layout.
     Debug:   None.
 
-[s] 2.3a WRITE constants.py
+[x] 2.3a WRITE constants.py
     Type: code
     Design: parameter blocks from designtracker-0.1.1 (C3), 1.2.1
     Prereq: 2.2, 2.1 (requires final HSV bounds derived in 2.1)
@@ -186,7 +186,7 @@ Design note 1.2.3 fused four design steps into one runtime script.
 Designtracker steps 1.2.3, 1.2.4, 1.3.1, 1.3.2 all execute in this single
 script. Frames never touch disk; only crops do.
 
-[ ] 3.1  WRITE extract_crop.py
+[x] 3.1  WRITE extract_crop.py
     Type: code
     Design: designtracker-1.2.3, 1.2.4, 1.3.1, 1.3.2 (read in this order)
     Prereq: 2.3
@@ -211,7 +211,7 @@ script. Frames never touch disk; only crops do.
              'src'); import extract_crop"
     Debug:   ImportError -> missing import in config or wrong path.
 
-[ ] 3.2  DRY RUN ON 100 FRAMES OF CLIP 1
+[x] 3.2  DRY RUN ON 100 FRAMES OF CLIP 1
     Type: run
     Design: verifies 3.1
     Prereq: 3.1
