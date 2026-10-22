@@ -1,0 +1,374 @@
+IAI-gpt-devtracker-issue-pre-4.2-CnOCR_corrupts_environment
+
+
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> python -c "from cnocr import CnOcr; print('ok')"
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.4.6 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "<string>", line 1, in <module>
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnocr\__init__.py", line 24, in <module>
+    from cnstd.consts import AVAILABLE_MODELS as DET_AVAILABLE_MODELS
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\__init__.py", line 24, in <module>
+    from .detector import Detector
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\detector.py", line 31, in <module>
+    from .consts import MODEL_VERSION, AVAILABLE_MODELS, DOWNLOAD_SOURCE
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\consts.py", line 27, in <module>
+    from torchvision.models import (
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torchvision\__init__.py", line 5, in <module>
+    import torch
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\__init__.py", line 1477, in <module>
+    from .functional import *  # noqa: F403
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\functional.py", line 9, in <module>
+    import torch.nn.functional as F
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\nn\__init__.py", line 1, in <module>
+    from .modules import *  # noqa: F403
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\nn\modules\__init__.py", line 35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\nn\modules\transformer.py", line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\dev\envs\IAI-env\Lib\site-packages\torch\nn\modules\transformer.py:20: UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at ..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnocr\__init__.py", line 24, in <module>
+    from cnstd.consts import AVAILABLE_MODELS as DET_AVAILABLE_MODELS
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\__init__.py", line 25, in <module>
+    from .ppocr import PPDetector
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\ppocr\__init__.py", line 23, in <module>
+    from .rapid_detector import RapidDetector
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\ppocr\rapid_detector.py", line 33, in <module>
+    from rapidocr.utils.model_resolver import resolve_model_key
+ImportError: cannot import name 'resolve_model_key' from 'rapidocr.utils.model_resolver' (C:\dev\envs\IAI-env\Lib\site-packages\rapidocr\utils\model_resolver.py)
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip show cnocr
+Name: cnocr
+Version: 2.3.3
+Summary: Python3 package for Chinese/English OCR, with small pretrained models
+Home-page: https://github.com/breezedeus/cnocr
+Author: breezedeus
+Author-email: breezedeus@163.com
+License: Apache 2.0
+Location: C:\dev\envs\IAI-env\Lib\site-packages
+Requires: click, cnstd, numpy, onnx, pillow, pytorch-lightning, rapidocr, torch, torchmetrics, torchvision, tqdm, wandb
+Required-by:
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> python -c "from cnocr import CnOcr; print('ok')"
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.4.6 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "<string>", line 1, in <module>
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnocr\__init__.py", line 24, in <module>
+    from cnstd.consts import AVAILABLE_MODELS as DET_AVAILABLE_MODELS
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\__init__.py", line 24, in <module>
+    from .detector import Detector
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\detector.py", line 31, in <module>
+    from .consts import MODEL_VERSION, AVAILABLE_MODELS, DOWNLOAD_SOURCE
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\consts.py", line 27, in <module>
+    from torchvision.models import (
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torchvision\__init__.py", line 5, in <module>
+    import torch
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\__init__.py", line 1477, in <module>
+    from .functional import *  # noqa: F403
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\functional.py", line 9, in <module>
+    import torch.nn.functional as F
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\nn\__init__.py", line 1, in <module>
+    from .modules import *  # noqa: F403
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\nn\modules\__init__.py", line 35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\dev\envs\IAI-env\Lib\site-packages\torch\nn\modules\transformer.py", line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\dev\envs\IAI-env\Lib\site-packages\torch\nn\modules\transformer.py:20: UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at ..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnocr\__init__.py", line 24, in <module>
+    from cnstd.consts import AVAILABLE_MODELS as DET_AVAILABLE_MODELS
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\__init__.py", line 25, in <module>
+    from .ppocr import PPDetector
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\ppocr\__init__.py", line 23, in <module>
+    from .rapid_detector import RapidDetector
+  File "C:\dev\envs\IAI-env\Lib\site-packages\cnstd\ppocr\rapid_detector.py", line 33, in <module>
+    from rapidocr.utils.model_resolver import resolve_model_key
+ImportError: cannot import name 'resolve_model_key' from 'rapidocr.utils.model_resolver' (C:\dev\envs\IAI-env\Lib\site-packages\rapidocr\utils\model_resolver.py)
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip uninstall -y cnocr cnstd rapidocr pytorch-lightning torchmetrics wandb onnx
+Found existing installation: cnocr 2.3.3
+Uninstalling cnocr-2.3.3:
+  Successfully uninstalled cnocr-2.3.3
+Found existing installation: cnstd 1.2.8
+Uninstalling cnstd-1.2.8:
+  Successfully uninstalled cnstd-1.2.8
+Found existing installation: rapidocr 3.10.0
+Uninstalling rapidocr-3.10.0:
+  Successfully uninstalled rapidocr-3.10.0
+Found existing installation: pytorch-lightning 2.6.6
+Uninstalling pytorch-lightning-2.6.6:
+  Successfully uninstalled pytorch-lightning-2.6.6
+Found existing installation: torchmetrics 1.9.0
+Uninstalling torchmetrics-1.9.0:
+  Successfully uninstalled torchmetrics-1.9.0
+Found existing installation: wandb 0.31.0
+Uninstalling wandb-0.31.0:
+  Successfully uninstalled wandb-0.31.0
+Found existing installation: onnx 1.23.2
+Uninstalling onnx-1.23.2:
+  Successfully uninstalled onnx-1.23.2
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip show numpy torch torchvision tensorflow scikit-learn
+Name: numpy
+Version: 2.4.6
+Summary: Fundamental package for array computing in Python
+Home-page: https://numpy.org
+Author: Travis E. Oliphant et al.
+Author-email:
+License-Expression: BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+Location: C:\dev\envs\IAI-env\Lib\site-packages
+Requires:
+Required-by: Augmentor, contourpy, h5py, matplotlib, ml_dtypes, opencv-python, opencv-python-headless, pandas, scikit-learn, scipy, seaborn, shapely, tensorboard, tensorflow-hub, tensorflow-intel, torchvision, transformers, ultralytics, ultralytics-thop
+---
+Name: torch
+Version: 2.2.2
+Summary: Tensors and Dynamic neural networks in Python with strong GPU acceleration
+Home-page: https://pytorch.org/
+Author: PyTorch Team
+Author-email: packages@pytorch.org
+License: BSD-3
+Location: C:\dev\envs\IAI-env\Lib\site-packages
+Requires: filelock, fsspec, jinja2, networkx, sympy, typing-extensions
+Required-by: torchvision, ultralytics, ultralytics-thop
+---
+Name: torchvision
+Version: 0.17.2
+Summary: image and video datasets and models for torch deep learning
+Home-page: https://github.com/pytorch/vision
+Author: PyTorch Core Team
+Author-email: soumith@pytorch.org
+License: BSD
+Location: C:\dev\envs\IAI-env\Lib\site-packages
+Requires: numpy, pillow, torch
+Required-by: ultralytics
+---
+Name: tensorflow
+Version: 2.15.1
+Summary: TensorFlow is an open source machine learning framework for everyone.
+Home-page: https://www.tensorflow.org/
+Author: Google Inc.
+Author-email: packages@tensorflow.org
+License: Apache 2.0
+Location: C:\dev\envs\IAI-env\Lib\site-packages
+Requires: tensorflow-intel
+Required-by: tf_keras
+---
+Name: scikit-learn
+Version: 1.4.2
+Summary: A set of python modules for machine learning and data mining
+Home-page: https://scikit-learn.org
+Author:
+Author-email:
+License: new BSD
+Location: C:\dev\envs\IAI-env\Lib\site-packages
+Requires: joblib, numpy, scipy, threadpoolctl
+Required-by: scikeras
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip install "numpy<2.0" "tensorflow~=2.15.0" "torch~=2.2.0" "torchvision~=0.17.0" "scikit-learn<1.5"
+Collecting numpy<2.0
+  Using cached numpy-1.26.4-cp311-cp311-win_amd64.whl.metadata (61 kB)
+Requirement already satisfied: tensorflow~=2.15.0 in C:\dev\envs\IAI-env\Lib\site-packages (2.15.1)
+Requirement already satisfied: torch~=2.2.0 in C:\dev\envs\IAI-env\Lib\site-packages (2.2.2)
+Requirement already satisfied: torchvision~=0.17.0 in C:\dev\envs\IAI-env\Lib\site-packages (0.17.2)
+Requirement already satisfied: scikit-learn<1.5 in C:\dev\envs\IAI-env\Lib\site-packages (1.4.2)
+Requirement already satisfied: tensorflow-intel==2.15.1 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow~=2.15.0) (2.15.1)
+Requirement already satisfied: absl-py>=1.0.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2.5.0)
+Requirement already satisfied: astunparse>=1.6.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (1.6.3)
+Requirement already satisfied: flatbuffers>=23.5.26 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (25.12.19)
+Requirement already satisfied: gast!=0.5.0,!=0.5.1,!=0.5.2,>=0.2.1 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (0.7.0)
+Requirement already satisfied: google-pasta>=0.1.1 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (0.2.0)
+Requirement already satisfied: h5py>=2.9.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (3.16.0)
+Requirement already satisfied: libclang>=13.0.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (18.1.1)
+Collecting ml-dtypes~=0.3.1 (from tensorflow-intel==2.15.1->tensorflow~=2.15.0)
+  Using cached ml_dtypes-0.3.2-cp311-cp311-win_amd64.whl.metadata (20 kB)
+Requirement already satisfied: opt-einsum>=2.3.2 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (3.4.0)
+Requirement already satisfied: packaging in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (26.3)
+Collecting protobuf!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<5.0.0dev,>=3.20.3 (from tensorflow-intel==2.15.1->tensorflow~=2.15.0)
+  Using cached protobuf-4.25.9-cp310-abi3-win_amd64.whl.metadata (541 bytes)
+Requirement already satisfied: setuptools in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (65.5.0)
+Requirement already satisfied: six>=1.12.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (1.17.0)
+Requirement already satisfied: termcolor>=1.1.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (3.3.0)
+Requirement already satisfied: typing-extensions>=3.6.6 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (4.16.0)
+Requirement already satisfied: wrapt<1.15,>=1.11.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (1.14.2)
+Requirement already satisfied: tensorflow-io-gcs-filesystem>=0.23.1 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (0.31.0)
+Requirement already satisfied: grpcio<2.0,>=1.24.3 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (1.84.0)
+Requirement already satisfied: tensorboard<2.16,>=2.15 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2.15.2)
+Requirement already satisfied: tensorflow-estimator<2.16,>=2.15.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2.15.0)
+Requirement already satisfied: keras<2.16,>=2.15.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2.15.0)
+Requirement already satisfied: filelock in C:\dev\envs\IAI-env\Lib\site-packages (from torch~=2.2.0) (4.0.10)
+Requirement already satisfied: sympy in C:\dev\envs\IAI-env\Lib\site-packages (from torch~=2.2.0) (1.14.0)
+Requirement already satisfied: networkx in C:\dev\envs\IAI-env\Lib\site-packages (from torch~=2.2.0) (3.6.1)
+Requirement already satisfied: jinja2 in C:\dev\envs\IAI-env\Lib\site-packages (from torch~=2.2.0) (3.1.6)
+Requirement already satisfied: fsspec in C:\dev\envs\IAI-env\Lib\site-packages (from torch~=2.2.0) (2026.9.0)
+Requirement already satisfied: pillow!=8.3.*,>=5.3.0 in C:\dev\envs\IAI-env\Lib\site-packages (from torchvision~=0.17.0) (12.3.0)
+Requirement already satisfied: scipy>=1.6.0 in C:\dev\envs\IAI-env\Lib\site-packages (from scikit-learn<1.5) (1.17.1)
+Requirement already satisfied: joblib>=1.2.0 in C:\dev\envs\IAI-env\Lib\site-packages (from scikit-learn<1.5) (1.6.0)
+Requirement already satisfied: threadpoolctl>=2.0.0 in C:\dev\envs\IAI-env\Lib\site-packages (from scikit-learn<1.5) (3.7.0)
+Requirement already satisfied: google-auth<3,>=1.6.3 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2.59.1)
+Requirement already satisfied: google-auth-oauthlib<2,>=0.5 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (1.5.0)
+Requirement already satisfied: markdown>=2.6.8 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (3.11)
+Requirement already satisfied: requests<3,>=2.21.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2.34.2)
+Requirement already satisfied: tensorboard-data-server<0.8.0,>=0.7.0 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (0.7.2)
+Requirement already satisfied: werkzeug>=1.0.1 in C:\dev\envs\IAI-env\Lib\site-packages (from tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (3.1.9)
+Requirement already satisfied: pyasn1-modules>=0.2.1 in C:\dev\envs\IAI-env\Lib\site-packages (from google-auth<3,>=1.6.3->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (0.4.2)
+Requirement already satisfied: cryptography>=38.0.3 in C:\dev\envs\IAI-env\Lib\site-packages (from google-auth<3,>=1.6.3->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (50.0.2)
+Requirement already satisfied: requests-oauthlib>=0.7.0 in C:\dev\envs\IAI-env\Lib\site-packages (from google-auth-oauthlib<2,>=0.5->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2.0.0)
+Requirement already satisfied: charset_normalizer<4,>=2 in C:\dev\envs\IAI-env\Lib\site-packages (from requests<3,>=2.21.0->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (3.5.2)
+Requirement already satisfied: idna<4,>=2.5 in C:\dev\envs\IAI-env\Lib\site-packages (from requests<3,>=2.21.0->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (3.20)
+Requirement already satisfied: urllib3<3,>=1.26 in C:\dev\envs\IAI-env\Lib\site-packages (from requests<3,>=2.21.0->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2.8.0)
+Requirement already satisfied: certifi>=2023.5.7 in C:\dev\envs\IAI-env\Lib\site-packages (from requests<3,>=2.21.0->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2026.7.22)
+Requirement already satisfied: wheel<1.0,>=0.23.0 in C:\dev\envs\IAI-env\Lib\site-packages (from astunparse>=1.6.0->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (0.48.0)
+Requirement already satisfied: cffi>=2.0.0 in C:\dev\envs\IAI-env\Lib\site-packages (from cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (2.1.1)
+Requirement already satisfied: pycparser in C:\dev\envs\IAI-env\Lib\site-packages (from cffi>=2.0.0->cryptography>=38.0.3->google-auth<3,>=1.6.3->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (3.0)
+Requirement already satisfied: cloudpickle>=3.0 in C:\dev\envs\IAI-env\Lib\site-packages (from joblib>=1.2.0->scikit-learn<1.5) (3.1.2)
+Requirement already satisfied: pyasn1<0.7.0,>=0.6.1 in C:\dev\envs\IAI-env\Lib\site-packages (from pyasn1-modules>=0.2.1->google-auth<3,>=1.6.3->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (0.6.4)
+Requirement already satisfied: oauthlib>=3.0.0 in C:\dev\envs\IAI-env\Lib\site-packages (from requests-oauthlib>=0.7.0->google-auth-oauthlib<2,>=0.5->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (4.0.0)
+Requirement already satisfied: markupsafe>=2.1.1 in C:\dev\envs\IAI-env\Lib\site-packages (from werkzeug>=1.0.1->tensorboard<2.16,>=2.15->tensorflow-intel==2.15.1->tensorflow~=2.15.0) (3.0.4)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in C:\dev\envs\IAI-env\Lib\site-packages (from sympy->torch~=2.2.0) (1.3.0)
+Using cached numpy-1.26.4-cp311-cp311-win_amd64.whl (15.8 MB)
+Using cached ml_dtypes-0.3.2-cp311-cp311-win_amd64.whl (127 kB)
+Using cached protobuf-4.25.9-cp310-abi3-win_amd64.whl (413 kB)
+Installing collected packages: protobuf, numpy, ml-dtypes
+  Attempting uninstall: protobuf
+    Found existing installation: protobuf 7.36.2
+    Uninstalling protobuf-7.36.2:
+      Successfully uninstalled protobuf-7.36.2
+  Attempting uninstall: numpy
+    Found existing installation: numpy 2.4.6
+    Uninstalling numpy-2.4.6:
+      Successfully uninstalled numpy-2.4.6
+  Attempting uninstall: ml-dtypes
+    Found existing installation: ml_dtypes 0.6.0
+    Uninstalling ml_dtypes-0.6.0:
+      Successfully uninstalled ml_dtypes-0.6.0
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+googleapis-common-protos 1.75.5 requires protobuf<8.0.0,>=6.33.5, but you have protobuf 4.25.9 which is incompatible.
+opencv-python-headless 5.0.0.93 requires numpy>=2; python_version >= "3.9", but you have numpy 1.26.4 which is incompatible.
+opentelemetry-proto 1.45.1 requires protobuf<8.0,>=5.0, but you have protobuf 4.25.9 which is incompatible.
+pandas 3.1.0 requires numpy>=2.0.2; python_version < "3.14", but you have numpy 1.26.4 which is incompatible.
+Successfully installed ml-dtypes-0.3.2 numpy-1.26.4 protobuf-4.25.9
+
+[notice] A new release of pip is available: 26.2.1 -> 26.2.2
+[notice] To update, run: python.exe -m pip install --upgrade pip
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip uninstall -y opencv-python-headless ultralytics ultralytics-thop shapely googleapis-common-protos opentelemetry-proto opentelemetry-api opentelemetry-sdk opentelemetry-semantic-conventions
+Found existing installation: opencv-python-headless 5.0.0.93
+Uninstalling opencv-python-headless-5.0.0.93:
+  Successfully uninstalled opencv-python-headless-5.0.0.93
+Found existing installation: ultralytics 8.4.183
+Uninstalling ultralytics-8.4.183:
+  Successfully uninstalled ultralytics-8.4.183
+Found existing installation: ultralytics-thop 2.2.3
+Uninstalling ultralytics-thop-2.2.3:
+  Successfully uninstalled ultralytics-thop-2.2.3
+Found existing installation: shapely 2.2.0
+Uninstalling shapely-2.2.0:
+  Successfully uninstalled shapely-2.2.0
+Found existing installation: googleapis-common-protos 1.75.5
+Uninstalling googleapis-common-protos-1.75.5:
+  Successfully uninstalled googleapis-common-protos-1.75.5
+Found existing installation: opentelemetry-proto 1.45.1
+Uninstalling opentelemetry-proto-1.45.1:
+  Successfully uninstalled opentelemetry-proto-1.45.1
+Found existing installation: opentelemetry-api 1.45.1
+Uninstalling opentelemetry-api-1.45.1:
+  Successfully uninstalled opentelemetry-api-1.45.1
+Found existing installation: opentelemetry-sdk 1.45.1
+Uninstalling opentelemetry-sdk-1.45.1:
+  Successfully uninstalled opentelemetry-sdk-1.45.1
+Found existing installation: opentelemetry-semantic-conventions 0.66b1
+Uninstalling opentelemetry-semantic-conventions-0.66b1:
+  Successfully uninstalled opentelemetry-semantic-conventions-0.66b1
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip install "pandas<2.2"
+Collecting pandas<2.2
+  Using cached pandas-2.1.4-cp311-cp311-win_amd64.whl.metadata (18 kB)
+Requirement already satisfied: numpy<2,>=1.23.2 in C:\dev\envs\IAI-env\Lib\site-packages (from pandas<2.2) (1.26.4)
+Requirement already satisfied: python-dateutil>=2.8.2 in C:\dev\envs\IAI-env\Lib\site-packages (from pandas<2.2) (2.9.0.post0)
+Requirement already satisfied: pytz>=2020.1 in C:\dev\envs\IAI-env\Lib\site-packages (from pandas<2.2) (2026.5)
+Requirement already satisfied: tzdata>=2022.1 in C:\dev\envs\IAI-env\Lib\site-packages (from pandas<2.2) (2026.5)
+Requirement already satisfied: six>=1.5 in C:\dev\envs\IAI-env\Lib\site-packages (from python-dateutil>=2.8.2->pandas<2.2) (1.17.0)
+Using cached pandas-2.1.4-cp311-cp311-win_amd64.whl (10.6 MB)
+Installing collected packages: pandas
+  Attempting uninstall: pandas
+    Found existing installation: pandas 3.1.0
+    Uninstalling pandas-3.1.0:
+      Successfully uninstalled pandas-3.1.0
+Successfully installed pandas-2.1.4
+
+[notice] A new release of pip is available: 26.2.1 -> 26.2.2
+[notice] To update, run: python.exe -m pip install --upgrade pip
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip check
+opentelemetry-exporter-http-transport 0.66b1 requires opentelemetry-api, which is not installed.
+opentelemetry-exporter-otlp-common 0.66b1 requires opentelemetry-sdk, which is not installed.
+opentelemetry-exporter-otlp-proto-common 1.45.1 requires opentelemetry-proto, which is not installed.
+opentelemetry-exporter-otlp-proto-http 1.45.1 requires googleapis-common-protos, which is not installed.
+opentelemetry-exporter-otlp-proto-http 1.45.1 requires opentelemetry-api, which is not installed.
+opentelemetry-exporter-otlp-proto-http 1.45.1 requires opentelemetry-proto, which is not installed.
+opentelemetry-exporter-otlp-proto-http 1.45.1 requires opentelemetry-sdk, which is not installed.
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip uninstall -y opentelemetry-exporter-http-transport opentelemetry-exporter-otlp-common opentelemetry-exporter-otlp-proto-common opentelemetry-exporter-otlp-proto-http
+Found existing installation: opentelemetry-exporter-http-transport 0.66b1
+Uninstalling opentelemetry-exporter-http-transport-0.66b1:
+  Successfully uninstalled opentelemetry-exporter-http-transport-0.66b1
+Found existing installation: opentelemetry-exporter-otlp-common 0.66b1
+Uninstalling opentelemetry-exporter-otlp-common-0.66b1:
+  Successfully uninstalled opentelemetry-exporter-otlp-common-0.66b1
+Found existing installation: opentelemetry-exporter-otlp-proto-common 1.45.1
+Uninstalling opentelemetry-exporter-otlp-proto-common-1.45.1:
+  Successfully uninstalled opentelemetry-exporter-otlp-proto-common-1.45.1
+Found existing installation: opentelemetry-exporter-otlp-proto-http 1.45.1
+Uninstalling opentelemetry-exporter-otlp-proto-http-1.45.1:
+  Successfully uninstalled opentelemetry-exporter-otlp-proto-http-1.45.1
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip check
+No broken requirements found.
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> python -c "import numpy, torch, tensorflow, cv2, sklearn, pandas; print('numpy', numpy.__version__); print('torch', torch.__version__); print('tf', tensorflow.__version__); print('cv2', cv2.__version__); print('sklearn', sklearn.__version__); print('pandas', pandas.__version__)"
+2026-10-22 15:14:43.941079: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING:tensorflow:From C:\dev\envs\IAI-env\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+numpy 1.26.4
+torch 2.2.2+cpu
+tf 2.15.1
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+AttributeError: module 'cv2' has no attribute '__version__'
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip uninstall -y opencv-python
+Found existing installation: opencv-python 4.11.0.86
+Uninstalling opencv-python-4.11.0.86:
+  Successfully uninstalled opencv-python-4.11.0.86
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip install "opencv-python==4.11.0.86"
+Collecting opencv-python==4.11.0.86
+  Using cached opencv_python-4.11.0.86-cp37-abi3-win_amd64.whl.metadata (20 kB)
+Requirement already satisfied: numpy>=1.21.2 in C:\dev\envs\IAI-env\Lib\site-packages (from opencv-python==4.11.0.86) (1.26.4)
+Using cached opencv_python-4.11.0.86-cp37-abi3-win_amd64.whl (39.5 MB)
+Installing collected packages: opencv-python
+Successfully installed opencv-python-4.11.0.86
+
+[notice] A new release of pip is available: 26.2.1 -> 26.2.2
+[notice] To update, run: python.exe -m pip install --upgrade pip
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> python -c "import cv2; print('cv2', cv2.__version__)"
+cv2 4.11.0
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> pip check
+No broken requirements found.
+(IAI-env) PS D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI> python -c "import numpy, torch, tensorflow, cv2, sklearn, pandas; print('numpy', numpy.__version__); print('torch', torch.__version__); print('tf', tensorflow.__version__); print('cv2', cv2.__version__); print('sklearn', sklearn.__version__); print('pandas', pandas.__version__)"
+2026-10-22 15:16:15.953395: I tensorflow/core/util/port.cc:113] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+WARNING:tensorflow:From C:\dev\envs\IAI-env\Lib\site-packages\keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+numpy 1.26.4
+torch 2.2.2+cpu
+tf 2.15.1
+cv2 4.11.0
+sklearn 1.4.2
+pandas 2.1.4

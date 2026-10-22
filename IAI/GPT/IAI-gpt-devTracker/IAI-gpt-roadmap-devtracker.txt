@@ -233,7 +233,7 @@ script. Frames never touch disk; only crops do.
         Cross-clip dupes: last-kept-frame not reset between clips
     Cost:    ~2 minutes.
 
-[ ] 3.3  FULL RUN ON ALL 5 CLIPS
+[x] 3.3  FULL RUN ON ALL 5 CLIPS
     Type: run
     Prereq: 3.2 passes verification
     Action: Remove cap. Full extraction run.
@@ -259,7 +259,7 @@ SECTION 4 - SORTING AND AUDIT
     Verify: Folder tree shows 1\ through 15\.
     Debug:  Create missing folders manually.
 
-[ ] 4.2  SORT CROPS BY VISIBLE NUMERAL
+[x] 4.2  SORT CROPS BY VISIBLE NUMERAL
     Type: manual
     Design: designtracker-1.3.4
     Prereq: 4.1

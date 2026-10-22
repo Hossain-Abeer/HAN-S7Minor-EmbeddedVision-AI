@@ -70,3 +70,7 @@ use a box like [ ] for each subsection, such that once it's complete, i will tic
 6. phases (starting with phase 0 software installation)
 
 Then propose a roadmap for me, mentioning the sequence of events, and then anything else you'd mention additionally
+
+
+
+CnOCR corrupted the development environment. I attempted to recover. analyze & validate. if valid I proceed with other OCR library, such as easyOCR
