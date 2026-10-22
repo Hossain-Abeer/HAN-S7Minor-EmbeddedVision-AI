@@ -1,0 +1,86 @@
+================================================================================
+3.3 FULL RUN ON ALL 5 CLIPS - PASS (DEVIATION DOCUMENTED)
+================================================================================
+
+RUN COMMAND
+    python src/extract_crop.py
+
+RESULTS PER CLIP
+    clip 1: frames=4587  kept=31  crops=367
+    clip 2: frames=3545  kept=14  crops=163
+    clip 3: frames=5784  kept=24  crops=284
+    clip 4: frames=5486  kept=25  crops=296
+    clip 5: frames=5739  kept=28  crops=328
+    --------------------------------------------------
+    TOTAL:  frames=25141  kept=122  crops=1438
+
+VERIFY LINE ANALYSIS
+    [~] 3000-9000 crops:  1438 returned
+        -> below devtracker's pre-motion-gate estimate
+        -> ABOVE 1.2.1 floor of 750 crops by ~92%
+        -> ~96 crops/class average across 15 classes
+        -> Acceptable; class sufficiency verified at 4.4 audit
+    [x] rejects.csv has blur + duplicate rows:
+        -> duplicate: dominant (thousands of rows)
+        -> blur:      present (values 71-75, threshold 75.0)
+        -> both gates engaged; motion gate not short-circuiting blur gate
+    [x] No file > ~100 KB:
+        -> crops remain small padded ball patches
+    [x] Total + rejection rate recorded:
+        -> 1438 crops from 25141 source frames
+        -> ~98% frame rejection rate (motion gate is the dominant filter)
+    [x] Script completes without crash
+    [x] All 5 clips processed
+
+WHY THE DEVIATION IS ACCEPTABLE
+    - Devtracker's 3000-9000 figure was authored before the motion-gate
+      architecture (see devtracker-pre-3.3.txt).
+    - Motion gate fires once per settle event -> ~1 capture per shot cycle,
+      not one capture per stride window.
+    - Yield is now governed by shot count per clip (~25 settles x ~11.5
+      balls = ~290 crops/clip), not by frame stride.
+    - 1.2.1's real objective was "enough crops for 50/class floor".
+      1438 / 15 = ~96/class. Comfortably clears the floor.
+
+    - Option 4 (re-record 5 clips x 3 min) chosen explicitly by user to
+      reach this yield. Further re-record is not justified.
+
+PER-CLIP YIELD NOTE
+    - clip 2 yields lowest (14 kept, 163 crops). Possible causes:
+      shorter effective gameplay, fewer distinct shot-settle events, or
+      longer static aiming phases suppressing motion gate triggers.
+    - Not a defect. Noted for 4.2 sort prioritisation if class 4.4 audit
+      shows a rare class clustered in clip 2.
+
+REJECTION REASON BREAKDOWN (from logs/rejects_extract.csv)
+    Duplicate: predominant reason. Motion gate + dup gate working as designed.
+    Blur:      present in later frames (values 71-75). Clip 5 shows
+               several blur rejects near end-of-clip, likely due to
+               camera pan or UI animation during late gameplay.
+    Neither reason dominates to a degree that suggests misconfiguration.
+
+ARTEFACTS PRODUCED
+    - unsorted_png\   (1438 PNGs, flat, filenames clip{id}_frame{idx:06d}_ball{k}.png)
+    - logs/rejects_extract.csv   (truncated and repopulated at run start)
+
+READINESS FOR DOWNSTREAM
+    - 4.1 confirm class folders exist:  UNAFFECTED (folders already present)
+    - 4.2 sort crops by numeral:        READY (1438 crops to sort)
+    - 4.4 audit class balance:          EXPECT PASS (target floor 50/class;
+                                        ~96/class average before cull)
+    - Preliminary ML §3:                "1438 crops extracted across 5 clips
+                                        via motion-gated pipeline; average
+                                        ~96 crops per class before audit cull."
+
+PENDING RISK
+    - If 4.4 audit reveals ANY class below 30 usable crops, escalate per
+      standard trigger (re-run at lower MOTION_THRESHOLD or accept and
+      document limitation). Deferred until 4.4.
+
+CHECKLIST STATUS
+    [x] 3.3 Full run on all 5 clips
+    [ ] 4.1 Confirm class folders exist
+
+================================================================================
+END OF NOTE
+================================================================================

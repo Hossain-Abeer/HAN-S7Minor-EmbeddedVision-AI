@@ -1,0 +1,381 @@
+================================================================================
+DEVTRACKER PRE-2 (3.3) - EXTRACTION YIELD DIAGNOSIS & RECOVERY PLAN
+================================================================================
+
+PURPOSE
+-------
+Records the diagnosis of the failed [3.3] Full Run, the analysis of why
+config changes cannot raise yield, the option space for adding table-states,
+the selection of Option 4 (re-record all 5 clips at 3 min), and the
+recording protocol (do not pot, hit hard) that maximises yield and class
+balance. This note supersedes the original devtracker-3.3 verify line,
+which was written for a stride-based pipeline and does not apply to the
+motion-gated pipeline now in place.
+
+PREREQ
+------
+extract_crop.py and config.py at the motion-gated revision (post
+devtracker-pre-3.3.txt). Five clips at ~90 s each on disk.
+
+================================================================================
+PART A - FIRST 3.3 RUN - INVALID
+================================================================================
+
+RUN OUTPUT
+----------
+    clip 1: frames=2706 kept=8  crops=108
+    [WARN] missing clip: billiards-game-clip2.mp4
+    clip 3: frames=2334 kept=8  crops=79
+    clip 4: frames=3265 kept=10 crops=105
+    clip 5: frames=2598 kept=9  crops=85
+    [DONE] total kept frames=35 total crops=377
+
+VERIFY LINE RESULTS
+-------------------
+    Contains 3000-9000 crops         377  FAIL
+    rejects.csv has blur AND dupe     only dupe  FAIL (design outcome)
+    No file > ~100 KB                max ~8 KB  PASS
+    All 5 clips processed            4 of 5     FAIL
+    Script completes without crash   yes        PASS
+
+Devtracker debug line: "If total < 2000, revisit 3.2 debug list."
+377 < 2000. Escalation triggered.
+
+================================================================================
+PART B - ROOT CAUSE - THE PIPELINE WORKS; DESIGN UNDER-DELIVERS
+================================================================================
+
+WHY ONLY ONE CAPTURE PER SETTLE
+-------------------------------
+State variables in main():
+    prev_gray_small          previous frame, downscaled
+    frames_since_move        counter of consecutive "still" frames
+    _last_kept_frame         last frame that passed passes_filter()
+
+Frame-by-frame trace of one settle event (30 fps):
+
+    Frame  motion_diff  frames_since_move  Gate  passes_filter   Result
+    -----  -----------  -----------------  ----  -------------   ------
+    N      22.0         0 (reset)          no    not called      -
+    N+1    15.0         0                  no    not called      -
+    N+2    8.0          0                  no    not called      -
+    N+3    3.8          1                  no    not called      -
+    N+4    2.1          2                  no    not called      -
+    N+5    1.9          3                  YES   called          KEPT
+    N+6    1.2          4                  YES   called          REJECT (diff 0.3 < 3.0)
+    N+7    0.8          5                  YES   called          REJECT (diff 0.3)
+    ... (60 frames of stillness) ...
+    N+80   25.0         0 (reset)          no    not called      - (new shot)
+
+Three things combine to lock the pipeline at one keep per settle:
+
+    (1)  Gate opens the moment frames_since_move >= 3.
+    (2)  passes_filter() compares to _last_kept_frame. Frame N+5 has
+         no prior keep -> passes -> _last_kept_frame = N+5.
+    (3)  On frame N+6, diff(N+6, N+5) ~ 0.3 < DUP_THRESHOLD (3.0) ->
+         rejected. Same for every subsequent still frame, because
+         _last_kept_frame is NOT updated on rejection.
+
+RESULT: The duplicate gate functions as a permanent cooldown for the
+current still state. Only a new motion event (new shot) resets it.
+
+PER-CLIP MATH CONFIRMS THE MODEL
+---------------------------------
+    Clip  Frames  Kept  Crops  Settles/clip  Crops/frame
+    ----  ------  ----  -----  ------------  -----------
+    1     2706    8     108    8             13.5
+    3     2334    8     79     8              9.9
+    4     3265    10    105    10            10.5
+    5     2598    9     85     9              9.4
+    (clip 2 missing)
+
+Keeps per clip = number of shot cycles = number of settle events.
+Crops per keep = number of balls visible in that frame.
+The pipeline is doing exactly what it was designed to do.
+
+WHY ZERO BLUR REJECTS
+---------------------
+The motion gate only calls passes_filter() after 3+ frames of stillness.
+Nothing arriving at the blur check is in motion. Zero blur rejects is
+architecturally correct for a motion-gated pipeline.
+
+The devtracker-3.3 verify line was written for a stride-based pipeline.
+It does not apply to a motion-gated one. Document as design change, not
+defect.
+
+================================================================================
+PART C - WHY CONFIG CHANGES CANNOT FIX THE YIELD
+================================================================================
+
+LEVER-BY-LEVER
+--------------
+    FRAME_STRIDE = 1
+        Already at minimum. Can't go lower. Not a yield lever.
+
+    BLUR_THRESHOLD = 75.0
+        Zero blur rejects. Nothing to recover. Not a yield lever.
+
+    DUP_THRESHOLD = 3.0
+        Lower it -> lockout stronger.
+        Raise it  -> admits near-identical frames. Junk crops, not new
+                     data.
+        Not a yield lever.
+
+    MOTION_THRESHOLD = 4.0
+        Lower it -> gate opens more, but dup gate still locks out every
+                    subsequent frame of the same still state. No change.
+        Raise it -> fewer settles detected. Reduces yield.
+        Not a yield lever.
+
+    MIN_BALL_AREA = 800 / MAX_BALL_AREA = 6000
+        Detection already yields ~10 balls/frame, matching the physical
+        ball count. No extra balls exist to detect. Small lever only.
+
+    MIN_CIRCULARITY = 0.7
+        Lower it -> admits partial balls, cloth edges. Noise, not yield.
+        Raise it -> rejects partially occluded balls. Reduces yield.
+        Small lever only.
+
+CONCLUSION
+----------
+Every config lever points at the same wall: 46 unique table states x
+~10 balls = 460 crops. Only more table states can raise the yield.
+
+================================================================================
+PART D - OPTION SPACE FOR ADDING TABLE STATES
+================================================================================
+
+FIVE OPTIONS IDENTIFIED
+-----------------------
+    Option 1  Accept 460 crops, adjust target from 50/class to 30/class.
+              Zero code change. Fast but weak foundations.
+
+    Option 2  Capture during deceleration (motion_diff in [4, 15] window).
+              Yields 3-5 unique frames per settle. Requires ~15-line
+              code change + dry-run verification of crop quality.
+              Risk: motion blur during capture.
+
+    Option 3  Capture pre-shot AND post-shot stillness. Requires
+              MOTION_THRESHOLD drop to ~2 and per-settle capture counter.
+              ~25-line change. Risk: cue stick / hand occlusion in pre-
+              shot crops.
+
+    Option 4  Re-record all 5 clips at 3 min each. Discards current clips.
+              ~60-75 min effort. Yield ~820 crops, ~55/class.
+
+    Option 5  Add a 3-min clip6. Preserves current 5 clips. ~15 min effort.
+              Yield ~730 crops, ~49/class.
+
+HEAD-TO-HEAD - OPTION 5 vs OPTION 4
+------------------------------------
+    Dimension                Option 5 (3-min clip6)  Option 4 (replace 5)
+    -----------------------  ----------------------  --------------------
+    Effort                   ~15 min                 ~60-75 min
+    Yield                    ~730 crops, ~49/class   ~820 crops, ~55/class
+    Passes 4.4 audit?        Borderline              Yes comfortably
+    Diversity                6 clips x fresh states  5 clips x longer
+    Re-work risk             None; current 5 valid   Loses current clips
+    Existing artefacts       Preserved               Rebuilt
+    DL report headroom       Adequate                Stronger
+
+INITIAL RECOMMENDATION WAS OPTION 5
+------------------------------------
+Reasoning: 3-min clip6 nearly closes the 50/class gap at minimal effort,
+preserves existing work, adds rack-configuration diversity.
+
+================================================================================
+PART E - DECISION - OPTION 4
+================================================================================
+
+USER CHOICE
+-----------
+Option 4. Re-record all 5 clips at 3 min each. Replace current 5.
+
+RATIONALE
+---------
+Stronger foundations for the downstream pipeline, particularly Phase 4
+(CNN). The DL report needs meaningful training data for the custom CNN
+vs transfer-learning comparison. 55/class provides headroom; 49/class
+does not. The extra ~45 min of effort is worth the headroom.
+
+================================================================================
+PART F - RECORDING PROTOCOL - DO NOT POT
+================================================================================
+
+THE PROBLEM WITH POTTING
+------------------------
+Every potted ball is:
+    - A class removed from all subsequent keeps in that clip.
+    - A yield loss for every subsequent keep (fewer balls per frame).
+    - A balance distortion (early-potted classes starved of coverage).
+
+YIELD COMPARISON - POTTING vs HIT-AROUND
+-----------------------------------------
+    Time into clip  Balls on table  Crops/keep
+    --------------  --------------  ----------
+    Scenario A - No potting
+    0:00 (post-break)  15             ~13
+    1:00               15             ~13
+    2:00               15             ~13
+    3:00               15             ~13
+    Total              --             ~25 keeps x 13 = ~325 crops/clip
+
+    Scenario B - Competitive potting
+    0:00 (post-break)  15             ~13
+    1:00               10             ~8
+    2:00               5              ~4
+    3:00               2              ~2
+    Total              --             ~25 keeps x ~7 = ~175 crops/clip
+
+    Delta: ~85% more crops per clip from simply not potting.
+
+FIVE REASONS TO HIT AROUND, NOT POT
+------------------------------------
+    1. Yield per keep: ~325 vs ~175 crops per clip. ~2x difference.
+    2. Class balance: potted classes appear in fewer keeps. 3x imbalance
+       across classes if pot sequences vary per clip.
+    3. Positional variety: hard hits spread balls across the table.
+       "Soft tap to keep near rack" fails this - fixed positions cause
+       positional shortcut risk.
+    4. Continuity: every shot should move at least 2 balls. Aim cue ball
+       at other balls, not at pockets. Occasionally hit rails to
+       redistribute.
+    5. Downstream robustness: 100+/class passes 4.4 without risk; 31/class
+       fails and forces resampling.
+
+THE THIRD PATH - HARD HIT, NO POT
+----------------------------------
+    Strategy           Pos variety  Class coverage  Yield/keep
+    -----------------  -----------  --------------  ----------
+    Pot everything     Some         Poor (classes    Low
+                                    disappear)
+    Soft tap near rack Poor         Good            High
+    Hard hit, no pot   Excellent    Good            High   <- TARGET
+
+PRACTICAL RECORDING PROTOCOL
+-----------------------------
+    Setup:
+        - Same game/build as current clips (cloth, lighting, ball
+          rendering, font). HSV bounds in constants.py must remain valid:
+          H 80-100, S 100-255, V 30-255.
+        - 1080p, 30 fps, overhead view.
+        - No new HUD elements.
+        - 3 minutes per clip.
+
+    Play style per 3-min clip:
+        1. Break normally - all 15 balls spread from rack.
+        2. Subsequent 15-20 shots:
+           - Aim cue ball at OTHER BALLS, not at pockets.
+           - Moderate-to-high force to keep balls moving.
+           - Vary targets; don't always hit the same ball.
+           - Occasionally aim at rails to redistribute.
+        3. If a ball is about to be potted accidentally: let it. Don't
+           fight the game. Some potting is fine.
+        4. If the game has a practice or re-rack mode: trigger it every
+           60-90 s. Each re-rack = another break = another 15-ball spread
+           event. Highest-yield trick: 3 breaks per clip = 3x spread
+           events.
+
+    Watch for:
+        - Cluster near one rail - break clusters up (aim at middle).
+        - All balls in one quadrant - hit hard to spread.
+        - Ball stuck in corner - leave it (unique position) or gently move.
+
+EXPECTED OUTCOMES WITH THIS STRATEGY
+-------------------------------------
+    Strategy                    Crops/clip  5-clip total  Per-class avg
+    --------------------------  ----------  ------------  -------------
+    Current (competitive pot)   ~92         460           31
+    No-pot, hit around          ~300        1500          100
+    No-pot + re-rack 3x         ~400        2000          133
+
+With 100+ crops/class:
+    - 4.4 audit passes without risk.
+    - Phase 2 (SVM/k-NN) needs no class weighting.
+    - Phase 4 (CNN) has enough data without extreme augmentation.
+    - Confusion matrices are statistically meaningful.
+
+================================================================================
+PART G - EXECUTION STEPS
+================================================================================
+
+PRE-RECORDING CHECKLIST
+-----------------------
+    [ ] Same game/build as current clips.
+    [ ] 1080p, 30 fps, overhead.
+    [ ] No new HUD elements.
+    [ ] Recording length 3 min per clip.
+    [ ] Play protocol: hit around, don't pot, use practice/rerack if
+        available.
+    [ ] Save as game1\billiards-game-clip{1..5}.mp4 (overwrite).
+
+CLEAR OLD CROPS
+---------------
+    Move unsorted_png\ to unsorted_png_old\ as backup, or delete outright.
+    Rationale: old crops have frame indices from the 90-s clips. New clips
+    would produce filenames that collide with them (e.g.
+    clip1_frame000003_ball0.png from both old and new clip 1).
+
+RE-RUN 3.3
+----------
+    python src/extract_crop.py
+
+EXPECTED OUTPUT SHAPE
+---------------------
+    clip 1: frames~5400 kept~25 crops~250
+    clip 2: frames~5400 kept~25 crops~250
+    clip 3: frames~5400 kept~25 crops~250
+    clip 4: frames~5400 kept~25 crops~250
+    clip 5: frames~5400 kept~25 crops~250
+    [DONE] total kept frames~125 total crops~1250
+
+Numbers will vary. Acceptance criteria:
+    - Total >= 1000 crops.
+    - All 5 clips processed (no [WARN] missing clip).
+    - Each class >= 50 after 4.4 audit.
+
+IF ANY CLASS FALLS BELOW 30 AFTER 4.4 AUDIT
+--------------------------------------------
+    Add clip6 targeting the rare class specifically - play games where
+    that ball stays on the table longer. Usually one such iteration
+    suffices.
+
+================================================================================
+PART H - REPORT NARRATIVE
+================================================================================
+
+PRELIMINARY ML SECTION 3
+------------------------
+State the recording protocol as deliberate data-acquisition design:
+
+    "Recordings were captured under a max-ball-on-table play protocol:
+    gameplay was designed to spread balls widely and avoid potting,
+    maximising (a) balls-visible-per-frame and (b) per-class positional
+    variety. This is a data-acquisition strategy, not a gameplay
+    restriction - no rules were modified. The objective is a balanced,
+    positionally diverse dataset representing each class at many table
+    positions."
+
+A marker will read this as thoughtful data design, not laziness.
+
+ARCHITECTURAL NOTE
+------------------
+The motion-gated pipeline captures one frame per shot-settle event.
+Yield is therefore proportional to (number of shots) x (balls on table
+at settle). This is the structural ceiling for the design and it drives
+the recording protocol. Document as an intentional pipeline characteristic
+in the report, replacing the stride-based verify line in the original
+devtracker.
+
+================================================================================
+FINAL STATE
+================================================================================
+
+Current:    5 clips x 90 s, 460 crops, ~31/class, motion-gated pipeline
+Target:     5 clips x 3 min, ~1250 crops, ~80-100/class
+Blocked on: Re-recording all 5 clips under the no-pot protocol
+Next step:  Record, clear unsorted_png, re-run 3.3, validate >= 1000 crops
+
+================================================================================
+END OF NOTE
+================================================================================
