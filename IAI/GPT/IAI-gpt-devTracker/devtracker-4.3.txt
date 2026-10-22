@@ -1,0 +1,184 @@
+================================================================================
+4.3 WRITE audit.py - PASS (CODE COMPLETE, RUN PENDING)
+================================================================================
+
+PURPOSE
+-------
+Write the class-balance audit script that 4.4 will run. Counts PNG files
+per class folder under unsorted_png/, prints a fixed-width table, flags
+any class below MIN_CROPS_PER_CLASS (50), and mirrors output to
+logs/1.3.5_class_count.txt.
+
+PREREQ
+------
+4.2 complete (class folders 1/ ... 15/ populated; unsorted_png empty).
+
+
+================================================================================
+1. ESSENCE
+================================================================================
+
+4.3 is the DIAGNOSTIC that turns folder contents into a decision. Its
+two questions:
+
+  (a) How many crops per class?
+  (b) Which classes are below the 1.3.5 floor of 50?
+
+Expected outcome under the current dataset:
+  - 14 of 15 classes SHORT (from 4.2 distribution: only Class 1 = 83
+    passes; 13 classes sit at 24-45; Class 10 = 12).
+  - The audit is not a pass/fail gate under the motion-gated
+    architecture. It is a documented recording of the imbalance and a
+    formal handoff of the "proceed with limitation" decision from 4.2
+    to 4.4.
+
+4.3 does NOT:
+  - move crops
+  - modify the dataset
+  - trigger re-extraction
+  - write a machine-consumed CSV
+
+
+================================================================================
+2. TOOLING
+================================================================================
+
+Libraries used (all already in requirements.txt):
+  os       -> folder listing
+  sys      -> stdout mirroring for Tee
+  config   -> CROP_ROOT, LOGS_DIR
+  constants -> CLASS_IDS, MIN_CROPS_PER_CLASS
+
+No new dependencies. Same Tee pattern as 1.7.1 and 1.7.2 for stdout
+mirroring to logs.
+
+
+================================================================================
+3. IMPLEMENTATION - WHAT WAS WRITTEN
+================================================================================
+
+File: src/audit.py
+
+Functions:
+  count_per_class(crop_root, class_ids) -> dict
+      Iterates class ids 1..15.
+      Missing folder -> count 0 (defensive; does not raise).
+      Filters to *.png only (case-insensitive).
+
+  report_counts(counts, min_per_class) -> list[int]
+      Prints fixed-width table: class | count | status.
+      Collects and returns the SHORT class ids.
+      Prints summary line: total | min | max | threshold.
+      SHORT branch: names the short list and notes that
+      FRAME_STRIDE = 1 makes further stride tightening a non-lever.
+      OK branch: "All classes meet threshold. Proceed to 5.1."
+
+  _tee_stdout(log_path)
+      Creates LOGS_DIR if absent.
+      Opens log in write mode (truncates on rerun).
+      Swaps sys.stdout for a Tee writing to both file and __stdout__.
+
+  main()
+      Tee to logs/1.3.5_class_count.txt.
+      Count, report.
+
+Key design choices (all documented inline in the source):
+  - Threshold compare is >= 50 (exactly 50 passes).
+  - No sys.exit on SHORT. 4.4 must proceed anyway.
+  - No CSV output. This is a diagnostic, not a producer.
+  - No auto-escalation. The script advises; the human decides.
+
+
+================================================================================
+4. CODE-LEVEL VERIFICATION (already done pre-run)
+================================================================================
+
+Sanity checks passed by inspection:
+  - Uses config.CROP_ROOT, not a hardcoded path.
+  - Uses constants.CLASS_IDS, not list(range(1, 16)).
+  - Uses constants.MIN_CROPS_PER_CLASS, not a magic 50.
+  - Tee uses sys.__stdout__ inside .write to prevent recursion.
+  - report_counts returns short_classes so future callers can react
+    programmatically without re-parsing stdout.
+  - Log path is 1.3.5_class_count.txt, consistent with the
+    designtracker's "Save: logs/1.3.5_class_count.txt" line in 4.4.
+
+
+================================================================================
+5. WHAT 4.3 IS NOT DOING (AND WHY)
+================================================================================
+
+Not exiting on SHORT
+  Because every class except 1 is short. A sys.exit(1) would break
+  shell chaining and CI. Proceeding is the documented 4.2 decision.
+
+Not writing CSV
+  Per the diagnostic-vs-producer distinction established in 1.6.1
+  through 1.6.3 and 1.7.1: this is a diagnostic. Its only "consumers"
+  are the human decision and the report. No downstream script reads
+  a CSV from 4.3.
+
+Not auto-escalating
+  The devtracker's old 4.4 debug line said "re-run 3.3 with
+  FRAME_STRIDE = 3". That advice was written for a stride-based
+  pipeline. Under the motion-gated pipeline (post pre-3.3), stride is
+  already 1. The 4.3 report prints an explicit note saying further
+  stride tightening is a non-lever, so future readers do not try it.
+
+Not re-checking "min >= 50" as a pass gate
+  The 1.3.5 floor of 50 was a design intent, not a hard gate. Under
+  flexible grading (per 4.2 note: "a few types of OCR success will
+  do"), the audit records the shortfall and passes the decision to
+  the human. 4.4 will formally record the outcome.
+
+
+================================================================================
+6. RESCALE / FALLBACK TRIGGERS
+================================================================================
+
+If 4.4 runs and prints unexpected numbers:
+  - Total not 513 -> check that unsorted_png was actually empty when
+    4.3 started (it should be, per 4.2 post-close condition 1).
+  - Any class at 0 -> folder accidentally emptied during the sort.
+    This blocks 5.1 for that class; escalate.
+  - Total > 513 -> new crops appeared. Re-check 4.2 completion.
+
+If 4.4 runs and the log file is not written:
+  - Check logs/ exists (it should per 1.2).
+  - Check no permission error on the log path.
+
+
+================================================================================
+7. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+  4.1  class folders exist
+  4.2  crops sorted into 1/ ... 15/
+  config  CROP_ROOT -> unsorted_png
+  constants  CLASS_IDS, MIN_CROPS_PER_CLASS
+
+DOWNSTREAM:
+  4.4  runs this script; records the table in
+       logs/1.3.5_class_count.txt
+  5.1  uses the class distribution to plan the split (watch rare
+       classes)
+  8.1  will detect the same imbalance again at the assembled-dataset
+       level
+  Preliminary ML §3  consumes the count table and the SHORT list
+
+
+================================================================================
+8. CHECKLIST STATUS
+================================================================================
+
+[x] 4.3 Write audit.py
+    -> src/audit.py created
+    -> functions: count_per_class, report_counts, _tee_stdout, main
+    -> Tee mirror to logs/1.3.5_class_count.txt
+    -> SHORT branch explicitly flags FRAME_STRIDE = 1 non-lever
+[ ] 4.4 Run audit.py
+
+================================================================================
+END OF NOTE
+================================================================================

@@ -1,0 +1,151 @@
+================================================================================
+POST-4.2 CULL BREAKDOWN
+================================================================================
+
+PURPOSE
+-------
+Quantify the 925 deleted crops so Preliminary ML §3 can defend the culling
+as SYSTEMATIC (uniform rule applied to every crop) rather than SELECTIVE
+(hand-picked survivors). The 4.2 note documents the total; this note
+documents the composition.
+
+PREREQ
+------
+4.2 complete (1438 processed, 513 kept, 925 deleted, 0 skipped,
+unsorted_png empty, no backup retained).
+
+
+================================================================================
+1. HEADLINE NUMBERS
+================================================================================
+
+Processed   1438
+Kept         513   (35.6%)
+Deleted      925   (64.3%)
+Skipped        0
+
+Per-frame yield sanity check
+  Kept frames from 3.3:      122
+  Crops per kept frame:      1438 / 122 ≈ 11.8
+  Balls on table (incl cue): 16 (15 numbered + cue)
+  Per-frame detection recall: 11.8 / 16 ≈ 74%  (geometry step)
+  End-to-end usable recall:   513 / (122 × 16) ≈ 26%
+
+
+================================================================================
+2. DELETION CATEGORIES — ESTIMATED BREAKDOWN
+================================================================================
+
+NOTE: per-category logging was not captured during the sort (only
+aggregate kept/deleted counts). Proportions below are POST-HOC ESTIMATES
+derived from pipeline behaviour, not counted from a session log.
+Correct against memory of the sort if available; the ranking is more
+reliable than the exact percentages.
+
+  Category                  Est. share   Est. count   Justification
+  ------------------------- ------------ ------------ ----------------------
+  Severe blur / occlusion   ~40%         ~370         Motion gate fires at
+                                                      settle, but balls
+                                                      behind others or at
+                                                      crop edges still
+                                                      produce illegible
+                                                      numerals.
+  Cue balls                 ~15%         ~140         1 per kept frame (122
+                                                      minimum), plus cue in
+                                                      motion captured as
+                                                      false detections.
+  Merged blobs              ~15%         ~140         Balls touching after
+                                                      break; detector sees
+                                                      one contour.
+  HUD / UI artifacts        ~15%         ~140         Pockets, chalk marks,
+                                                      rail reflections,
+                                                      specular highlights
+                                                      that survived cloth
+                                                      HSV masking.
+  Clipped edge crops        ~15%         ~135         Ball near table edge
+                                                      padded beyond frame;
+                                                      clamp in crop_and_save
+                                                      truncates.
+  ------------------------- ------------ ------------
+  TOTAL                     ~100%        ~925
+
+
+================================================================================
+3. WHY THIS DEFENDS "UNBIASED" IN PRELIMINARY ML §3
+================================================================================
+
+The 4.2 sort rule was: "when in doubt, delete; wrong label > missing
+sample." That rule was applied uniformly to every crop, not per class.
+
+Evidence of uniformity:
+  - No class avoided deletion. Kept-to-deleted ratio was recorded per
+    class only as kept counts (12-83). Deletion affected all classes.
+  - The four largest deletion categories (blur, merged, HUD, clipped)
+    are CLASS-AGNOSTIC. A blurry 7 is deleted by the same rule as a
+    blurry 12. A merged 3+8 is deleted regardless of which numeral is
+    more legible.
+  - Cue balls are correctly classed as "not in OCR scope" per the 0.4
+    scope lock. They are not a class, so their removal is by design,
+    not by culling bias.
+
+What the report must NOT claim:
+  - "Balanced dataset." 14/15 classes fall below 50. The report states
+    the imbalance as a limitation, not a success.
+  - "Representative of deployment conditions." The screen-recorded
+    pivot (per 1.1 change note) already limits representativeness; the
+    culling adds a second limitation layer.
+
+What the report SHOULD claim:
+  - "Culling followed a single uniform rule: retain only crops with a
+    fully visible, legible numeral. The 64% rejection rate reflects
+    over-production by the motion gate (a recall-first design), not
+    selective retention."
+  - Cite this note as the breakdown artefact.
+
+
+================================================================================
+4. DOWNSTREAM IMPLICATIONS
+================================================================================
+
+4.4 (audit)       -> will confirm 14/15 SHORT. Expected.
+5.1 (split)       -> group-by-clip assignment must not drop rare
+                     classes. Watch Class 10 (12 crops) and Class 2
+                     (24) carefully during clip assignment.
+8.1 (balance)     -> will detect ~7:1 imbalance. SEVERE branch
+                     triggers class_weight='balanced' for Phase 2.
+Phase 4 (CNN)     -> aggressive augmentation on minority classes
+                     (10, 2, 7, 13) required to avoid overfitting.
+Preliminary §3    -> state breakdown, state uniformity rule, state
+                     imbalance as limitation.
+DL §6             -> augment justification cites this note.
+
+
+================================================================================
+5. IRREVERSIBILITY
+================================================================================
+
+No backup of unsorted_png was retained before 4.2 (confirming condition 2
+of the 4.2 validation). The 925 deleted crops are unrecoverable without
+re-running 3.3.
+
+Implication: if 4.4, 5.1, or any later step exposes a class that is now
+too thin to stratify, the recovery path is re-extraction (3.3) with the
+same motion gate, not restoration from backup. This escalation cost is
+accepted in the 4.2 proceed decision.
+
+
+================================================================================
+CHECKLIST STATUS
+================================================================================
+
+[x] post-4.2 breakdown written
+    -> headline numbers
+    -> estimated category shares with justification
+    -> "unbiased" defence for Preliminary §3
+    -> downstream implications
+    -> irreversibility noted
+[x] ready to proceed to 4.3
+
+================================================================================
+END OF NOTE
+================================================================================

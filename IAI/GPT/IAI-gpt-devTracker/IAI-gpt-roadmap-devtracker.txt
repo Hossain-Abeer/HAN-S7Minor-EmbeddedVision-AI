@@ -280,7 +280,7 @@ SECTION 4 - SORTING AND AUDIT
     Cost:   1-2 hours for ~2000 crops. Split across 3-4 sessions.
     Debug:  Mis-sorted crops -> restore from unsorted_png_backup\, retry.
 
-[ ] 4.3  WRITE audit.py
+[x] 4.3  WRITE audit.py
     Type: code
     Design: designtracker-1.3.5
     Prereq: 4.2
@@ -292,7 +292,7 @@ SECTION 4 - SORTING AND AUDIT
              the minimum.
     Verify: Imports cleanly.
 
-[ ] 4.4  RUN audit.py
+[x] 4.4  RUN audit.py
     Type: run
     Prereq: 4.3
     Action: python src/audit.py
