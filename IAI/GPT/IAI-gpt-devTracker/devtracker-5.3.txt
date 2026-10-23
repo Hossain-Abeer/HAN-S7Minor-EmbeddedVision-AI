@@ -1,0 +1,737 @@
+================================================================================
+5.3 WRITE AND RUN verify_split.py - PASS (SOFT MISSES ONLY)
+================================================================================
+
+PURPOSE
+-------
+Read splits.csv. Print per-role / per-class count matrix. Detect:
+  - HARD FAILURES: zero cells in val/test, or train < 5 for any class
+  - SOFT MISSES:   val/test < 3 for any class (non-blocking)
+Save the matrix to a log for Preliminary ML §3 evidence.
+
+PREREQ
+------
+5.2 complete (splits.csv written; 505 rows; val=clip5, test=clip1,
+train=clips2+3+4).
+
+
+================================================================================
+1. RUN OUTPUT
+================================================================================
+
+Command:
+    python src/verify_split.py
+
+Console + log output:
+    [INFO] read 505 rows from ~\splits.csv
+
+    Per-role / per-class count matrix:
+     class |  train |    val |   test
+    ---------------------------------
+         1 |     43 |     22 |     17
+         2 |     14 |      5 |      5
+         3 |     15 |      3 |     14
+         4 |     16 |     10 |     10
+         5 |      5 |     14 |      7
+         6 |     18 |      8 |     10
+         7 |     15 |      8 |      1
+         8 |     15 |      6 |     13
+         9 |     12 |      6 |      7
+        10 |      5 |      2 |      5
+        11 |     25 |      7 |      5
+        12 |     28 |     11 |      6
+        13 |      7 |      3 |     13
+        14 |     16 |     13 |      5
+        15 |     21 |     10 |      4
+    ---------------------------------
+     total |    255 |    128 |    122
+
+    SOFT TARGET MISSES (2):
+         val class 10: n= 2 (val < 3 (soft target))
+        test class  7: n= 1 (test < 3 (soft target))
+
+    Soft misses are NON-BLOCKING. Document in Preliminary ML §3
+    as a known limitation (thin val/test cells for those classes).
+
+
+================================================================================
+2. VERIFY LINE - CHECKS
+================================================================================
+
+[x] Matrix has 15 rows (classes 1-15).
+[x] min / max / total visible:
+    - train: min=5 (classes 5,10), max=43 (class 1), total=255
+    - val:   min=2 (class 10),     max=22 (class 1), total=128
+    - test:  min=1 (class 7),      max=17 (class 1), total=122
+[x] 505 total (255 + 128 + 122). Matches 4.4.
+[x] All 15 classes present in every role (no zero cells). HARD floor
+    for val/test PASSES.
+[x] All train cells >= 5. HARD floor for train PASSES.
+[x] SOFT misses flagged (2). Non-blocking per Verify line.
+
+ALL HARD CHECKS PASS. NO HARD FAILURES.
+
+
+================================================================================
+3. THE TWO SOFT MISSES - CONFIRMED FROM PRE-5.3 WARNING
+================================================================================
+
+    Miss 1:  val, class 10, n=2
+    Miss 2:  test, class 7,  n=1
+
+    Both were PREDICTED at 5.2 time by the pre-5.3 diagnostic block in
+    split.py's main(). The prediction was based on class 10 = 12 total
+    crops (thinnest class per 4.4) and the known clip-to-class
+    distribution. The prediction matched actual output exactly.
+
+    This validates that the pre-5.3 diagnostic was worth adding: the
+    user saw the pending soft misses BEFORE 5.3 ran, so no surprise.
+
+
+================================================================================
+4. THE FILENAME FLAG (non-blocking)
+================================================================================
+
+DEVTTRACKER 5.3 SAVE LINE
+    "Save: logs/1.4.2_stratification.txt"
+
+SCRIPT ACTUAL OUTPUT
+    Writes to logs/1.4.2_stratification.txt (per _tee_stdout).
+
+USER-CURATED COPY
+    Renamed to verify_split_log.txt.
+
+RECOMMENDED ACTION
+    Keep both:
+      - logs/1.4.2_stratification.txt  (script's authoritative output)
+      - verify_split_log.txt           (curated copy)
+    Reference the devtracker-named file in Preliminary ML §3 for
+    traceability. Or symlink if the disk clutter matters.
+
+    Not blocking. Same class of flag as the 4.4 audit log name
+    mismatch (audit_class_count.txt vs 1.3.5_class_count.txt).
+
+
+================================================================================
+5. INTERPRETATION - WHY THE MATRIX IS HEALTHY
+================================================================================
+
+COVERAGE
+    Every class appears in every role. Train, val, test each have 15
+    non-zero entries. This is the HARD floor, and it passes.
+
+    This outcome was NOT guaranteed: the 5.2 split used group-by-clip
+    (Option B: best -> val, next -> test). Had clip 1 or clip 5 been
+    missing a class, that class would have zero cells in test or val
+    and the split would have HARD-FAILED. The fact that all 15 classes
+    landed in every role is the payoff of 1.4.1 §6's coverage-based
+    assignment.
+
+CLASS DISTRIBUTION ACROSS ROLES
+    - Class 1 dominates all roles (43 / 22 / 17). Expected - per 4.4,
+      class 1 has the most crops (82 of 505 = 16.2%).
+    - Class 10 is thin in every role (5 / 2 / 5). Expected - 12 total
+      crops = 2.4%. It is the class most likely to demonstrate
+      classifier failure at Phase 2.
+    - Class 7 in test = 1. Single-crop test cell. Classifier accuracy
+      on class 7 in test will be either 0% or 100% - no statistical
+      meaning. This is the SOFT miss.
+
+WHY THE MATRIX STILL SUPPORTS STRATIFICATION
+    The hard floor (>= 1 per class per role) is what "stratified" means
+    in 5.3's verify line. All cells pass. Soft misses are quality
+    warnings, not correctness failures.
+
+    A statistically quiet test cell for class 7 means "we cannot
+    confidently report test accuracy for class 7". It does not mean
+    "test set is broken". The classifier still trains on class 7 (15
+    crops in train), and val has 8 crops for it. The imbalance is
+    documented, not concealed.
+
+
+================================================================================
+6. DOWNSTREAM IMPLICATIONS
+================================================================================
+
+6.1 (mask.py)
+    -> Proceeds normally. Mask extraction is per-crop, agnostic to role.
+    -> Mask rejection will further reduce cell counts. The thin cells
+       (class 7 test=1, class 10 val=2) may drop to zero AFTER mask
+       rejection if those specific crops fail mask extraction.
+    -> Watch class 7's single test crop specifically. If it fails
+       mask extraction at 6.3, class 7 becomes a zero cell in test at
+       dataset assembly (7.3), and the split integrity is broken.
+    -> If that happens: reassign roles (rare-class preference per 5.2
+       fallback option 1) or accept zero-cell in test for class 7 and
+       document.
+
+7.3 (assemble.py)
+    -> Re-runs an inner join between features.csv and splits.csv.
+    -> Any crop that failed mask extraction (6.1-6.3) does not appear
+       in features.csv, so drops out of the join.
+    -> Post-join role x class matrix will be re-verified. If class 7
+       test cell went from 1 to 0, this is where it surfaces.
+
+8.1 (balance.py)
+    -> Will compute train-only max/min ratio.
+    -> From this matrix: train min=5 (classes 5, 10), max=43 (class 1).
+       Ratio = 43/5 = 8.6. That is >= 3.0 (SEVERE) and >= 1.5
+       (MODERATE). Verdict: SEVERE.
+    -> Action: class_weight='balanced' for Phase 2 SVC and RF.
+
+Preliminary ML §3
+    -> Report the matrix verbatim.
+    -> State soft misses as known limitation:
+       "Class 10 (2 crops) in val and class 7 (1 crop) in test fall
+        below the soft target of 3. Evaluation metrics for these
+        classes carry correspondingly higher uncertainty."
+    -> Note the 8.6:1 train imbalance as a separate limitation (also
+       flagged at 4.4 and will be formally re-flagged at 8.1).
+    -> If class 7's test crop is lost at 6.3, upgrade the note from
+       "thin" to "zero-cell in test for class 7, documented limitation".
+
+DL §6
+    -> Aggressive augmentation on minority classes (10, 7, 13, 5).
+    -> Class 10 especially: 12 total, 5 in train. Augmentation budget
+       justified by this matrix.
+
+
+================================================================================
+7. THE CODE - src/verify_split.py
+================================================================================
+
+    """
+    5.3 VERIFY STRATIFIED SPLITTING
+
+    Reads splits.csv. Prints a per-role / per-class count matrix.
+    Flags:
+      - Zero cells (hard failure for val/test)
+      - Below hard floor: train < 5, val/test < 1
+      - Below soft target: val/test < 3
+
+    Design reference: designtracker-1.4.2
+
+    Run from repo root:
+        python src/verify_split.py
+
+    Output:
+      Console matrix
+      logs/1.4.2_stratification.txt (via Tee)
+    """
+
+    import os
+    import csv
+    import sys
+
+    import config
+    import constants as C
+
+    HARD_FLOOR_TRAIN   = 5
+    HARD_FLOOR_VALTEST = 1
+    SOFT_TARGET_VALTEST = 3
+    ROLES = ("train", "val", "test")
+
+
+    def _tee_stdout(log_path):
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        log_file = open(log_path, "w")
+
+        class _Tee:
+            def write(self, s):
+                log_file.write(s)
+                sys.__stdout__.write(s)
+
+            def flush(self):
+                log_file.flush()
+                sys.__stdout__.flush()
+
+        sys.stdout = _Tee()
+
+
+    def load_splits(splits_csv):
+        rows = []
+        with open(splits_csv, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                rows.append((r["filename"], r["role"]))
+        return rows
+
+
+    def class_from_filename(rel_path):
+        prefix = rel_path.split("/")[0]
+        try:
+            return int(prefix)
+        except ValueError:
+            return None
+
+
+    def build_matrix(rows, class_ids):
+        matrix = {role: {cid: 0 for cid in class_ids} for role in ROLES}
+        for rel_path, role in rows:
+            cid = class_from_filename(rel_path)
+            if cid is None or cid not in class_ids:
+                continue
+            if role not in matrix:
+                continue
+            matrix[role][cid] += 1
+        return matrix
+
+
+    def print_matrix(matrix, class_ids):
+        header = f"{'class':>6} | " + " | ".join(f"{r:>6}" for r in ROLES)
+        print(header)
+        print("-" * len(header))
+        for cid in class_ids:
+            line = f"{cid:>6} | " + " | ".join(
+                f"{matrix[r][cid]:>6}" for r in ROLES
+            )
+            print(line)
+        print("-" * len(header))
+        totals = {r: sum(matrix[r].values()) for r in ROLES}
+        print(f"{'total':>6} | " + " | ".join(f"{totals[r]:>6}" for r in ROLES))
+
+
+    def check_floors(matrix, class_ids):
+        hard_failures = []
+        soft_failures = []
+        for role in ROLES:
+            for cid in class_ids:
+                n = matrix[role][cid]
+                if role == "train":
+                    if n < HARD_FLOOR_TRAIN:
+                        hard_failures.append(
+                            (role, cid, n, f"train < {HARD_FLOOR_TRAIN}")
+                        )
+                else:
+                    if n < HARD_FLOOR_VALTEST:
+                        hard_failures.append(
+                            (role, cid, n,
+                             f"{role} < {HARD_FLOOR_VALTEST} (zero cell)")
+                        )
+                    elif n < SOFT_TARGET_VALTEST:
+                        soft_failures.append(
+                            (role, cid, n,
+                             f"{role} < {SOFT_TARGET_VALTEST} (soft target)")
+                        )
+        return hard_failures, soft_failures
+
+
+    def report_failures(hard_failures, soft_failures):
+        print()
+        if not hard_failures and not soft_failures:
+            print("All roles meet hard floors and soft targets. "
+                  "Proceed to 6.1.")
+            return
+
+        if hard_failures:
+            print(f"HARD FAILURES ({len(hard_failures)}):")
+            for role, cid, n, reason in hard_failures:
+                print(f"  {role:>6} class {cid:>2}: n={n:>2} ({reason})")
+            print()
+            print("Note: FRAME_STRIDE is already 1 under the motion-gated")
+            print("architecture. Standard escalation (stride 5->3) is a")
+            print("non-lever. Options:")
+            print("  1. Re-run assign_roles with rare-class preference.")
+            print("  2. Narrow classifier scope to fully-covered classes.")
+            print("  3. Document as limitation and proceed.")
+
+        if soft_failures:
+            print()
+            print(f"SOFT TARGET MISSES ({len(soft_failures)}):")
+            for role, cid, n, reason in soft_failures:
+                print(f"  {role:>6} class {cid:>2}: n={n:>2} ({reason})")
+            print()
+            print("Soft misses are NON-BLOCKING. Document in Preliminary ML §3")
+            print("as a known limitation (thin val/test cells for those classes).")
+
+
+    def main():
+        log_path = os.path.join(config.LOGS_DIR, "1.4.2_stratification.txt")
+        _tee_stdout(log_path)
+
+        rows = load_splits(config.SPLITS_CSV)
+        print(f"[INFO] read {len(rows)} rows from {config.SPLITS_CSV}")
+
+        matrix = build_matrix(rows, C.CLASS_IDS)
+        print("\nPer-role / per-class count matrix:")
+        print_matrix(matrix, C.CLASS_IDS)
+
+        hard_failures, soft_failures = check_floors(matrix, C.CLASS_IDS)
+        report_failures(hard_failures, soft_failures)
+
+
+    if __name__ == "__main__":
+        main()
+
+
+================================================================================
+8. SKELETAL EXPLANATION - WITH [PARAMS] & DESCRIPTION
+================================================================================
+
+8.1 _tee_stdout([LOG_PATH]) - mirror helper
+
+    def _tee_stdout(log_path):
+        [ensure LOGS_DIR exists]
+        [open log_file in write mode]
+        class _Tee:
+            def write(self, s):
+                [log_file.write(s)]
+                [sys.__stdout__.write(s)]   # prevents recursion
+            def flush(self):
+                [flush both]
+        [swap sys.stdout = _Tee()]
+
+    PARAMS:
+      [LOG_PATH]   config.LOGS_DIR / "1.4.2_stratification.txt"
+
+    DESCRIPTION:
+      Same Tee pattern as 4.3 audit.py and 1.7.1 clean.py. Uses
+      sys.__stdout__ (not sys.stdout) inside .write() to prevent
+      infinite recursion when sys.stdout has been replaced. Log file
+      opened in "w" mode - re-runs overwrite, correct for a per-run
+      diagnostic.
+
+      Why a log: console is ephemeral; the matrix is evidence for
+      Preliminary ML §3. Devtracker 5.3 explicitly says "Save:
+      logs/1.4.2_stratification.txt".
+
+
+8.2 load_splits([SPLITS_CSV]) -> list[tuple]
+
+    def load_splits(splits_csv):
+        [rows = []]
+        [open splits_csv for reading]
+        [reader = csv.DictReader]
+        for [r] in reader:
+            [rows.append((r["filename"], r["role"]))]
+        return rows
+
+    PARAMS:
+      [SPLITS_CSV]   config.SPLITS_CSV = ~\splits.csv
+
+    DESCRIPTION:
+      Reads 5.1's output. DictReader makes header parsing implicit -
+      columns must be named "filename" and "role" (they are, by 5.1's
+      write_splits_csv). No assumption about column order.
+
+      Expected size: 505 rows (from 4.4). Fewer rows = files dropped
+      at 4.2 or CSV truncated. More rows = new crops appeared since
+      5.1.
+
+
+8.3 class_from_filename([REL_PATH]) -> int | None
+
+    def class_from_filename(rel_path):
+        [prefix = rel_path.split("/")[0]]
+        try:
+            return int(prefix)
+        except ValueError:
+            return None
+
+    PARAMS:
+      [REL_PATH]   one row's "filename" value,
+                   e.g. "1/clip1_frame000003_ball1.png"
+
+    DESCRIPTION:
+      Class label lives in the parent-folder prefix. Same convention
+      as 1.5.3 assemble.py: "1/" -> label 1.
+
+      Why try/except: malformed prefixes (stray "unsorted/" path)
+      return None. build_matrix then skips them silently - a bad row
+      contributes to no cell, not to a wrong cell. Defensive without
+      raising.
+
+
+8.4 build_matrix([rows], [CLASS_IDS]) -> dict
+
+    def build_matrix(rows, class_ids):
+        [matrix = {role: {cid: 0 for cid in class_ids} for role in ROLES}]
+        for [rel_path, role] in rows:
+            [cid = class_from_filename(rel_path)]
+            if [cid is None or cid not in class_ids]: continue
+            if [role not in matrix]: continue
+            [matrix[role][cid] += 1]
+        return matrix
+
+    PARAMS:
+      [rows]         output of load_splits
+      [CLASS_IDS]    constants.CLASS_IDS = [1..15]
+
+    DESCRIPTION:
+      Initializes ALL cells to 0 BEFORE counting. Critical: a class
+      that doesn't appear in test at all still has entry
+      test[class]=0, which makes zero-cell detection possible. If
+      initialization were omitted, absent classes would KeyError, not
+      count as 0.
+
+      Three defence points per row: malformed prefix (None), class
+      out of range, role not in ROLES. Each causes a silent skip
+      rather than a corrupted count.
+
+      Return shape:
+        {
+          "train": {1: 55, 2: 15, ..., 15: 29},
+          "val":   {1: 22, 2:  5, ..., 15: 10},
+          "test":  {1: 17, 2:  5, ..., 15:  4},
+        }
+
+
+8.5 print_matrix([matrix], [CLASS_IDS])
+
+    def print_matrix(matrix, class_ids):
+        [print header row: class | train | val | test]
+        [print separator]
+        for [cid] in [class_ids]:
+            [print f"{cid:>6} | {train:>6} | {val:>6} | {test:>6}"]
+        [print separator]
+        [print totals row: total | T | V | Te]
+
+    PARAMS:
+      [matrix]       output of build_matrix
+      [CLASS_IDS]    constants.CLASS_IDS
+
+    DESCRIPTION:
+      Fixed-width column layout for clean reading in terminal and log.
+      15 rows + header + separator + totals = 18 lines. The totals row
+      lets a reader eyeball-verify train+val+test = 505.
+
+      Why not a figure: devtracker 5.3 says "Print per-role per-class
+      count matrix" - verification, not report figure. The
+      class_balance.png figure comes later at 8.1. 5.3 is text.
+
+
+8.6 check_floors([matrix], [CLASS_IDS]) -> (list, list)
+
+    def check_floors(matrix, class_ids):
+        [hard_failures = []]
+        [soft_failures = []]
+        for [role] in ROLES:
+            for [cid] in [class_ids]:
+                [n = matrix[role][cid]]
+                if role == "train":
+                    if [n < HARD_FLOOR_TRAIN]:
+                        [hard_failures.append((role, cid, n, reason))]
+                else:
+                    if [n < HARD_FLOOR_VALTEST]:
+                        [hard_failures.append((role, cid, n, "zero cell"))]
+                    elif [n < SOFT_TARGET_VALTEST]:
+                        [soft_failures.append((role, cid, n, "soft"))]
+        return hard_failures, soft_failures
+
+    PARAMS:
+      [matrix]       output of build_matrix
+      [CLASS_IDS]    constants.CLASS_IDS
+
+    THRESHOLDS (from devtracker 5.3 Verify line):
+      [HARD_FLOOR_TRAIN]   = 5   - every class must have >=5 in train
+                                    (thin CV folds otherwise)
+      [HARD_FLOOR_VALTEST] = 1   - every class must have >=1 in val and
+                                    test (zero cell = hard failure)
+      [SOFT_TARGET_VALTEST] = 3  - val/test cells below 3 flagged but
+                                    not blocking
+
+    DESCRIPTION:
+      Three-tier classification. Zero cells in val/test are HARD.
+      Any cell below its floor is HARD. Cells in val/test between 1
+      and 2 are SOFT - statistically noisy but not fatal.
+
+      Why separate lists: the two failure types have different
+      downstream consequences. Hard failures may require the
+      scope-narrowing decision from 5.2's carry-forward. Soft misses
+      need only a sentence in Preliminary §3. Bundling them into one
+      list would obscure that difference.
+
+
+8.7 report_failures([hard], [soft])
+
+    def report_failures(hard_failures, soft_failures):
+        if not hard and not soft:
+            [print "All roles meet hard floors and soft targets.
+                    Proceed to 6.1."]
+            return
+        if hard:
+            [print "HARD FAILURES (n):"]
+            [per-failure line: role class cid: n=<n> (reason)]
+            [print escalation note: FRAME_STRIDE=1, three options]
+        if soft:
+            [print "SOFT TARGET MISSES (n):"]
+            [per-failure line]
+            [print non-blocking note]
+
+    PARAMS:  outputs of check_floors.
+
+    DESCRIPTION:
+      Two-section report. Hard failures first - they demand an action.
+      Soft misses second - they demand a sentence. The escalation note
+      is hardcoded (not merely referenced) because a future reader of
+      the log file won't have the devtracker at hand. It reads:
+
+        "FRAME_STRIDE is already 1 under the motion-gated architecture.
+         Standard escalation (stride 5->3) is a non-lever. Options:
+           1. Re-run assign_roles with rare-class preference.
+           2. Narrow classifier scope to fully-covered classes.
+           3. Document as limitation and proceed."
+
+      These three options are the fallback chain from 5.2 writeup §7.
+      Recorded in the log file for traceability.
+
+
+8.8 main()
+
+    def main():
+        [Tee stdout to logs/1.4.2_stratification.txt]
+        [rows = load_splits(config.SPLITS_CSV)]
+        [print row count]
+        [matrix = build_matrix(rows, C.CLASS_IDS)]
+        [print matrix]
+        [hard, soft = check_floors(matrix, C.CLASS_IDS)]
+        [report_failures(hard, soft)]
+
+    PARAMS:  None (reads config + constants)
+
+    DESCRIPTION:
+      Orchestrates the four steps in order: load -> build -> print ->
+      check -> report. Print happens BEFORE check so that even if
+      check crashes (it won't - but defensively), the matrix is
+      already in the log for inspection.
+
+
+================================================================================
+9. DESIGN DECISIONS - ALL CONFIRMED
+================================================================================
+
+(a) Matrix initialization: {cid: 0} BEFORE counting.
+    Rejected: lazy counting (misses zero cells, turns them into
+    KeyError). Rationale: absent class in a role MUST appear as n=0 to
+    trigger the hard-failure check.
+
+(b) Class label from filename prefix.
+    Rejected: read class from parent folder name on disk. Rationale:
+    the CSV filename is the authoritative source; walking the disk
+    again would allow divergence if files were added/moved after 5.1.
+
+(c) Malformed rows silently skipped.
+    Rejected: raise on malformed. Rationale: one bad row should not
+    corrupt the audit; it will be caught as a missing file elsewhere.
+
+(d) Log path: logs/1.4.2_stratification.txt.
+    Matches devtracker 5.3 Save line. User renamed their copy to
+    verify_split_log.txt - traceability note, not a bug.
+
+(e) Tee helper consistent with 4.3 and 1.7.1.
+    Rejected: plain print (log lost). Rejected: separate log file
+    writing after the fact (easy to forget).
+
+(f) Thresholds as module constants (HARD_FLOOR_TRAIN etc.).
+    Rejected: hardcoded literals. Rationale: tunable in one place if
+    a later step revises the floor (e.g. from 5 to 3 for train if CV
+    folds prove noisy).
+
+(g) Hard vs soft as separate lists and separate report sections.
+    Rationale: different remediation paths (scope narrowing vs
+    one-sentence limitation).
+
+(h) Escalation note hardcoded in the log output.
+    Rationale: log must be self-contained. A reader of the log six
+    months later cannot be expected to cross-reference the
+    designtracker for the "why stride 3 is dead" argument.
+
+
+================================================================================
+10. REPORT SURFACE
+================================================================================
+
+PRELIMINARY ML §3 (stratification evidence)
+    - Paste the 15x3 matrix verbatim from the log.
+    - One sentence: "All 15 classes appear in every role; the hard
+      floor of 1 per class per role is met."
+    - One sentence: "Two classes fall below the soft target of 3:
+      class 10 in val (n=2) and class 7 in test (n=1). Metrics for
+      these classes in their respective roles carry higher
+      uncertainty."
+    - Path to logs/1.4.2_stratification.txt.
+
+FULL ML §6 (methodology)
+    - Only if scope narrowed to fully-covered classes: cite this
+      matrix as the justification. Not the case here (all roles cover
+      all classes).
+
+FULL ML §8 / DL §6 (limitations)
+    - If class 7's single test crop is lost at 6.1-6.3 (mask
+      rejection), upgrade the note from "thin test cell" to "zero
+      test cell". The split integrity is preserved (test set still
+      valid), but class-7 test accuracy becomes unreportable.
+    - Combine with the 8.6:1 train imbalance limitation for §3.
+
+
+================================================================================
+11. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+  5.1  src/split.py -> writes splits.csv
+  5.2  splits.csv inspected; pre-5.3 warning predicted exactly 2 soft
+       misses (class 7 test, class 10 val). Matched actual output.
+  config  SPLITS_CSV, LOGS_DIR
+  constants  CLASS_IDS
+
+DOWNSTREAM:
+  6.1  mask extraction proceeds. Watch class 7 test crop specifically.
+       If mask rejection drops it, class 7 becomes zero test cell at
+       7.3.
+  7.3  assemble.py re-verifies the matrix after inner join. If any
+       cell went to 0, surfaces there.
+  8.1  balance.py will compute train max/min = 43/5 = 8.6 -> SEVERE.
+       Triggers class_weight='balanced' for Phase 2.
+  Phase 2  consumes the split via 1.7.3's Pipeline.
+  Preliminary ML §3  consumes this matrix + soft-miss notes as
+       stratification evidence.
+
+
+================================================================================
+12. RESCALE / FALLBACK TRIGGERS
+================================================================================
+
+- If any HARD failure appears on re-run:
+    -> check if 6.1 (mask) or 6.3 (features) silently dropped a
+       class's crops between 5.2 and re-run.
+    -> if the CSV is identical, hard failure would indicate a code
+       regression in 5.1/5.3 - investigate.
+
+- If total != 505:
+    -> re-check 4.4 and 5.2. A change in row count means files were
+       added (new extraction) or removed (deleted by hand). Not
+       expected.
+
+- If the log path cannot be written:
+    -> check config.LOGS_DIR exists and is writable.
+
+- If class 7's single test crop is lost at 6.1-6.3:
+    -> at 7.3, the matrix will show test[7]=0.
+    -> This is a HARD failure of the split integrity, but not a
+       HARD failure of 5.3 (5.3 passed; the loss happened downstream).
+    -> Recovery: re-run split.py with rare-class preference
+       (fallback option 1), or narrow scope and document (fallback
+       option 2). Do not re-run 5.3 until the input CSV changes.
+
+
+================================================================================
+13. CHECKLIST STATUS
+================================================================================
+
+[x] 5.3 Write and run verify_split.py
+    -> src/verify_split.py written
+    -> functions: _tee_stdout, load_splits, class_from_filename,
+       build_matrix, print_matrix, check_floors, report_failures, main
+    -> log: logs/1.4.2_stratification.txt (user copy:
+       verify_split_log.txt - flagged)
+    -> run: 505 rows read; matrix printed; 15 classes in every role
+    -> soft misses: 2 (val class 10 n=2; test class 7 n=1)
+    -> hard failures: 0
+    -> 4.4 imbalance manifests here as expected; SEVERE verdict
+       pending at 8.1
+[ ] 6.1 Write mask.py
+
+================================================================================
+END OF NOTE
+================================================================================

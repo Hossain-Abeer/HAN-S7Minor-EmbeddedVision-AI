@@ -1,0 +1,560 @@
+================================================================================
+5.1 WRITE split.py - COMPLETE (CODE WRITTEN, RUN PENDING)
+================================================================================
+
+PURPOSE
+-------
+Write the group-by-clip split script that 5.2 will run. Assigns each of
+the 5 source clips to one of {train, val, test} (3 / 1 / 1), and writes
+splits.csv mapping every crop filename to its role.
+
+PREREQ
+------
+4.4 complete (audit log at logs/audit_class_count.txt; total=505,
+min=12 (C10), max=82 (C1), 14/15 SHORT).
+
+
+================================================================================
+1. ESSENCE & ROLE IN THE CHAIN
+================================================================================
+
+1.3.4 assigned LABELS (which class each crop belongs to).
+5.1 assigns ROLES (which of train/val/test each crop plays in).
+
+Role: PARTITIONING. Produces splits.csv. Does NOT move files. Does NOT
+train. Does NOT compute metrics. It is the seam that lets Phase 2 train
+on train, tune on val, and evaluate once on test.
+
+WHY GROUP-BY-CLIP (not file-level random)
+  Frames from the same clip 5 frames apart (e.g. frame 100 and frame 105
+  of the same 7-ball) are near-identical. A random file split would put
+  frame 100 in train and frame 105 in val -> val accuracy is inflated by
+  memorisation. Group-by-clip keeps all frames of a clip in the same
+  role. This is the group-by-clip leakage defence established in 1.4.1 §4.
+
+WHY 3 / 1 / 1 (60 / 20 / 20)
+  With 5 clips and whole-clip assignment, the only partitions are:
+      3 train / 1 val / 1 test   [SELECTED]
+      2 / 1 / 2  -> val too small
+      4 / 1 / 0  -> no test set
+      2 / 1 / 1  -> 1 clip has no home
+  Trade-off accepted: val and test each come from a single clip, so
+  their class variety is limited. Mitigation: assign the best-covered
+  clip to val, next to test (see §3).
+
+WHY DETERMINISTIC (no random seed)
+  Clip names are known. Coverage counts are computable. Role assignment
+  is fully determined by the data. No randomness required, none used.
+  Re-runs are bit-identical.
+
+DOWNSTREAM CONSUMERS
+  5.3  verify_split.py    -> reads splits.csv to check zero cells
+  1.5  features.py        -> reads splits.csv to attach labels + roles
+  7.3  assemble.py        -> reads splits.csv for the role column
+  Phase 2                 -> reads via 1.7.3's Pipeline (train/val/test)
+
+
+================================================================================
+2. TOOLING
+================================================================================
+
+Libraries (all already in requirements.txt):
+  os          -> folder listing
+  csv         -> splits.csv writing
+  re          -> CLIP_ID_REGEX
+  collections -> defaultdict
+
+Imports:
+  config     -> CROP_ROOT, SPLITS_CSV
+  constants  -> CLASS_IDS
+
+No new dependencies.
+
+
+================================================================================
+3. THE CODE - src/split.py
+================================================================================
+
+    """
+    5.1 SPLIT INTO TRAIN / VALIDATION / TEST
+
+    Group-by-clip split: whole clips assigned to roles.
+      - Method: group-by-clip (not file-level random)
+      - Ratio:  3 train / 1 val / 1 test
+      - Rule:   best-coverage clip -> val, second -> test, rest -> train
+      - Output: config.SPLITS_CSV with columns filename, role
+
+    Design reference: designtracker-1.4.1
+
+    Run from repo root:
+        python src/split.py
+    """
+
+    import os
+    import csv
+    import re
+    from collections import defaultdict
+
+    import config
+    import constants as C
+
+    # Filename convention from 1.3.2:
+    #   clip{id}_frame{idx:06d}_ball{k}.png
+    CLIP_ID_REGEX = re.compile(r"clip(\d+)_frame(\d+)_ball(\d+)")
+
+
+    def scan_crops(crop_root, class_ids):
+        """
+        Walk each class folder and return a list of
+        (relative_filename, label, clip_id) tuples.
+
+        relative_filename format: "<class>/<fname>.png"
+        """
+        records = []
+        for cid in class_ids:
+            folder = os.path.join(crop_root, str(cid))
+            if not os.path.isdir(folder):
+                continue
+            for fname in os.listdir(folder):
+                if not fname.lower().endswith(".png"):
+                    continue
+                match = CLIP_ID_REGEX.search(fname)
+                if not match:
+                    continue
+                clip_id = int(match.group(1))
+                rel_path = f"{cid}/{fname}"
+                records.append((rel_path, cid, clip_id))
+        return records
+
+
+    def score_clips_by_coverage(records):
+        """
+        Return {clip_id: (classes_covered, min_count_across_covered)}.
+
+        Higher tuple = better coverage.
+        """
+        counts = defaultdict(lambda: defaultdict(int))
+        for _, label, clip_id in records:
+            counts[clip_id][label] += 1
+
+        scores = {}
+        for clip_id, per_class in counts.items():
+            covered = len(per_class)
+            min_count = min(per_class.values()) if per_class else 0
+            scores[clip_id] = (covered, min_count)
+        return scores
+
+
+    def assign_roles(scores):
+        """
+        Rank clips by (classes_covered, min_count) descending.
+        Rank 0 -> val, rank 1 -> test, ranks 2+ -> train.
+
+        Tie-break: clip_id ascending (deterministic; no random seed).
+        """
+        ranked = sorted(
+            scores.items(),
+            key=lambda kv: (-kv[1][0], -kv[1][1], kv[0]),
+        )
+        roles = {}
+        for rank, (clip_id, _) in enumerate(ranked):
+            if rank == 0:
+                roles[clip_id] = "val"
+            elif rank == 1:
+                roles[clip_id] = "test"
+            else:
+                roles[clip_id] = "train"
+        return roles
+
+
+    def write_splits_csv(records, roles, out_path):
+        """
+        Write splits CSV: header + one row per crop.
+        Columns: filename, role.
+        """
+        with open(out_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["filename", "role"])
+            for rel_path, _label, clip_id in records:
+                writer.writerow([rel_path, roles[clip_id]])
+
+
+    def coverage_matrix(records):
+        """
+        Diagnostic helper: {clip_id: {class_id: count}}.
+        Used only by main() to pre-warn about zero cells before 5.3.
+        """
+        matrix = defaultdict(lambda: defaultdict(int))
+        for _, label, clip_id in records:
+            matrix[clip_id][label] += 1
+        return matrix
+
+
+    def main():
+        records = scan_crops(config.CROP_ROOT, C.CLASS_IDS)
+        print(f"[INFO] scanned {len(records)} crops across "
+              f"{len(C.CLASS_IDS)} classes")
+
+        if not records:
+            print("[WARN] no crops found; check config.CROP_ROOT")
+            return
+
+        scores = score_clips_by_coverage(records)
+        roles = assign_roles(scores)
+
+        # --- Diagnostic: ranked clip coverage scores ---
+        print("\nClip coverage scores (ranked):")
+        ranked = sorted(
+            scores.items(),
+            key=lambda kv: (-kv[1][0], -kv[1][1], kv[0]),
+        )
+        for clip_id, (covered, min_count) in ranked:
+            print(
+                f"  clip {clip_id}: classes_covered={covered:>2}, "
+                f"min_count={min_count:>2}, role={roles[clip_id]}"
+            )
+
+        # --- Diagnostic: pre-5.3 zero-cell warning ---
+        cm = coverage_matrix(records)
+        role_classes = {"train": set(), "val": set(), "test": set()}
+        for clip_id, role in roles.items():
+            for cls, n in cm[clip_id].items():
+                if n > 0:
+                    role_classes[role].add(cls)
+
+        print("\nPer-role class coverage (pre-5.3 check):")
+        any_missing = False
+        for role in ("train", "val", "test"):
+            covered = role_classes[role]
+            missing = [c for c in C.CLASS_IDS if c not in covered]
+            if missing:
+                any_missing = True
+                print(f"  {role}: {len(covered)}/{len(C.CLASS_IDS)} classes "
+                      f"(MISSING: {missing})")
+            else:
+                print(f"  {role}: all {len(C.CLASS_IDS)} classes covered")
+        if any_missing:
+            print("  [NOTE] 5.3 will flag these as zero cells. "
+                  "If unrecoverable, document as limitation and scope the "
+                  "classifier to the fully-covered classes.")
+
+        # --- Write CSV ---
+        write_splits_csv(records, roles, config.SPLITS_CSV)
+        print(f"\n[INFO] wrote {config.SPLITS_CSV}")
+
+
+    if __name__ == "__main__":
+        main()
+
+
+================================================================================
+4. SKELETAL EXPLANATION - WITH [PARAMS] & DESCRIPTION
+================================================================================
+
+4.1 scan_crops([CROP_ROOT], [CLASS_IDS]) -> list[tuple]
+
+    def scan_crops(crop_root, class_ids):
+        [records = []]
+        for [cid] in [class_ids]:
+            [folder = crop_root / cid]
+            if [folder missing]: continue
+            for [fname] in [folder]:
+                if [not .png]: continue
+                [match CLIP_ID_REGEX against fname]
+                if [no match]: continue
+                [clip_id = int(match.group(1))]
+                [records.append(("cid/fname.png", cid, clip_id))]
+        return records
+
+    PARAMS:
+      [CROP_ROOT]   config.CROP_ROOT = ~\unsorted_png\  (class subfolders)
+      [CLASS_IDS]   constants.CLASS_IDS = [1..15]
+
+    DESCRIPTION:
+      Walks each class folder once. For every PNG whose filename matches
+      clip{N}_frame{idx:06d}_ball{k}.png, records
+      (relative_path, label, clip_id). Label comes from the parent folder
+      (never inferred from the filename). Clip ID comes from the filename
+      via regex. Malformed filenames are silently skipped - they belong
+      to no clip, so no role can be assigned.
+
+      Why relative paths: splits.csv stays portable if the root moves.
+      Downstream scripts reconstruct absolute paths as CROP_ROOT / rel_path.
+
+
+4.2 score_clips_by_coverage([records]) -> dict[clip_id, tuple]
+
+    def score_clips_by_coverage(records):
+        [counts = defaultdict(lambda: defaultdict(int))]
+        for [_, label, clip_id] in [records]:
+            [counts[clip_id][label] += 1]
+        [scores = {}]
+        for [clip_id, per_class] in [counts]:
+            [covered = len(per_class)]
+            [min_count = min(per_class.values())]
+            [scores[clip_id] = (covered, min_count)]
+        return scores
+
+    PARAMS:
+      [records]    output of scan_crops()
+
+    DESCRIPTION:
+      Reduces each clip to a single score tuple
+      (classes_covered, min_count). Lexicographic sort means coverage
+      dominates: a clip covering all 15 classes beats one covering 14
+      even if the 14-cover clip has a fatter minimum.
+
+      Why this score (from 1.4.1 §6): It answers "how good a candidate
+      is this clip for the highest-pressure role?" Coverage matters
+      because a clip missing a class is useless for that class in
+      whichever role it lands. min_count breaks ties between clips
+      that cover the same number of classes; the fatter minimum wins.
+
+
+4.3 assign_roles([scores]) -> dict[clip_id, str]
+
+    def assign_roles(scores):
+        [ranked = sorted(scores, key=(-classes_covered, -min_count, clip_id))]
+        [roles = {}]
+        for [rank, (clip_id, _)] in enumerate(ranked):
+            if rank == 0:   [roles[clip_id] = "val"]
+            elif rank == 1: [roles[clip_id] = "test"]
+            else:           [roles[clip_id] = "train"]
+        return roles
+
+    PARAMS:
+      [scores]     output of score_clips_by_coverage()
+
+    DESCRIPTION:
+      Deterministic assignment. Rank 0 -> val (highest-pressure role -
+      looked at repeatedly during training for early stopping, LR
+      scheduling). Rank 1 -> test (held out, only looked at once at the
+      very end). Ranks 2-4 -> train.
+
+      Why val before test (from 1.4.1 §6):
+        "Both are held out. But val is looked at repeatedly during
+         training and is more sensitive to thin classes. Give the
+         best-covered clip to the harder-working role."
+
+      Tie-break added beyond 1.4.1: clip_id ascending. The spec says
+      "Ties broken arbitrarily otherwise, and the tie-break decision is
+      recorded." Ascending is the least-surprising arbitrary choice.
+
+      No random seed: 1.4.1 §7 - "Fixed assignment. Clip names are
+      known; role assignment is deterministic given the coverage counts."
+
+
+4.4 write_splits_csv([records], [roles], [SPLITS_CSV])
+
+    def write_splits_csv(records, roles, out_path):
+        [open out_path for writing]
+        [write header row: filename, role]
+        for [rel_path, _, clip_id] in [records]:
+            [write (rel_path, roles[clip_id])]
+
+    PARAMS:
+      [records]     output of scan_crops()
+      [roles]       output of assign_roles()
+      [SPLITS_CSV]  config.SPLITS_CSV = ~\splits.csv
+
+    DESCRIPTION:
+      Writes the CSV. Files stay in 1/ ... 15/. The CSV is a logical
+      map: filename -> role. Downstream (5.3, 1.5, Phase 2) reads this
+      CSV and joins against the actual PNG paths.
+
+      Why logical, not physical folders (1.4.1 §8):
+        "Moving files duplicates storage, renames break provenance,
+         and re-splitting with different rules becomes a rewrite."
+
+      CSV format example:
+        filename,role
+        1/clip1_frame000005_ball0.png,train
+        3/clip2_frame000150_ball2.png,val
+        10/clip4_frame000042_ball1.png,test
+
+
+4.5 coverage_matrix([records]) - DIAGNOSTIC ADDITION (not in 1.4.1)
+
+    def coverage_matrix(records):
+        [matrix = defaultdict(lambda: defaultdict(int))]
+        for [_, label, clip_id] in [records]:
+            [matrix[clip_id][label] += 1]
+        return matrix
+
+    PARAMS:
+      [records]     output of scan_crops()
+
+    DESCRIPTION:
+      Not in the designtracker spec. Pure diagnostic used by main() to
+      print a pre-5.3 zero-cell warning. Given 4.4's imbalance
+      (14/15 SHORT, Class 10=12 crops), zero cells in val or test are
+      likely. This gives visibility before 5.3 formally fails, so the
+      user can decide how to handle it before writing another note.
+
+
+4.6 main()
+
+    def main():
+        [records = scan_crops(config.CROP_ROOT, C.CLASS_IDS)]
+        [scores  = score_clips_by_coverage(records)]
+        [roles   = assign_roles(scores)]
+
+        [print ranked clip coverage table]
+        [print per-role class coverage; flag MISSING classes]
+
+        [write_splits_csv(records, roles, config.SPLITS_CSV)]
+
+    PARAMS:
+      None (reads from config and constants)
+
+    DESCRIPTION:
+      Orchestrates the four core functions in order:
+        scan -> score -> assign -> write.
+      Two diagnostic print blocks (ranked scores, per-role coverage)
+      are additions beyond 1.4.1 that surface problems at 5.1 time
+      rather than waiting for 5.3 to fail.
+
+
+================================================================================
+5. DESIGN DECISIONS - ALL CONFIRMED
+================================================================================
+
+(a) Split method: group-by-clip.
+    Rejected: file-level random (leakage between near-identical frames).
+    Reference: 1.4.1 §4.
+
+(b) Ratio: 3 / 1 / 1 (60/20/20).
+    Rejected: 2/1/2 (val too small), 4/1/0 (no test), 2/1/1 (1 clip
+    homeless).
+    Reference: 1.4.1 §5.
+
+(c) Assignment rule: best-coverage -> val, next -> test, rest -> train.
+    Reference: 1.4.1 §6.
+
+(d) Random seed: none. Deterministic by design.
+    Reference: 1.4.1 §7.
+
+(e) CSV output, not folder movement.
+    Reference: 1.4.1 §8.
+
+(f) Tie-break: clip_id ascending.
+    Least-surprising arbitrary rule; deterministic; recorded here.
+
+(g) Diagnostic blocks in main() (ranked scores, per-role coverage).
+    Additions beyond 1.4.1. Purpose: surface zero-cell problems at
+    5.1 time rather than at 5.3 time.
+
+
+================================================================================
+6. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+  4.4  total=505 across 15 classes (14/15 SHORT).
+  config  CROP_ROOT, SPLITS_CSV.
+  constants  CLASS_IDS.
+  1.3.2  filename convention clip{id}_frame{idx:06d}_ball{k}.png.
+
+DOWNSTREAM:
+  5.2  runs this script; records output; verifies splits.csv.
+  5.3  reads splits.csv; per-role/per-class count matrix; flags zero
+       cells.
+  1.5  reads splits.csv + PNGs; produces feature matrix.
+  7.3  reads splits.csv for the role column in dataset.csv.
+  Phase 2  consumes dataset.csv via 1.7.3's Pipeline.
+  Preliminary ML §3  consumes splits evidence for stratification claim.
+
+LATERAL:
+  NONE. 5.1 does not touch any other file. Its only artefact is
+  splits.csv.
+
+
+================================================================================
+7. WHAT TO WATCH IN 5.2 & 5.3
+================================================================================
+
+5.2 EXPECTED OUTPUT
+  [INFO] scanned 505 crops across 15 classes
+
+  Clip coverage scores (ranked):
+    clip ?: classes_covered=15, min_count=?, role=val
+    clip ?: classes_covered=?,  min_count=?, role=test
+    clip ?: classes_covered=?,  min_count=?, role=train
+    clip ?: classes_covered=?,  min_count=?, role=train
+    clip ?: classes_covered=?,  min_count=?, role=train
+
+  Per-role class coverage (pre-5.3 check):
+    ...
+
+5.2 VERIFY LINE
+  [x] splits.csv exists
+  [x] Exactly 3 clips -> train, 1 -> val, 1 -> test
+  [x] Assignment deterministic (re-run yields identical output)
+
+5.3 RISK - THE REAL GATE
+  Given 4.4's imbalance, one or more of these is likely:
+    - Class 10 (12 crops) may not appear in every clip
+    - Class 13 (23), Class 2 (24), Class 7 (24) are thin
+  Result: val or test may have 0 of a rare class.
+
+  5.3's verify line says "Zero cell -> escalate to 4.4 stride-3
+  re-extraction." That escalation path is DEAD (stride is already 1
+  from the motion-gated architecture in pre-3.3).
+
+  FALLBACK CHAIN (for 5.3 to choose, not 5.1):
+    1. Re-run assign_roles with preference for clips that cover rare
+       classes. Scope-narrowing decision, not a code bug.
+    2. Narrow the classifier scope to classes fully covered across
+       train/val/test. Matches the flexible-grading note from 4.4.
+       Document in Preliminary §3.
+    3. Accept the split; rely on class_weight='balanced'. Weakest
+       option - zero cells corrupt val/test metrics.
+
+  Do NOT add a fallback in split.py. 5.1 must do its job faithfully
+  (deterministic clip assignment). The scope decision is a 5.3 output,
+  not a 5.1 input.
+
+PRE-5.3 DIAGNOSTIC IN main()
+  The "Per-role class coverage (pre-5.3 check)" block already warns
+  you which classes will trip 5.3 - before you have to debug it.
+
+
+================================================================================
+8. RESCALE / FALLBACK TRIGGERS
+================================================================================
+
+- If splits.csv is not written:
+    -> check config.SPLITS_CSV path writable.
+    -> check config.CROP_ROOT populated (5.1 prints scanned count).
+
+- If exactly 3 clips are not in train:
+    -> inspect score_clips_by_coverage output. Ties and coverage
+       sorting are deterministic; a wrong split means the score
+       function is being fed unexpected data (e.g. a class folder was
+       accidentally emptied).
+
+- If a role has fewer than 5 clips:
+    -> impossible by construction (5 clips -> 3/1/1). Indicates a
+       corrupted record set. Re-run scan_crops and inspect.
+
+- If clip 10 is not in a role's coverage:
+    -> pre-5.3 diagnostic will warn. Escalate at 5.3 time per §7.
+
+
+================================================================================
+9. CHECKLIST STATUS
+================================================================================
+
+[x] 5.1 Write split.py
+    -> src/split.py written
+    -> functions: scan_crops, score_clips_by_coverage, assign_roles,
+       write_splits_csv, coverage_matrix (diagnostic), main
+    -> deterministic: no random seed; tie-break clip_id ascending
+    -> output: config.SPLITS_CSV (splits.csv)
+    -> adds pre-5.3 zero-cell diagnostic
+[ ] 5.2 Run split.py
+[ ] 5.3 Write and run verify_split.py
+
+================================================================================
+END OF NOTE
+================================================================================

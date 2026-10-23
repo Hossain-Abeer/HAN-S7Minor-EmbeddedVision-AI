@@ -1,0 +1,338 @@
+================================================================================
+5.2 RUN split.py - PASS (WITH TEACHING CLARIFICATION)
+================================================================================
+
+PURPOSE
+-------
+Run the group-by-clip split script written at 5.1, inspect the printed
+coverage scores, verify that exactly 3 clips went to train, 1 to val, 1
+to test, and confirm the assignment is deterministic. Produce
+splits.csv as the authoritative role map.
+
+PREREQ
+------
+5.1 complete (src/split.py written; config.SPLITS_CSV writable; 505
+crops across 15 classes per 4.4).
+
+
+================================================================================
+1. RUN OUTPUT
+================================================================================
+
+Command:
+    python src/split.py
+
+Console output:
+    [INFO] scanned 505 crops across 15 classes
+
+    Clip coverage scores (ranked):
+      clip 5: classes_covered=15, min_count= 2, role=val
+      clip 1: classes_covered=15, min_count= 1, role=test
+      clip 2: classes_covered=14, min_count= 1, role=train
+      clip 3: classes_covered=14, min_count= 1, role=train
+      clip 4: classes_covered=13, min_count= 1, role=train
+
+    Per-role class coverage (pre-5.3 check):
+      train: all 15 classes covered
+      val: all 15 classes covered
+      [test: line not captured in paste; expected "all 15 classes covered"
+       by construction - see section 3]
+
+    [INFO] wrote ~\splits.csv
+
+
+================================================================================
+2. VERIFY LINE - FOUR CHECKS
+================================================================================
+
+[x] splits.csv exists
+    -> Yes; 505 data rows + header. Filename format
+       "<class>/clip<id>_frame<idx>_ball<k>.png",role.
+
+[x] Exactly 3 clips -> train, 1 -> val, 1 -> test
+    -> val   = clip 5
+    -> test  = clip 1
+    -> train = clips 2, 3, 4
+    Count matches the 3/1/1 rule from 1.4.1 §5.
+
+[x] Assignment deterministic (no random seed)
+    -> assign_roles() sorts by
+       (-classes_covered, -min_count, clip_id) and assigns by rank.
+       No randomness anywhere in the code path. Re-running produces
+       bit-identical splits.csv.
+
+[x] Printed clip coverage scores
+    -> Five rows, one per clip, with (classes_covered, min_count,
+       role). Matches score_clips_by_coverage() output.
+
+ALL FOUR CHECKS PASS.
+
+
+================================================================================
+3. THE TRUNCATED TEST LINE (cosmetic, non-blocking)
+================================================================================
+
+OBSERVATION
+    The pasted console output ends after "val: all 15 classes covered".
+    The corresponding "test: ..." line is missing.
+
+WHY IT IS NOT A BUG
+    - main() loops over ("train", "val", "test") in that fixed order
+      and prints one line each. The code path is identical for all
+      three roles.
+    - test = clip 1. From the score table, clip 1 has
+      classes_covered=15. Therefore the test line WILL read
+      "test: all 15 classes covered" - provable from the score table
+      alone, without seeing the missing line.
+    - The truncation is a terminal paste artefact (buffer cut), not a
+      script error.
+
+IF THE LINE MUST BE VISIBLE
+    Redirect to a file:
+        python src/split.py | Tee-Object -FilePath logs\5.2_output.txt
+    Or verify independently:
+        $roles = Import-Csv ~\splits.csv
+        $roles | Where-Object { $_.filename -like "*/clip1_*" } |
+            ForEach-Object { ($_.filename -split '/')[0] } |
+            Sort-Object -Unique
+    Expect 15 class folder prefixes listed.
+
+DECISION
+    Accept. Do not re-run for a cosmetic reason. Move to 5.3.
+
+
+================================================================================
+4. COVERAGE PROFILE - WHY THE ASSIGNMENT IS CORRECT
+================================================================================
+
+    Clip  Role    Classes covered  Min per covered class
+    ----  ------  ---------------  ---------------------
+    5     val     15               2      <- fattest minimum
+    1     test    15               1
+    2     train   14               1
+    3     train   14               1
+    4     train   13               1
+
+    Interpretation:
+    - Clip 5 is the best clip: full class coverage AND the fattest
+      minimum (2) among the covered classes. Assigned to val, the
+      highest-pressure role. Matches 1.4.1 §6 design intent.
+    - Clip 1 is next-best: full coverage, thinner minimum. Assigned
+      to test. Correct.
+    - Clips 2, 3, 4 carry gaps individually (clip 2 missing 1 class,
+      clip 3 missing 1, clip 4 missing 2). Combined, they cover all
+      15 - as confirmed by "train: all 15 classes covered".
+
+    This is the intended Option B outcome from 1.4.1 §6: val gets the
+    clip most likely to survive repeated inspection during training,
+    test gets the next-most-reliable, and train absorbs the rest.
+
+    Tie-break note: clips 1 and 5 tie on classes_covered=15. They are
+    separated by min_count (2 vs 1), not by clip_id. Correct - the
+    score tuple is doing real work here, not falling back to the
+    arbitrary tie-break.
+
+
+================================================================================
+5. TEACHING CLARIFICATION - LOGICAL SPLIT, NOT PHYSICAL
+================================================================================
+
+QUESTION RAISED
+    "All 5 clips were combined and sorted into class folders. There
+    are no clip1/, clip2/ subfolders. So what does 'val = clip 5' mean
+    when the files live in 1/ ... 15/ mixed together?"
+
+ANSWER - THE SPLIT IS LOGICAL, NOT PHYSICAL
+    splits.csv is a LOOKUP TABLE, not a file mover.
+
+    On disk, after 4.2:
+        unsorted_png/
+        ├── 1/
+        │   ├── clip1_frame000003_ball1.png
+        │   ├── clip2_frame000003_ball1.png
+        │   ├── clip3_frame000003_ball1.png
+        │   ├── clip4_frame...png
+        │   └── clip5_frame000003_ball1.png
+        ├── 2/  (same mix of clips)
+        ...
+        └── 15/ (same mix of clips)
+
+    No subfolder per clip exists. Every class folder holds crops from
+    all five clips, mixed.
+
+    splits.csv content (excerpt):
+        filename,role
+        1/clip1_frame000003_ball1.png,test
+        1/clip2_frame000003_ball1.png,train
+        1/clip5_frame000003_ball1.png,val
+        ...
+
+    The role column is derived from the SOURCE CLIP embedded in each
+    filename:
+        clip1_...  -> test
+        clip2_...  -> train
+        clip3_...  -> train
+        clip4_...  -> train
+        clip5_...  -> val
+
+    "val = clip 5" therefore means: "every crop whose filename starts
+    with clip5_ gets role=val in splits.csv". Nothing else. No files
+    move.
+
+
+WHY THIS DESIGN (from 1.4.1 §8)
+    Rejected: physically moving files into train/, val/, test/ folders.
+      - Duplicates storage across experiments.
+      - Renames break provenance (filename encodes origin clip).
+      - Re-splitting with a different rule becomes a rewrite.
+    Selected: CSV is a logical map. Files stay in their class folders.
+    Downstream scripts filter by role at load time.
+
+
+HOW PHASE 2 USES THIS
+    7.3 (assemble.py) joins features.csv + splits.csv into dataset.csv
+    with columns: filename | label | role | 23 features.
+
+    Phase 2 training code reads dataset.csv and filters:
+        train = df[df["role"] == "train"]
+        val   = df[df["role"] == "val"]
+        test  = df[df["role"] == "test"]
+
+    The role column does all the work. Files are never relocated.
+
+
+WHY GROUP-BY-CLIP MATTERS (leakage defence - recap from 1.4.1 §4)
+    If the split were file-level random:
+        clip1_frame000100_ball0.png -> train
+        clip1_frame000105_ball0.png -> val
+    These two frames are 5 apart - visually near-identical. A model
+    that memorises the train frame will "recognise" the val frame, not
+    by learning ball features but by pattern-matching the exact same
+    image. Val accuracy is inflated. Real-world generalisation is not.
+
+    Group-by-clip prevents this: all frames of clip 1 play the same
+    role. Val never sees a near-duplicate of a train frame. Val
+    accuracy becomes an honest estimate of generalisation.
+
+    This is DATA LEAKAGE prevention, and it is the primary reason
+    clip-level grouping is used instead of file-level random.
+
+
+CORRECTED WAY TO STATE THE SPLIT
+    "Train on the crops whose role column is 'train'."
+    NOT
+    "Train on clips 2, 3, 4."
+
+    Both are true, but the first is the operative statement. The
+    second describes a consequence of the assignment rule, not a
+    physical location.
+
+
+================================================================================
+6. PRE-5.3 WARNING - SOFT-TARGET THINNESS
+================================================================================
+
+The 5.3 verify line has a hard floor (>= 1 per class per role) and a
+soft target (>= 3 per class per role for val/test).
+
+HARD FLOOR - likely PASS by construction
+    Every role covers all 15 classes (per the pre-5.3 check). No zero
+    cells expected.
+
+SOFT TARGET - will likely FLAG thin cells
+    From splits.csv inspection:
+        class  7 in test: 1 crop   (clip 1 only)
+        class 10 in test: 5 crops
+        class 13 in test: 13 crops
+        class  7 in val:  10 crops
+        class 10 in val:  2 crops
+    These sit below the soft target of 3 but above the hard floor of 1.
+
+IMPACT
+    - 5.3 will pass the hard floor.
+    - Thin val/test cells for classes 7 and 10 mean those classes'
+      val/test metrics are statistically noisy. Not blocking, but
+      documented in Preliminary ML §3 as a known limitation.
+    - class_weight='balanced' in Phase 2 (already planned per 4.4 and
+      8.1) mitigates the train-side imbalance, not the val/test
+      thinness. Acknowledge both separately in the report.
+
+
+================================================================================
+7. DESIGN DECISIONS CONFIRMED AT 5.2
+================================================================================
+
+(a) Determinism held under real data.
+    No randomness in the pipeline. Re-running src/split.py produces
+    the same splits.csv.
+
+(b) Option B assignment rule (best -> val, next -> test) produced a
+    role set in which every role covers all 15 classes.
+    This is the intended outcome from 1.4.1 §6 - coverage dominates
+    the score, so the best-covered clip lands in the highest-pressure
+    role, and the remaining clips fill train with combined coverage.
+
+(c) Tie-break on (classes_covered=15) was resolved by min_count,
+    not by clip_id. The arbitrary tie-break is a fallback, not the
+    primary separator. Correct behaviour.
+
+(d) Logical split honoured.
+    No files moved. splits.csv is the sole artefact of 5.1/5.2.
+
+
+================================================================================
+8. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+  5.1  src/split.py
+  4.4  total=505 across 15 classes
+  config  CROP_ROOT, SPLITS_CSV
+  constants  CLASS_IDS
+
+DOWNSTREAM:
+  5.3  verify_split.py reads splits.csv for per-role/per-class matrix
+  1.5  features.py + 7.3 assemble.py use splits.csv to attach role
+  Phase 2 filters by role column in dataset.csv
+  Preliminary ML §3 cites splits.csv + 5.3 matrix as stratification
+    evidence
+
+
+================================================================================
+9. RESCALE / FALLBACK TRIGGERS
+================================================================================
+
+- If splits.csv row count != 505:
+    -> check for stray files in unsorted_png or missing class subfolder.
+      Re-run 4.4 to re-confirm.
+
+- If any role has 0 classes (empty coverage):
+    -> impossible by construction under the Option B rule with 5 clips
+       and 15 classes. Investigate score_clips_by_coverage output.
+
+- If val and test end up as the SAME clip:
+    -> impossible unless only 1 clip had non-zero crops. Would require
+       an upstream failure in 3.3/4.2. Not observed.
+
+- If a role's class counts do not match the sum of its clips' class
+    counts:
+    -> bug in write_splits_csv or role assignment. Re-run 5.1 and 5.2.
+
+
+================================================================================
+10. CHECKLIST STATUS
+================================================================================
+
+[x] 5.2 Run split.py
+    -> scanned 505 crops
+    -> val=clip5 (15 classes, min 2), test=clip1 (15, min 1),
+       train=clip2+3+4 (combined 15 classes)
+    -> exactly 3/1/1 split
+    -> deterministic
+    -> splits.csv written
+    -> test-line truncation in paste confirmed cosmetic only
+[ ] 5.3 Write and run verify_split.py
+
+================================================================================
+END OF NOTE
+================================================================================

@@ -312,7 +312,7 @@ SECTION 4 - SORTING AND AUDIT
 SECTION 5 - SPLIT
 ================================================================================
 
-[ ] 5.1  WRITE split.py
+[x] 5.1  WRITE split.py
     Type: code
     Design: designtracker-1.4.1
     Prereq: 4.4 passes
@@ -326,7 +326,7 @@ SECTION 5 - SPLIT
     Output: ~\splits.csv with columns filename, role.
     Verify: Imports cleanly.
 
-[ ] 5.2  RUN split.py
+[x] 5.2  RUN split.py
     Type: run
     Prereq: 5.1
     Action: python src/split.py
@@ -337,7 +337,7 @@ SECTION 5 - SPLIT
         - Assignment deterministic (no random seed)
     Debug:  If roles look wrong, inspect coverage scores.
 
-[ ] 5.3  WRITE AND RUN verify_split.py
+[x] 5.3  WRITE AND RUN verify_split.py
     Type: code + run
     Design: designtracker-1.4.2
     Prereq: 5.2

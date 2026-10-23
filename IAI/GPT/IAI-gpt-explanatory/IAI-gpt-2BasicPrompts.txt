@@ -37,6 +37,9 @@ i don't understand. explain them first, one by one in terms:
 [1.7.3]
 sufficient discussion. do the txt writeup of all that's being discussed, including all that was explained as a part of teaching me
 
+[5.1] 
+proceed to produce the code for copy-pasting, then proceed to explanation of the code, by using skeletal codeblocks with [params] & description
+
 
 
 i have made a decision. If mitigating the issue of orientation fails, ie. non of the method works or the code becomes too complex, we will be ignoring 6, and only recognizing 9, as it matters for 9-ball game rule, and during 8-ball game rule, 6 doesn't really count. so both 6 & 9 could be mapped to a 9. 
@@ -60,17 +63,4 @@ use a box like [ ] for each subsection, such that once it's complete, i will tic
 
 
 
-
- here are all the files. express your understanding. now, mention:
-1. overview of the entire module.
-2. a very short summary of each of the week. 
-3. objectives of the exercises.
-4. assessment. it should be in terms of two periods - period 1 has two reports and quizes as part of its assessment, the preliminary ML report & the full ML report. period 2 has the DL report.. this is the root structure of the module. 
-5. class schedule
-6. phases (starting with phase 0 software installation)
-
-Then propose a roadmap for me, mentioning the sequence of events, and then anything else you'd mention additionally
-
-
-
-CnOCR corrupted the development environment. I attempted to recover. analyze & validate. if valid I proceed with other OCR library, such as easyOCR
+validate. if valid, do the .txt writeup, include all being related to & discussed about it. you need to include - 'the code, then explanation of the code, by using skeletal codeblocks with [params] & description'
