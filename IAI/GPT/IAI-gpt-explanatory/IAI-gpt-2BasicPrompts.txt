@@ -57,7 +57,7 @@ use a box like [ ] for each subsection, such that once it's complete, i will tic
 
 
 
-
+before that, give a % or progress bar depicting the workflow state. make sure to count in the weight/significance of a task also, not just a count of the number of tasks
 
 
 

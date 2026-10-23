@@ -1,0 +1,29 @@
+================================================================================
+6.3 FULL RUN ON ALL CROPS - PASS
+================================================================================
+
+RUN OUTPUT
+----------
+[DONE] total=505 written=492 rejected=13
+
+VERIFY CHECKS
+-------------
+[x] Mask count (492) = crop count (505) - rejects (13).
+[x] Reject log populated (logs/rejects_mask.csv) with 13 small_mask rows.
+[x] All rejects sit at 12-29 px (just below MIN_MASK_AREA = 30).
+[x] Critical test/val cells preserved (3x True).
+[x] Striped ball masks generated (no apparent failure in class 9-15).
+
+INTERACTIVITY
+-------------
+Downstream 1.5.2 reads 492 masks; 13 crops vanish.
+7.3 inner join drops the 13 rejected crops.
+
+CHECKLIST
+---------
+[x] 6.3 Full run
+[ ] 7.1 Write features.py
+
+================================================================================
+END OF NOTE
+================================================================================

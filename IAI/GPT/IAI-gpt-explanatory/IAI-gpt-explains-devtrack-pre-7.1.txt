@@ -1,0 +1,196 @@
+================================================================================
+IAI-GPT-EXPLAINS - PRE-7.1 CONTEXT: DIMENSIONALITY REDUCTION
+================================================================================
+
+PURPOSE
+-------
+This note captures the explanation of how the mask pipeline reduces a raw
+color crop into a small, fixed-length list of 23 numerical features. It
+explains why raw pixels are unsuitable for classical ML (Phase 2) and
+provides the exact code mechanics of the feature extraction step (7.1).
+
+--------------------------------------------------------------------------------
+1. THE PROBLEM WITH RAW PIXELS
+--------------------------------------------------------------------------------
+In classical ML (SVM, Random Forest, k-NN), the model does not "see" an
+image. It only sees a 1D list of numbers (a feature vector).
+
+If we feed a raw 60x60 RGB crop directly to the model:
+  - 60 x 60 = 3,600 pixels.
+  - Each pixel has 3 values (Red, Green, Blue).
+  - 3,600 x 3 = 10,800 numbers per image.
+
+With only 505 images in the dataset, giving the model 10,800 dimensions
+causes the "curse of dimensionality." The model will simply memorize the
+exact pixel positions and colors of the 505 training images and fail
+completely on unseen images.
+
+Furthermore, raw pixels are position-dependent. If a ball shifts 2 pixels
+to the left, all 10,800 numbers change. The model must relearn the shape
+from scratch.
+
+--------------------------------------------------------------------------------
+2. THE SOLUTION: MEASUREMENTS, NOT PIXELS
+--------------------------------------------------------------------------------
+Instead of asking the model to look at 10,800 colors, we use 7.1 (features.py)
+to measure the geometry of the numeral. We reduce the data from 10,800 raw
+pixels down to exactly 23 descriptive numbers.
+
+By doing this, we force the model to learn the SHAPE of the numeral (e.g.,
+holes, aspect ratios) rather than the COLOR of the ball.
+
+--------------------------------------------------------------------------------
+3. CODE SNIPPETS: HOW THE 23 FEATURES ARE EXTRACTED
+--------------------------------------------------------------------------------
+
+3.1 FINDING THE BLOB (Dropping the rest)
+----------------------------------------
+Before measuring, we isolate the main white blob (the patch surrounding
+the numeral).
+
+    def largest_blob(mask):
+        [n, labels, stats, _] = cv2.connectedComponentsWithStats(mask, 8)
+        if n <= 1:
+            return None, None
+        [idx = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])]
+        [blob = (labels == idx).astype(np.uint8) * 255]
+        return blob, stats[idx]
+
+    [params]
+      mask: the binary mask PNG from 6.1.
+    
+    [description]
+      Finds every white shape, picks the one with the largest area, and
+      keeps only that one. We go from a 60x60 array (3,600 numbers) to a
+      handful of stats (Area, Width, Height, X, Y). The rest is zeroed out.
+
+
+3.2 hole_count (1 number)
+-------------------------
+How do we count holes? We invert the blob so the numeral becomes a white
+shape, and count how many white shapes are inside (not touching the edges).
+
+    def find_holes(blob_mask, min_area_px):
+        [inv = cv2.bitwise_not(blob_mask)]
+        [n, labels, stats, _] = cv2.connectedComponentsWithStats(inv, 8)
+        [h, w] = blob_mask.shape
+        holes = []
+        for i in range(1, n):
+            [x, y, ww, hh, area] = stats[i]
+            if x == 0 or y == 0 or x + ww == w or y + hh == h: continue # border
+            if area < min_area_px: continue # noise
+            holes.append(stats[i])
+        return holes
+
+    [params]
+      blob_mask: the largest blob isolated in 3.1.
+      min_area_px: ignores tiny specks (MIN_HOLE_AREA_PX = 5).
+    
+    [description]
+      Inverts the image. The numeral becomes white; the background becomes
+      black. We count the white "islands" completely surrounded by black.
+      An "8" returns 2 holes. "0" returns 1. "1" returns 0.
+
+
+3.3 blob_area_ratio & hole_area_ratio (2 numbers)
+-------------------------------------------------
+How much of the crop is filled by the blob? How much of the blob is filled
+by the hole?
+
+    [crop_area = float(h * w)]
+    [blob_area = float(blob_stat[cv2.CC_STAT_AREA])]
+    [hole_area = float(holes[0][cv2.CC_STAT_AREA]) if holes else 0.0]
+
+    [feats["blob_area_ratio"] = blob_area / crop_area]
+    [feats["hole_area_ratio"] = hole_area / blob_area]
+
+    [params]
+      crop_area: total pixels in the crop (h * w).
+      blob_area: area of the largest white patch.
+    
+    [description]
+      Simple division using OpenCV's stats. A wide numeral like "8" has a
+      high hole_area_ratio (large hole). A thin "1" has a low ratio.
+
+
+3.4 hole_aspect (1 number)
+--------------------------
+Is the numeral tall and skinny, or square?
+
+    [hw = float(holes[0][cv2.CC_STAT_WIDTH])]
+    [hh = float(holes[0][cv2.CC_STAT_HEIGHT])]
+    [feats["hole_aspect"] = hw / hh]
+
+    [description]
+      Width of the hole divided by height. A "1" has a very small ratio
+      (tall and thin). An "8" has a ratio close to 1.0 (square).
+
+
+3.5 hole_centroid_dx / dy (2 numbers)
+-------------------------------------
+Is the numeral perfectly centered, or sitting off to the side?
+
+    [blob_cx = blob_stat[cv2.CC_STAT_LEFT] + bw / 2.0]
+    [blob_cy = blob_stat[cv2.CC_STAT_TOP]  + bh / 2.0]
+    [hole_cx = hx + hw / 2.0]
+    [hole_cy = hy + hh / 2.0]
+
+    [feats["hole_centroid_dx"] = (hole_cx - blob_cx) / max(1.0, bw)]
+    [feats["hole_centroid_dy"] = (hole_cy - blob_cy) / max(1.0, bh)]
+
+    [description]
+      Calculates the center of the blob and the center of the hole.
+      Subtracts them and normalizes by the blob's width/height. If the
+      numeral is perfectly centered, the values are 0.0.
+
+
+3.6 projections (16 numbers)
+----------------------------
+Where is the "mass" of the numeral concentrated? We squash the image into
+two 1D shadows and divide each shadow into 8 buckets.
+
+    def projections_binned(blob_mask, n_bins, blob_area):
+        [col_sums = (blob_mask > 0).sum(axis=0).astype(float)] # shadow from top
+        [row_sums = (blob_mask > 0).sum(axis=1).astype(float)] # shadow from left
+        
+        [x_chunks = np.array_split(col_sums, n_bins)] # split into 8 chunks
+        [y_chunks = np.array_split(row_sums, n_bins)]
+        
+        [x_bins = np.array([c.sum() for c in x_chunks]) / max(1.0, blob_area)]
+        [y_bins = np.array([c.sum() for c in y_chunks]) / max(1.0, blob_area)]
+        return x_bins, y_bins
+
+    [params]
+      n_bins: number of bins per axis (PROJ_BINS = 8).
+      blob_area: used to normalize the bin counts into percentages.
+    
+    [description]
+      .sum(axis=0) counts white pixels in every column. np.array_split
+      squashes those columns into 8 bins. It sums the counts in each bin
+      and divides by blob_area. A "1" has mass concentrated in the middle
+      bins. A "0" has mass split between the left/right edge bins.
+
+--------------------------------------------------------------------------------
+4. THE RESULTING DATA STRUCTURE
+--------------------------------------------------------------------------------
+By the time features_from_mask() finishes, it has thrown away the 10,800
+raw pixel values entirely. It outputs a dictionary that looks like this:
+
+{
+  "hole_count": 1,
+  "connected_component_count": 1,
+  "blob_area_ratio": 0.28,
+  "hole_area_ratio": 0.15,
+  "hole_aspect": 0.85,
+  "hole_centroid_dx": 0.02,
+  "hole_centroid_dy": -0.01,
+  "proj_x_0": 0.01, "proj_x_1": 0.05, ... "proj_x_7": 0.00, 
+  "proj_y_0": 0.00, "proj_y_1": 0.12, ... "proj_y_7": 0.01
+}
+
+That dictionary is the 23 features. The model trains on this list of
+numbers, completely blind to the ball's color or exact pixel layout.
+
+================================================================================
+END OF NOTE
+================================================================================

@@ -1,0 +1,572 @@
+================================================================================
+6.1 WRITE mask.py - COMPLETE (CODE WRITTEN, RUN PENDING)
+================================================================================
+
+PURPOSE
+-------
+Write the numeral-region mask extractor that 6.2 will dry-run and 6.3 will
+run in full. For every crop in CROP_ROOT/<class>/, produce a binary mask
+under MASK_ROOT/<class>/<name>_mask.png. Crops whose mask has too few
+pixels are rejected and logged (second audit pass).
+
+PREREQ
+------
+5.3 complete (splits.csv written; hard floor passed; 2 soft misses
+flagged: val C10 n=2, test C7 n=1).
+4.2 complete (505 crops sorted into 1/ ... 15/).
+2.1 complete (CLOTH_H_LO..CLOTH_V_HI locked in constants.py).
+2.3b complete (MASK_* and MIN_MASK_AREA locked in config.py).
+
+
+================================================================================
+1. ESSENCE & ROLE IN THE CHAIN
+================================================================================
+
+1.3.2 produced crops (a padded ball patch with a 15% cloth ring).
+6.1 produces MASKS (a stencil of the white numeral patch, numeral as a hole).
+
+Role: PREPROCESSING + SECOND AUDIT.
+  - Produces the binary mask that 1.5.2 (features.py) consumes.
+  - Rejects crops whose mask is empty/unusable. This is audit pass #2,
+    parallel to 1.2.4's frame-level filter: over-produce upstream, gate
+    here, log every rejection.
+  - Feeds directly into 1.5.2's hole_count / blob_area_ratio / projections.
+
+6.1 does NOT:
+  - classify, label, or decide roles
+  - filter or clean (that is 1.7.1 / 1.7.2)
+  - modify the crop files themselves
+  - train anything
+
+WHAT A MASK IS
+  A binary image, same size as the crop, where 0=ignore and 255=keep.
+  It is a map of WHERE the numeral region is, not a picture of it.
+  Downstream 1.5.2 finds the largest blob, inverts it, and counts the
+  holes inside — every numeral appears as a HOLE inside the surviving
+  white blob.
+
+WHY HSV high-V low-S
+  "Whiteness" is what the numeral patch has: bright, unsaturated. HSV
+  separates this from ball colour (coloured → high S) and from cloth
+  (coloured → in CLOTH_* range). The two thresholds V_MIN and S_MAX are
+  the only knobs that decide what survives as "white".
+
+WHY MORPH_CLOSE = 0
+  Closing (dilate→erode) FILLS holes. For numerals 0, 6, 8, 9, filling
+  the hole destroys the very feature 1.5.2 relies on. OPEN is fine
+  (removes specks). CLOSE must remain 0 unless a future note revises
+  1.5.2's feature set.
+
+
+================================================================================
+2. TOOLING
+================================================================================
+
+Libraries (all in requirements.txt):
+  os      -> folder walk, makedirs, env var
+  csv     -> reject log
+  cv2     -> cvtColor, inRange, bitwise_not, bitwise_and, morphologyEx,
+             count_nonzero, imread, imwrite
+  numpy   -> array bounds, ones()
+  config  -> CROP_ROOT, MASK_ROOT, MASK_S_MAX, MASK_V_MIN,
+             MASK_MORPH_KERNEL, MASK_MORPH_OPEN, MASK_MORPH_CLOSE,
+             MIN_MASK_AREA, MASK_REJECT_LOG
+  constants -> CLASS_IDS, CLOTH_H_LO..CLOTH_V_HI
+
+No new dependencies. Same env-var dry-run pattern as extract_crop.py
+(EVML_DRY_RUN_CROPS mirrors EVML_DRY_RUN_FRAMES).
+
+
+================================================================================
+3. THE CODE - src/mask.py
+================================================================================
+
+    """
+    6.1 EXTRACT NUMERAL-REGION MASK PER CROP
+
+    For each crop in CROP_ROOT/<class>/, extract a binary mask that isolates
+    the numeral region:
+      - HSV high-V, low-S threshold  (whitish pixels)
+      - intersect with non-cloth     (reuse CLOTH_* bounds from constants.py)
+      - morphology OPEN only         (CLOSE must stay 0 to preserve holes)
+
+    Output: parallel tree under MASK_ROOT/<class>/<name>_mask.png
+    Rejects (mask too small): logged to MASK_REJECT_LOG, skipped.
+
+    Design reference: designtracker-1.5.1
+    Run from repo root:
+        python src/mask.py
+
+    Dry run (caps total crops processed to N):
+        PowerShell:
+            $env:EVML_DRY_RUN_CROPS="20"; python src/mask.py;
+            Remove-Item Env:EVML_DRY_RUN_CROPS
+    """
+
+    import os
+    import csv
+    import cv2
+    import numpy as np
+
+    import config
+    import constants as C
+
+
+    def extract_numeral_mask(crop_bgr):
+        """
+        Return a uint8 binary mask (0/255).
+        Isolates bright, low-saturation pixels (the white patch bearing the
+        numeral) while excluding cloth-coloured pixels.
+        """
+        hsv = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2HSV)
+
+        # (a) high-V, low-S: the whitish patch that carries the numeral
+        white_lo = np.array([0,   0,                 config.MASK_V_MIN])
+        white_hi = np.array([179, config.MASK_S_MAX, 255])
+        mask = cv2.inRange(hsv, white_lo, white_hi)
+
+        # (b) intersect with non-cloth pixels
+        cloth_lo = np.array([C.CLOTH_H_LO, C.CLOTH_S_LO, C.CLOTH_V_LO])
+        cloth_hi = np.array([C.CLOTH_H_HI, C.CLOTH_S_HI, C.CLOTH_V_HI])
+        cloth    = cv2.inRange(hsv, cloth_lo, cloth_hi)
+        valid    = cv2.bitwise_not(cloth)
+        mask     = cv2.bitwise_and(mask, valid)
+
+        # (c) morphology: OPEN only. CLOSE must stay 0 (would fill numeral holes).
+        if config.MASK_MORPH_KERNEL > 0:
+            k = np.ones((config.MASK_MORPH_KERNEL, config.MASK_MORPH_KERNEL),
+                        np.uint8)
+            if config.MASK_MORPH_OPEN > 0:
+                mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k,
+                                        iterations=config.MASK_MORPH_OPEN)
+            if config.MASK_MORPH_CLOSE > 0:
+                mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k,
+                                        iterations=config.MASK_MORPH_CLOSE)
+
+        return mask
+
+
+    def mask_is_usable(mask):
+        return int(np.count_nonzero(mask)) >= config.MIN_MASK_AREA
+
+
+    def log_reject(class_id, filename, n_pixels):
+        new_file = not os.path.exists(config.MASK_REJECT_LOG)
+        with open(config.MASK_REJECT_LOG, "a", newline="") as f:
+            w = csv.writer(f)
+            if new_file:
+                w.writerow(["reason", "class_id", "filename", "n_pixels"])
+            w.writerow(["small_mask", class_id, filename, n_pixels])
+
+
+    def build_masks(crop_root, mask_root, class_ids, dry_run_crops=0):
+        total = 0
+        written = 0
+        rejected = 0
+
+        for cid in class_ids:
+            src_dir = os.path.join(crop_root, str(cid))
+            if not os.path.isdir(src_dir):
+                continue
+            out_dir = os.path.join(mask_root, str(cid))
+            os.makedirs(out_dir, exist_ok=True)
+
+            for fname in sorted(os.listdir(src_dir)):
+                if not fname.lower().endswith(".png"):
+                    continue
+                if fname.endswith("_mask.png"):
+                    continue
+                if dry_run_crops and total >= dry_run_crops:
+                    return total, written, rejected
+
+                crop = cv2.imread(os.path.join(src_dir, fname))
+                total += 1
+
+                if crop is None:
+                    print(f"[WARN] read fail: {cid}/{fname}")
+                    rejected += 1
+                    continue
+
+                mask = extract_numeral_mask(crop)
+
+                if not mask_is_usable(mask):
+                    log_reject(cid, fname, int(np.count_nonzero(mask)))
+                    rejected += 1
+                    continue
+
+                base, _ = os.path.splitext(fname)
+                out_path = os.path.join(out_dir, f"{base}_mask.png")
+                if cv2.imwrite(out_path, mask):
+                    written += 1
+                else:
+                    print(f"[WARN] imwrite fail: {out_path}")
+                    rejected += 1
+
+        return total, written, rejected
+
+
+    def main():
+        # Truncate reject log at start of each run
+        if os.path.exists(config.MASK_REJECT_LOG):
+            os.remove(config.MASK_REJECT_LOG)
+
+        dry_run_crops = int(os.environ.get("EVML_DRY_RUN_CROPS", "0"))
+
+        total, written, rejected = build_masks(
+            config.CROP_ROOT, config.MASK_ROOT, C.CLASS_IDS,
+            dry_run_crops=dry_run_crops,
+        )
+        print(f"[DONE] total={total} written={written} rejected={rejected}")
+
+
+    if __name__ == "__main__":
+        main()
+
+
+================================================================================
+4. SKELETAL EXPLANATION - WITH [PARAMS] & DESCRIPTION
+================================================================================
+
+4.1 extract_numeral_mask([CROP_BGR]) -> mask
+
+    def extract_numeral_mask(crop_bgr):
+        [hsv  = cvtColor(crop_bgr, BGR2HSV)]
+        [mask = inRange(hsv, [WHITE_LO], [WHITE_HI])]        # (a)
+        [cloth= inRange(hsv, [CLOTH_LO], [CLOTH_HI])]        # (b)
+        [mask = bitwise_and(mask, bitwise_not(cloth))]
+        if [MASK_MORPH_KERNEL] > 0:
+            [k = ones(kernel, kernel)]
+            if [MASK_MORPH_OPEN]  > 0: [mask = morph OPEN ]
+            if [MASK_MORPH_CLOSE] > 0: [mask = morph CLOSE]
+        return mask
+
+    PARAMS:
+      [WHITE_LO]           = [0, 0, MASK_V_MIN]     config = [0,   0,   180]
+      [WHITE_HI]           = [179, MASK_S_MAX, 255] config = [179, 60,  255]
+      [CLOTH_LO]           from constants.py        = [80, 100, 30]
+      [CLOTH_HI]           from constants.py        = [100, 255, 255]
+      [MASK_MORPH_KERNEL]  config                   = 3
+      [MASK_MORPH_OPEN]    config                   = 1
+      [MASK_MORPH_CLOSE]   config                   = 0   (MUST stay 0)
+
+    DESCRIPTION:
+      The mask is the STENCIL of the white circle patch, with the numeral
+      as a HOLE inside. High-V / low-S isolates the patch regardless of
+      ball colour. Intersecting with non-cloth strips the 15% cloth ring
+      added at 1.3.2 so cloth reflections cannot leak into the mask. OPEN
+      removes specks. CLOSE is forbidden: it would fill numerals 0/6/8/9
+      and destroy the hole_count feature 1.5.2 depends on.
+
+      The white_lo H upper bound is 179 (any hue) rather than a fixed
+      range: the numeral patch is achromatic, so hue is noise. What
+      defines "white" here is V_MIN (bright) and S_MAX (unsaturated).
+
+
+4.2 mask_is_usable([MASK]) -> bool
+
+    def mask_is_usable(mask):
+        return count_nonzero(mask) >= [MIN_MASK_AREA]
+
+    PARAMS:
+      [MIN_MASK_AREA]   config = 30 px
+
+    DESCRIPTION:
+      Crops with an empty or nearly-empty mask are unusable for 1.5.2
+      (no blob -> no features). Rejecting here is audit pass #2, the
+      same pattern as 1.2.4's frame-level blur/duplicate filter. The
+      threshold 30 was set in 2.3b based on typical numeral pixel count
+      after OPEN; it is a floor, not a target. A crop just above 30 px
+      is accepted; a crop below is logged and dropped.
+
+
+4.3 log_reject([CLASS_ID], [FILENAME], [N_PIXELS])
+
+    def log_reject(class_id, filename, n_pixels):
+        [if MASK_REJECT_LOG missing: write header]
+        [append: "small_mask", class_id, filename, n_pixels]
+
+    PARAMS:
+      [CLASS_ID]   loop var, e.g. 3
+      [FILENAME]   loop var, e.g. clip1_frame000058_ball10.png
+      [N_PIXELS]   count_nonzero(mask), e.g. 12
+      [MASK_REJECT_LOG]  config = logs\rejects_mask.csv
+
+    DESCRIPTION:
+      Append-only CSV. Truncated at run start (main) so re-runs produce
+      a clean log. Every rejection is traceable to (class, file, pixel
+      count). Feeds Preliminary ML §3's second-audit rejection rate line
+      and provides evidence if 7.3 later drops rows from the inner join.
+
+      Format is parallel to 1.2.4's frame-level reject log — one row per
+      rejection with the metric value, so both logs can be cited in the
+      report symmetrically.
+
+
+4.4 build_masks([CROP_ROOT], [MASK_ROOT], [CLASS_IDS], [DRY_RUN_CROPS])
+    -> (total, written, rejected)
+
+    def build_masks(crop_root, mask_root, class_ids, dry_run_crops=0):
+        for [cid] in [CLASS_IDS]:
+            [src = crop_root/cid]; if missing: continue
+            [out = mask_root/cid]; makedirs(exist_ok=True)
+            for [fname] in sorted(listdir(src)):
+                if not .png: skip
+                if ends _mask.png: skip              # idempotent
+                if dry_run and total >= [DRY_RUN_CROPS]: return
+                [crop = imread(src/fname)]; total++
+                if crop is None: rejected++; continue
+                [mask = extract_numeral_mask(crop)]
+                if not mask_is_usable(mask):
+                    log_reject(cid, fname, ...); rejected++; continue
+                [write out/base_mask.png]; written++
+        return total, written, rejected
+
+    PARAMS:
+      [CROP_ROOT]       config = ~\unsorted_png
+      [MASK_ROOT]       config = ~\mask_png
+      [CLASS_IDS]       constants = [1..15]
+      [DRY_RUN_CROPS]   env EVML_DRY_RUN_CROPS, default 0 (full)
+
+    DESCRIPTION:
+      Parallel tree, 1:1 path substitution: unsorted_png\C\X.png ->
+      mask_png\C\X_mask.png.
+
+      Three defensive behaviours:
+        (i)  sorted(listdir): deterministic order -> dry runs are
+             repeatable -> the same 20 crops land in 6.2's mask folder
+             every time.
+        (ii) skip _mask.png: prevents re-masking if the script is
+             accidentally run inside mask_png/ (idempotency guard).
+        (iii) makedirs(exist_ok=True): re-runs do not raise; missing
+             classes are silently created.
+
+      The dry-run cap is checked at the START of each iteration, before
+      reading — so an interrupted dry run does not leave a half-written
+      mask. Returns aggregate counters for the summary line.
+
+      Rejected crops do not appear in MASK_ROOT. This is a downstream
+      consequence that 7.3's inner join will handle: rows in splits.csv
+      without a matching row in features.csv are dropped silently, per
+      1.5.2's section 8 policy.
+
+
+4.5 main()
+
+    def main():
+        [delete MASK_REJECT_LOG if exists]      # truncate per run
+        [dry = int(env EVML_DRY_RUN_CROPS, default 0)]
+        [total, written, rejected = build_masks(...)]
+        [print f"[DONE] total=... written=... rejected=..."]
+
+    PARAMS:
+      None (reads config, constants, env)
+
+    DESCRIPTION:
+      Single summary line only. Per-class detail already lives in
+      MASK_REJECT_LOG; a full per-class table is what 4.3's audit.py
+      already produced at the crop level and what 8.1 will re-produce
+      at dataset level. Duplicating that here would add a fourth
+      source of truth.
+
+      The env-var dry-run knob mirrors extract_crop.py's
+      EVML_DRY_RUN_FRAMES. Both scripts can be dry-run with one
+      setting per script, no code edits between dry-run and full runs.
+
+
+================================================================================
+5. DESIGN DECISIONS - ALL CONFIRMED
+================================================================================
+
+(a) Threshold space: HSV high-V low-S.
+    Rejected: Otsu (assumes bimodal histogram; invalid for coloured ball
+    with a small white patch). Rejected: fixed grayscale threshold
+    (fails across ball colours). Reference: designtracker-1.5.1 §4(a).
+
+(b) Morphology: OPEN=1, CLOSE=0.
+    Closing would fill numerals 0/6/8/9 and destroy hole_count. Opening
+    removes specks without erasing shape. Reference: 1.5.1 §4(b).
+
+(c) Cloth masking: enabled.
+    The 15% cloth ring added at 1.3.2 exists specifically to support
+    this. Without it, bright cloth reflections enter the mask as edge
+    blobs. Reference: 1.5.1 §4(c).
+
+(d) Output: parallel tree under MASK_ROOT/<class>/<name>_mask.png.
+    Rejected: mixed into crop folders (loader footgun: any *_mask.png
+    accidentally picked up as a crop). Rejected: flat dump (forces
+    filename parsing to recover class). Reference: 1.5.1 §3 and 1.5.2
+    §0 directory tree update.
+
+(e) No-numeral fallback: reject crop, log to CSV.
+    Rejected: keep with zero-features. Rationale: labelled noise
+    degrades both SVM and CNN, and dishonest §3 claims. Reference:
+    1.5.1 §4(e).
+
+(f) Dry-run knob via env var (EVML_DRY_RUN_CROPS), not a CLI arg.
+    Rationale: identical pattern to extract_crop.py's
+    EVML_DRY_RUN_FRAMES / EVML_DRY_RUN_CLIPS. Two scripts, one
+    convention. Also avoids argparse boilerplate.
+
+(g) Deterministic file order (sorted).
+    Rationale: 6.2 compares a sample of masks; if listdir returned
+    arbitrary order, the "same 20 crops" would differ across runs,
+    making tuning-by-eye unreliable.
+
+(h) Reject log truncated per run.
+    Rationale: same as 3.1 (extract_crop.py removes REJECT_LOG at
+    start). A clean run yields a clean log; a re-run after threshold
+    tweaks is comparable against the previous one only if both are
+    single-run logs.
+
+(i) No directory-level stats in main().
+    Rationale: 4.3 audit.py already provides per-class counts; 8.1
+    balance.py re-counts at dataset level. A third per-class table here
+    would need to be kept in sync with two others. The reject log is
+    the only per-class artefact 6.1 needs to produce.
+
+
+================================================================================
+6. DRY-RUN WRAPPER - mask_dry_run.ps1 (TOOLING, parallels Section 3)
+================================================================================
+
+NOTE: no wrapper was produced at 6.1 time. The equivalent of Section 3's
+extract_dry_run.ps1 is scheduled for 6.2, when the dry run is actually
+executed. Same pattern: tooling is written immediately before the run
+step it serves, not at code-write time.
+
+For reference (to be created at 6.2):
+
+    # src/mask_dry_run.ps1
+    $env:EVML_DRY_RUN_CROPS = "20"
+    python src/mask.py
+    Remove-Item Env:EVML_DRY_RUN_CROPS
+
+Rationale for deferring: 6.1 is a code-write step; 6.2 is a run step.
+The wrapper depends only on the code (not on any decision), so writing
+it at 6.1 time or 6.2 time produces identical results. Deferring keeps
+6.1 focused on the one artefact it must produce (src/mask.py).
+
+
+================================================================================
+7. CARRY-FORWARD WATCH ITEMS (from 5.3)
+================================================================================
+
+Class 7 test set contains exactly ONE crop:
+    7/clip1_frame000029_ball8.png      (role=test per splits.csv)
+If 6.1 mask extraction rejects this crop, class 7 becomes a HARD ZERO
+CELL in test at 7.3. Recovery options per 5.3 §6.1:
+    1. Reassign roles with rare-class preference (re-run 5.1 with
+       modified tie-break).
+    2. Narrow classifier scope to classes fully covered (drop class 7
+       from the OCR target set, document).
+    3. Accept zero test cell; class 7's test accuracy becomes
+       unreportable.
+
+Class 10 val set contains exactly TWO crops:
+    10/clip5_frame001753_ball7.png     (role=val)
+    10/clip5_frame001820_ball11.png    (role=val)
+If either is rejected, val drops to 1 (still above hard floor).
+If both are rejected, val class 10 becomes a HARD zero cell.
+
+ACTION AT 6.2 / 6.3:
+    After mask extraction completes, spot-check:
+        mask_png/7/clip1_frame000029_ball8_mask.png   exists?
+        mask_png/10/clip5_frame001753_ball7_mask.png  exists?
+        mask_png/10/clip5_frame001820_ball11_mask.png exists?
+    If any is missing, the corresponding crop was rejected by
+    6.1's MIN_MASK_AREA floor. This is where the split-integrity
+    risk from 5.3 materialises, not at 6.1 itself.
+
+
+================================================================================
+8. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+  1.3.2  crops saved with a 15% cloth ring
+  1.3.1  CLOTH_* HSV bounds (locked at 2.1, stored in constants.py)
+  4.2    crops sorted into 1/ ... 15/
+  5.3    splits.csv roles assigned (irrelevant to 6.1 but read at 1.5.3)
+  config  CROP_ROOT, MASK_ROOT, MASK_*, MIN_MASK_AREA, MASK_REJECT_LOG
+  constants  CLASS_IDS, CLOTH_*
+
+DOWNSTREAM:
+  6.2  dry run on ~20 crops; visual inspection of the first masks
+  6.3  full run; log to MASK_REJECT_LOG
+  1.5.1 read mask PNGs from mask_png/
+  1.5.2 derive shape features (hole_count, projections, ...)
+  1.6  EDA on those features
+  7.3  inner join drops rejected crops from dataset.csv
+  Preliminary ML §3 cites: reject rate per class, sample masks,
+  threshold values (V_MIN=180, S_MAX=60).
+
+
+================================================================================
+9. RESCALE / FALLBACK TRIGGERS
+================================================================================
+
+- If 6.3 rejects >10% of a class:
+    -> loosens S_MAX (60 -> 80) or lowers V_MIN (180 -> 150). Inspect
+       5-10 sample masks at the new thresholds before committing.
+    -> After the threshold change, re-run 6.3 and re-check the class
+       shortfall against the 4.4 distribution.
+
+- If masks are almost all empty:
+    -> cloth HSV range likely overlapping numeral white (e.g. pale
+       cloth). Re-sample CLOTH_* from a fresh frame; update
+       constants.py; re-run 6.1.
+
+- If class 7 test crop or class 10 val crops are rejected:
+    -> see §7 recovery chain. Do not force MIN_MASK_AREA lower just to
+       save those 1-2 crops; that trades a systematic threshold for a
+       case-by-case exception, which corrupts the "uniform rule"
+       argument in Preliminary §3.
+
+
+================================================================================
+10. REPORT SURFACE
+================================================================================
+
+PRELIMINARY ML §3 (features + masks)
+    - V_MIN, S_MAX values (180, 60) with one-sentence rationale
+       (whiteness under coloured ball surface).
+    - 2-3 sample masks (before / after OPEN), chosen across classes
+       spanning the solid (1-8) and striped (9-15) groups.
+    - Rejection count per class from MASK_REJECT_LOG, or the aggregate
+       rate if per-class is thin.
+    - Justification for Strategy 1 (circle-as-blob: numeral as a hole
+       inside the white patch stencil, no two-stage extraction).
+
+FULL ML §6 (methodology)
+    - One sentence: "Masks were extracted with HSV high-V low-S,
+       intersecting non-cloth, opening without closing. Rejected crops
+       (mask < 30 px) were dropped before feature extraction."
+
+FULL ML §8 / DL §6 (limitations)
+    - If any class lost a val/test cell due to 6.1 rejection, upgrade
+       the 5.3 "thin cell" note to "zero cell" for that class.
+    - Class 10 (12 crops total, 5 in train, 2 in val, 5 in test) is
+       the class most likely to lose cells. Named explicitly.
+
+
+================================================================================
+11. CHECKLIST STATUS
+================================================================================
+
+[x] 6.1 Write mask.py
+    -> src/mask.py written
+    -> functions: extract_numeral_mask, mask_is_usable, log_reject,
+       build_masks, main
+    -> thresholds: HSV high-V low-S (V_MIN=180, S_MAX=60)
+    -> morphology: OPEN=1, CLOSE=0
+    -> cloth masking: enabled (reuses CLOTH_* from constants.py)
+    -> output: parallel tree under mask_png/<class>/<name>_mask.png
+    -> no-numeral: reject + log to logs/rejects_mask.csv
+    -> dry-run knob: env EVML_DRY_RUN_CROPS
+    -> tooling: mask_dry_run.ps1 deferred to 6.2 (parallels Section 3)
+[ ] 6.2 Dry run on 20 crops
+[ ] 6.3 Full run
+
+================================================================================
+END OF NOTE
+================================================================================

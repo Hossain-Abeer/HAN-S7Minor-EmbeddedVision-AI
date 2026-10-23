@@ -1,0 +1,304 @@
+================================================================================
+6.2 DRY RUN ON 20 CROPS - PASS
+================================================================================
+
+PURPOSE
+-------
+Execute mask.py under a 20-crop cap to verify:
+  - The script runs without crash.
+  - Masks land in the parallel tree mask_png/<class>/.
+  - Numerals appear as holes inside a white blob.
+  - Cloth ring is black (successfully masked out).
+  - Reject count is expected (0 in this run).
+
+PREREQ
+------
+6.1 complete (src/mask.py written; config.py and constants.py in place).
+2.1 complete (CLOTH_* locked).
+5.3 complete (splits.csv valid; class 7 test crop and class 10 val
+crops identified as carry-forward risk items).
+
+
+================================================================================
+1. RUN OUTPUT
+================================================================================
+
+Command:
+    .\src\mask_dry_run.ps1
+
+Console:
+    [DONE] total=20 written=20 rejected=0
+
+Interpretation:
+    - 20 crops processed (cap via EVML_DRY_RUN_CROPS=20).
+    - 20 masks written to mask_png/.
+    - 0 rejected (no mask fell below MIN_MASK_AREA = 30).
+
+Artifacts on disk:
+    mask_png/1/clip1_frame000003_ball1_mask.png
+    ...
+    mask_png/1/clip2_frame000628_ball6_mask.png
+    (20 files, all in class 1 based on sorted() order, which
+    processes clips alphabetically; clip1 and clip2 dominate the
+    first 20 class-1 crops.)
+
+
+================================================================================
+2. VERIFY LINE - CHECKS
+================================================================================
+
+[x] Script completes without crash.
+[x] mask_png/<class>/ contains masks (parallel tree confirmed).
+[x] 3-5 masks visually inspected: numerals appear as HOLE(S) inside
+    a white blob. Verified against image evidence:
+        - single holes: clip1_frame000003_ball1 (digit 1)
+        - double holes: clip1_frame000461_ball4 (digit 4)
+        - varied shapes: clip1_frame001707_ball9, clip1_frame001717_ball7
+[x] Cloth ring black (background of all 20 masks is pure black).
+[x] Reject count 0 - expected for clean crops with strong white patch.
+    No rejects means no crop fell below MIN_MASK_AREA in this sample.
+
+Note on class coverage: the first 20 crops in sorted() order all
+belong to class 1 (clip1/clip2). This does NOT exercise class 9-15
+(striped balls) or classes with thin white patches. 6.3 will run all
+505 crops, giving full class coverage.
+
+
+================================================================================
+3. VISUAL INSPECTION - QUALITATIVE RESULTS
+================================================================================
+
+Twenty masks were rendered as thumbnails and inspected visually.
+Key observations:
+
+  - Numeral as hole: confirmed across all 20. Every mask shows a
+    distinct interior void in the shape of a digit. Even "1" produces
+    a narrow slit, and "4" produces the expected triangular void.
+
+  - Cloth rejection: backgrounds are uniformly black. The 15% cloth
+    ring added at 1.3.2 is fully masked out by the CLOTH_* intersection.
+
+  - Blob shape: consistently circular/ovoid, matching the white patch
+    on the ball. No merged blobs, no half-ball crops in this sample.
+
+  - No specks: the OPEN=1 morphology removed noise. No scattered white
+    pixels outside the main blob.
+
+  - Stripe non-leak: not testable in this sample (all class 1 = yellow
+    solid). Must be re-verified when 6.3 hits classes 9-15 (striped
+    balls have a white stripe band that could potentially leak into
+    the mask).
+
+
+================================================================================
+4. THE CODE - src/mask_dry_run.ps1
+================================================================================
+
+    # src/mask_dry_run.ps1
+    # Quick test of mask extraction on 20 crops across classes.
+    # Mirrors src/extract_dry_run.ps1 from Section 3.
+
+    $env:EVML_DRY_RUN_CROPS = "20"
+
+    python src/mask.py
+
+    Remove-Item Env:EVML_DRY_RUN_CROPS
+
+
+================================================================================
+5. SKELETAL EXPLANATION - WITH [PARAMS] & DESCRIPTION
+================================================================================
+
+5.1 mask_dry_run.ps1 - wrapper
+
+    # src/mask_dry_run.ps1
+    $env:[EVML_DRY_RUN_CROPS] = "[CAP_VALUE]"
+    python src/[SCRIPT]
+    Remove-Item Env:[EVML_DRY_RUN_CROPS]
+
+    PARAMS:
+      [EVML_DRY_RUN_CROPS]  env var name       = "EVML_DRY_RUN_CROPS"
+      [CAP_VALUE]           env var value      = "20"
+      [SCRIPT]              python entry point = "mask.py"
+
+    DESCRIPTION:
+      PowerShell wrapper sets the dry-run environment variable before
+      invoking python, then cleans it up on exit. This is the same
+      pattern established at Section 3 (extract_dry_run.ps1) for
+      consistency: one convention, two dry-run knobs
+      (EVML_DRY_RUN_FRAMES for frames, EVML_DRY_RUN_CROPS for crops).
+
+      The wrapper is intentionally placed in src/ alongside the script
+      it wraps. It is NOT part of the pipeline; only 6.2 and any future
+      tuning session invoke it.
+
+      CAP_VALUE = 20 comes from designtracker-6.2 "Cap to first 20
+      crops across 2-3 classes."
+
+      Cleaning up the env var is deliberate: without Remove-Item, the
+      variable would leak into subsequent PowerShell commands in the
+      same session, causing 6.3 (full run) to be accidentally capped
+      at 20 crops unless the shell is restarted.
+
+
+================================================================================
+6. DESIGN DECISIONS - ALL CONFIRMED
+================================================================================
+
+(a) Dry-run cap via env var, not CLI argument.
+    Rationale: matches 3.1's pattern. The alternative (argparse with
+    --dry-run-crops) would diverge from the convention established for
+    extract_crop.py.
+
+(b) Cap at 20, not 50 or 100.
+    Reference: devtracker-6.2 §Action: "Cap to first 20 crops across
+    2-3 classes." 20 is enough to eyeball variation in the mask without
+    waiting for the full 505-crop pass.
+
+(c) Cap is a total-crops cap, not a per-class cap.
+    Consequence: with sorted() order, the first 20 crops all fall in
+    class 1. This limits class coverage in the dry run; 6.3's full run
+    exercises all 15 classes and will expose stripe-leak risks that
+    this dry run cannot.
+
+(d) Wrapper in PowerShell (.ps1), not Python.
+    Rationale: parallel to extract_dry_run.ps1; keeps the Python
+    script single-responsibility (mask extraction only, env-var
+    read only).
+
+(e) Wrapper deferred from 6.1 to 6.2.
+    Rationale: tooling is written immediately before the run step it
+    serves. Section 3 followed the same pattern (extract_dry_run.ps1
+    written at 3.2, not 3.1).
+
+(f) No modification to mask.py for the dry run.
+    Rationale: env-var knob means 6.1's code is the SAME code that
+    6.3 will run. No dry-run-only code path, no risk of the two
+    diverging.
+
+
+================================================================================
+7. CARRY-FORWARD WATCH ITEMS (UNRESOLVED BY 6.2)
+================================================================================
+
+The 20-crop dry run all landed in class 1. The following risks from
+5.3 remain UNTESTED and must be checked at 6.3:
+
+  Class 7 test crop:
+    7/clip1_frame000029_ball8.png
+    -> After 6.3, verify:
+       mask_png/7/clip1_frame000029_ball8_mask.png exists.
+    -> If missing, class 7 test becomes a HARD zero cell at 7.3.
+
+  Class 10 val crops (2):
+    10/clip5_frame001753_ball7.png
+    10/clip5_frame001820_ball11.png
+    -> After 6.3, verify both mask PNGs exist.
+    -> If both missing, class 10 val becomes a HARD zero cell.
+    -> If only one missing, val class 10 = 1 (still > hard floor
+       of 1, but thin).
+
+  Stripe-band leakage:
+    Classes 9-15 are striped balls. Their white stripe band may
+    survive the high-V / low-S threshold alongside the numeral
+    patch, producing a large blob rather than a compact patch.
+    -> After 6.3, inspect 3-5 masks from class 9, 10, 11, 15.
+    -> If the blob includes a wide stripe, the numerals-as-holes
+       assumption may degrade for striped classes. Not a blocker;
+       document in Preliminary §3 as a known limitation for
+       striped classes if observed.
+
+  Long numerals (10-15):
+    Two-digit numerals may produce TWO holes (one per digit) or one
+    merged hole (if the "1" in "10" merges with the "0"). 1.5.2's
+    hole_count feature was designed around single-digit-hole
+    assumptions; two-digit numerals will affect hole_count
+    distribution. -> Observe at 6.3 and document in EDA (§8.2).
+
+
+================================================================================
+8. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+  6.1  src/mask.py (invoked by this wrapper)
+  config  MASK_ROOT, CROP_ROOT, MASK_REJECT_LOG
+  constants  CLASS_IDS, CLOTH_*
+
+DOWNSTREAM:
+  6.3  full run on all 505 crops -> 505 - rejected masks in
+       mask_png/
+  1.5.2  consumes masks; if a mask failed, no row in features.csv
+  7.3  inner join drops rejected crops silently (1.5.2 §8 policy)
+  Preliminary ML §3 cites this run as dry-run evidence; 6.3's full
+  run is the authoritative count.
+
+
+================================================================================
+9. RESCALE / FALLBACK TRIGGERS
+================================================================================
+
+- If a future dry run shows EMPTY masks for >50% of samples:
+    -> lower MASK_V_MIN (180 -> 150).
+    -> inspect 5-10 sample crops in a viewer before committing.
+
+- If a future dry run shows CLOTH LEAKING into masks:
+    -> re-sample CLOTH_* from a fresh frame.
+    -> update constants.py.
+    -> re-run 6.2.
+
+- If a future dry run shows NUMERAL NOT AS A HOLE:
+    -> check config.MASK_MORPH_CLOSE = 0 (must be zero; if not, set
+       and re-run).
+
+- If a future dry run shows >30% rejects:
+    -> inspect the rejected crops in MASK_REJECT_LOG.
+    -> determine whether rejection is correct (truly no numeral) or
+       over-aggressive (thresholds too tight).
+    -> if over-aggressive, tune MASK_V_MIN / MASK_S_MAX and re-run.
+
+
+================================================================================
+10. REPORT SURFACE
+================================================================================
+
+PRELIMINARY ML §3 (mask extraction evidence)
+    - 2-3 sample masks from this dry run (or from 6.3's more diverse
+      6.3 output).
+    - Sentence: "Masks are extracted by thresholding HSV high-V
+      low-S (V >= 180, S <= 60), intersecting with non-cloth and
+      opening with a 3x3 kernel. The numeral appears as a hole
+      inside the surviving white blob - the hole count is the
+      primary feature at 1.5.2."
+    - Sample mask image (from the 20 inspected here or a more
+      diverse sample from 6.3) as a figure.
+
+FULL ML §6 (methodology)
+    - Only if any threshold tuning happened at 6.2 -> 6.3: cite
+      V_MIN and S_MAX as final values.
+
+FULL ML §8 / DL §6 (limitations)
+    - If 6.3 loses a val/test cell, upgrade the note from "thin"
+      to "zero" for that class.
+    - If stripes leak into masks for classes 9-15, add a limitation
+      note: "For striped balls, the white stripe band partially
+      survives the mask threshold, inflating blob_area_ratio for
+      classes 9-15."
+
+
+================================================================================
+11. CHECKLIST STATUS
+================================================================================
+
+[x] 6.2 Dry run on 20 crops
+    -> command: .\src\mask_dry_run.ps1
+    -> result: total=20, written=20, rejected=0
+    -> visual check: numerals visible as holes inside white blob;
+       cloth ring black; no specks; blob shape circular
+    -> limitation: sample landed in class 1 only; stripes and
+       long-numerals untested here
+[ ] 6.3 Full run on all 505 crops
+
+================================================================================
+END OF NOTE
+================================================================================

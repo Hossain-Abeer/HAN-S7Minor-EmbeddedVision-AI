@@ -358,7 +358,7 @@ SECTION 5 - SPLIT
 SECTION 6 - MASK EXTRACTION
 ================================================================================
 
-[ ] 6.1  WRITE mask.py
+[x] 6.1  WRITE mask.py
     Type: code
     Design: designtracker-1.5.1
     Prereq: 5.3 passes
@@ -379,7 +379,7 @@ SECTION 6 - MASK EXTRACTION
         - MORPH_CLOSE_ITER = 0 (closing would fill numeral holes).
     Verify: Imports cleanly.
 
-[ ] 6.2  DRY RUN ON 20 CROPS
+[x] 6.2  DRY RUN ON 20 CROPS
     Type: run
     Prereq: 6.1
     Action: Cap to first 20 crops across 2-3 classes.
