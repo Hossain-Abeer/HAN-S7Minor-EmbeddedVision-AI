@@ -38,3 +38,18 @@ MASK_MORPH_KERNEL = 3                # Kernel size for mask morphology (smaller 
 MASK_MORPH_OPEN = 1                  # Opening iterations on mask: removes specks, preserves numeral edges.
 MASK_MORPH_CLOSE = 0                 # CRITICAL: must stay 0; closing would fill numeral holes.
 MIN_MASK_AREA = 30                   # Reject crops whose mask has fewer than this many pixels.
+
+
+# ===== Features (1.5.2) =====
+USE_FEATURES = [
+    "hole_count",
+    "connected_component_count",
+    "blob_area_ratio",
+    "hole_area_ratio",
+    "hole_aspect",
+    "hole_centroid",
+    "projections",
+]
+PROJ_BINS        = 8
+KEEP_HU_MOMENTS  = False
+MIN_HOLE_AREA_PX = 5

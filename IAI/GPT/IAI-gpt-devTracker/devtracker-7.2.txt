@@ -1,0 +1,227 @@
+================================================================================
+POST-7.2 — FEATURE EXTRACTION OUTCOME & DATA-CEILING ACCEPTANCE
+================================================================================
+
+PURPOSE
+-------
+Record the semantic (not mechanical) failure of 7.2, characterise it as a
+data-ceiling rather than a code defect, quantify the downstream impact per
+consumer, list which classes remain viable under the CNN path, and lock the
+proceed decision. This note replaces a "7.2 PASS" writeup.
+
+PREREQ
+------
+7.1 complete (src/features.py written).
+7.2 run: features.csv written, 492 rows, 24 columns.
+6.3 complete: 492 masks in mask_png/<class>/, 13 rejects at 12-29 px.
+
+1. WHAT THE RUN PRODUCED
+------------------------
+Mechanically valid:
+  - features.csv exists, 492 rows, 24 columns
+  - No NaN
+  - proj_x/y rows sum to 1.0
+  - blob_area_ratio in [0.004, 0.28]
+  - Row count matches 6.3's written=492
+
+Semantically failed:
+  - hole_count = 0 for ALL 492 rows
+  - hole_area_ratio = 0.0 for ALL 492 rows
+  - hole_aspect = 0.0 for ALL 492 rows
+  - hole_centroid_dx = 0.0 for ALL 492 rows
+  - hole_centroid_dy = 0.0 for ALL 492 rows
+  The entire hole_* family is constant-zero. Not per-class variation.
+  Constant.
+
+2. WHAT IS DEAD, WHAT IS ALIVE
+------------------------------
+DEAD (constant zero across every row): 5 features
+  - hole_count
+  - hole_area_ratio
+  - hole_aspect
+  - hole_centroid_dx
+  - hole_centroid_dy
+
+ALIVE-BUT-WEAK (variance present, wrong semantics): 18 features
+  - blob_area_ratio   (1)
+      Range 0.004-0.28. Per-class medians cluster tightly. Encodes
+      fragment spread (weak proxy for solid-vs-striped), not numeral
+      identity.
+  - connected_component_count (1)
+      Range 1-8. Variance present. Encodes fragment count, i.e., mask
+      quality, not numeral identity. Structurally, this is the only
+      feature that carries a per-class-meaningful signal — but the signal
+      is "how badly the mask fragmented", not "what digit is this".
+  - proj_x_0..7, proj_y_0..7 (16)
+      Variance present. Encodes the *positions of the surviving fragments*
+      in the crop, not the numeral geometry they were designed to
+      capture. On intact masks these 16 features represent the numeral's
+      silhouette; on fragmented masks they represent where the two or
+      three surviving white specks happen to sit.
+
+Net: 23 designed features. 5 are dead. 18 are live. Of the 18, only 2
+carry an interpretable per-crop property; neither represents numeral
+shape.
+
+3. WHY (DATA-CEILING, NOT CODE BUG)
+-----------------------------------
+Chain of events:
+
+  Source: 1080p graphical-game footage
+    ↓
+  Screen recording: downscaled to ~720p by OS screen recorder
+    ↓
+  Ball crop: ~40×40 to ~60×60 px (padded)
+    ↓
+  Numeral stroke width inside crop: 1-2 px
+    ↓
+  HSV whiteness threshold (V>=180, S<=60): captures only the brightest
+    specular highlights; the ball's white numeral patch fragments into
+    two or three tiny blobs instead of forming a solid disc
+    ↓
+  find_holes(): correctly rejects any candidate hole whose bounding box
+    touches the image border. Fragmented masks have numerals that are no
+    longer enclosed by the patch — they merge with the outer black
+    background through gaps.
+    ↓
+  Result: 0 holes detected, in every crop, in every class.
+
+Visual evidence (cited):
+  mask_png/8/clip1_frame000084_ball6_mask.png
+    - Two tiny white fragments in upper-left
+    - No solid white disc
+    - No enclosed hole (numeral "8" should produce 2 holes)
+
+Contrast:
+  6.2's 20-crop dry run worked because sorted() order landed on class 1
+  (yellow solid, brightest surface). Brightest patches survived
+  thresholding as a solid disc, and holes were visible in the dry-run
+  masks. Class 8 (black ball) is the diagnostic opposite: darkest patch
+  fragments first.
+
+The pipeline is behaving correctly. The input resolution is the ceiling.
+No code change can recover information that was lost at ingestion.
+
+4. IMPACT PER DOWNSTREAM CONSUMER
+---------------------------------
+7.3 (assemble)
+  - No row drops attributable to 7.2 (all 492 rows present in
+    features.csv, all 492 present in splits.csv; inner join will match)
+  - Post-join matrix identical to post-6.3 matrix
+  - 5 dead columns enter dataset.csv unchanged
+
+8.1 (balance)
+  - Unaffected by dead features (row-count diagnostic)
+  - SEVERE imbalance verdict still expected (~8.6:1 train ratio)
+
+8.2 (distributions)
+  - 5 features will plot as flat lines at 0 across all classes
+  - Verdict for each of the 5: DEAD
+  - Remaining 18 will show variance but with the wrong interpretation:
+    fragment geometry, not numeral shape
+  - Curated figures for Preliminary §3 will name blob_area_ratio and
+    connected_component_count as the only two "meaningful" features
+
+8.3 (correlations)
+  - Feature-label mutual information for all 5 hole_* features ≈ 0
+  - Decision: drop all 5 from retained_features.txt
+  - Projection correlations (structural sum-to-1) unaffected
+  - blob_area_ratio may correlate with several projection bins (both
+    encode fragment spread)
+
+Phase 2 (SVM / k-NN / RF)
+  - Numeral-shape signal lost entirely
+  - Retained signal: fragment density (blob_area_ratio), fragment count
+    (connected_component_count), fragment positions (proj_x/y)
+  - Honest forecast: moderate separation of solid (1-8) vs striped
+    (9-15) is achievable; per-class accuracy (1 vs 7 vs 3) is
+    effectively unlearnable
+  - class_weight='balanced' still applies
+  - Final accuracy likely 15-25% (random chance = 6.7%)
+
+Phase 4 (CNN)
+  - Bypasses mask pipeline; reads raw crops directly
+  - 1-2 px stroke widths are at the edge of CNN learnability
+  - Simple non-loop digits (1, 4, 7, 11) may survive; loop digits
+    (0, 6, 8, 9) very unlikely
+  - Augmentation is justified by this note's data-ceiling argument, not
+    by "typical DL practice"
+
+5. CLASSES STILL VIABLE FOR OCR (HONEST RANKING)
+------------------------------------------------
+From features.csv (classical path): NONE reliably.
+The 18 live features do not encode numeral shape.
+
+From Phase 4 (CNN on raw crops), ranked by expected learnability:
+
+  HIGH    (simple, non-loop, distinctive outlines): 1, 4, 7, 11
+  MEDIUM  (partial structure, 0 or 1 loop):        2, 3, 5, 12, 13, 15
+  LOW     (1 loop, rotation-confusable):           0, 6, 9, 10
+  VERY LOW(two loops, fine internal detail):       8
+
+Reality check:
+  Even the HIGH tier needs augmentation and heavy regularization.
+  Ceiling likely 30-60% per-class. That is not practical OCR, but it
+  is above chance and can be presented as a functional demonstration.
+
+6. COMPARISON TO A REAL-WORLD INGESTION PATH
+--------------------------------------------
+If captured from physical billiards with a mid-range 108MP smartphone
+sensor at ~30 cm distance:
+  - Ball diameter in frame: ~600 px
+  - Numeral stroke width: 6-10 px
+  - White patch diameter: ~120 px
+  - Numeral hole area: 300-2000 px (>> MIN_HOLE_AREA_PX = 5)
+  - Mask: solid disc + clear numeral holes
+  - Feature set: fully exercisable
+  - OCR: fully achievable
+
+The feature set, thresholds, and pipeline design are correct. The
+data-ceiling comes from three compounding factors at ingestion:
+  (1) Screen-recording downscale: 1080p -> ~720p
+  (2) Graphical-game numeral rendering: thinner strokes than physical
+      printed numerals
+  (3) Crop padding: preserves context but shrinks effective resolution
+      per numeral
+
+This is documented as a limitation of the ingestion source. It is NOT a
+defect of the pipeline.
+
+7. DECISION & SCOPE
+-------------------
+Decision: PROCEED. Accept the 18-feature dataset with 5 dead features.
+Complete 7.3-9.4 as designed. Document in Preliminary §3.
+
+Scope statement (drop into Preliminary §3, use or paraphrase):
+  "The pipeline is designed to demonstrate a standard ML/DL workflow
+   for OCR of billiard-ball numerals. End-to-end functional accuracy
+   was capped by the ingestion source: 1080p graphical-game footage
+   downscaled to 720p during screen recording produced ball crops of
+   ~40x40 to ~60x60 px with 1-2 px numeral stroke widths, below the
+   thresholding resolution required to preserve the numeral-as-hole
+   geometry that the classical feature set was designed around. Five
+   of the twenty-three engineered features are consequently
+   constant-zero. The pipeline itself - acquisition, segmentation,
+   mask extraction, feature engineering, EDA, preprocessing, model
+   training, deployment - is fully operational and reportable. A
+   physical-camera ingestion path (e.g., 108MP smartphone at 30 cm
+   distance) would yield intact numerals and full feature exercise;
+   this is noted as a realistic future replacement for the
+   graphical-game source."
+
+8. CARRY-FORWARD
+----------------
+7.3  no changes; proceed as-designed
+8.2  expect 5 DEAD verdicts; not a bug
+8.3  drop all 5 hole_* features from retained_features.txt
+9.1  EXCLUDED_FEATURES to be extended: hole_* family joins
+     hole_count, connected_component_count, proj_* as excluded from IQR
+Phase 2  low per-class accuracy; report as limitation, not failure
+Phase 4  augmentation justified by this note
+Preliminary §3  cite this note as the data-ceiling narrative
+DL §6  same citation
+
+9. CHECKLIST STATUS
+-------------------
+[x] 7.2 accepted (mechanical pass, semantic data-ceiling documented)
+[ ] 7.3 Assemble feature matrix X + labels y

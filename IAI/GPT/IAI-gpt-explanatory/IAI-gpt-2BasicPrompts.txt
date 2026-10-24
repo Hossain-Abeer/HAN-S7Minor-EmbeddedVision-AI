@@ -64,3 +64,10 @@ before that, give a % or progress bar depicting the workflow state. make sure to
 
 
 validate. if valid, do the .txt writeup, include all being related to & discussed about it. you need to include - 'the code, then explanation of the code, by using skeletal codeblocks with [params] & description'
+
+
+
+just so you know, the game app itself creates a bottleneck: the graphics resolution of standard 1080p gets cropped to about standard 720p while screenrecording, and then whatever remains get into the pipeline, resulting in small crops with hardly any pixels in them, furthermore those pixels together rarely form a clear number. 
+If data ingestion was from real-life gameplay and not graphical game, powerful, hi-res camera could have captured the clips, for instance, the use of a mid-range smartphone often with 108MP sensor.
+this should be noted down, taken into consideration & proceed to the next steps in pipeline of our current method of ingested data. I have no doubt that it would have yield much better - frames, crops, masks, features and the rest of the downstream components.
+our work should concerns more of the use/development of a world-standard AI (ML/DL) pipeline, and less or flexibly relates to the end-point program/functions.

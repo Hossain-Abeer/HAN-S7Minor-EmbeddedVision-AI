@@ -1,0 +1,935 @@
+================================================================================
+7.1 WRITE features.py - COMPLETE (CODE WRITTEN, RUN PENDING)
+================================================================================
+
+PURPOSE
+-------
+Write the feature-extraction script that 7.2 will run. For every mask in
+MASK_ROOT/<class>/, derive a fixed-length feature vector describing the
+numeral geometry (hole_count, ratios, projections, ...). Writes
+features.csv with one row per surviving mask, keyed on the original
+crop filename so that 1.5.3's inner join against splits.csv succeeds.
+
+PREREQ
+------
+6.3 complete (492 masks written, 13 rejected, rejects logged at
+logs/rejects_mask.csv).
+5.3 complete (splits.csv written; soft misses flagged: val C10 n=2,
+test C7 n=1).
+2.1 complete (CLOTH_* locked).
+2.3b complete (MASK_* and MIN_MASK_AREA locked).
+[PRE-REQ ADDITION] config.py extended with the 1.5.2 feature block
+(USE_FEATURES, PROJ_BINS, KEEP_HU_MOMENTS, MIN_HOLE_AREA_PX). See §0.
+
+================================================================================
+0. PREREQ ADDITION TO config.py
+================================================================================
+
+The devtracker 7.1 spec references four config parameters that were not
+present in config.py as of 2.3b. Add this block under the
+"# ===== Mask (1.5.1) =====" section:
+
+    # ===== Features (1.5.2) =====
+    USE_FEATURES = [
+        "hole_count",
+        "connected_component_count",
+        "blob_area_ratio",
+        "hole_area_ratio",
+        "hole_aspect",
+        "hole_centroid",
+        "projections",
+    ]
+    PROJ_BINS        = 8
+    KEEP_HU_MOMENTS  = False
+    MIN_HOLE_AREA_PX = 5
+
+This is not a deviation from 2.3b - it is the 1.5.2 parameter block that
+2.3b deferred to 7.1 time, because those parameters don't exist until
+this step's contract is settled. Folding them into 2.3b retroactively
+would have required the 7.1 note to reach backwards; adding them here
+keeps the same pattern as 2.3a/2.3b's two-file split (constants.py for
+world facts, config.py for program parameters) without pretending we
+knew the feature set before 1.5.2 was designed.
+
+================================================================================
+1. ESSENCE & ROLE IN THE CHAIN
+================================================================================
+
+1.3.4 assigned LABELS (class 1-15).
+5.1 assigned ROLES (train / val / test).
+6.1 produced MASKS (binary stencils of the numeral patch).
+
+7.1 produces FEATURES (a 23-number vector per mask).
+
+Role: DIMENSIONALITY REDUCTION. Collapses each mask from a raw
+grayscale array (hundreds to thousands of pixels) into a fixed-length
+numerical descriptor that classical ML (SVM, k-NN, RF in Phase 2) can
+consume.
+
+WHY NOT USE RAW PIXELS (recap from IAI-gpt-explains-devtrack-pre-7.1)
+  A 60x60 RGB crop is 10,800 pixel values. With 505 samples, that is
+  deep in the curse-of-dimensionality regime: the model memorises exact
+  pixel positions and fails on any crop where the ball shifted by 2 px.
+  Raw pixels are position-dependent; features must not be.
+
+  The mask pipeline reduces each sample to 23 numbers that describe the
+  NUMERAL's geometry (holes, ratios, projections), not the BALL's
+  colour or exact position.
+
+WHAT THE FEATURE SET CONTAINS
+  Default (7 categories = 23 sub-features):
+    (a) hole_count                  1   number of holes inside the blob
+    (b) connected_component_count   1   white regions in the mask
+    (c) blob_area_ratio             1   blob pixels / crop pixels
+    (f) hole_area_ratio             1   hole pixels / blob pixels
+    (g) hole_aspect                 1   hole width / hole height
+    (h) hole_centroid_dx, _dy       2   hole offset from blob centroid
+    (i) proj_x_0..7, proj_y_0..7   16   binned mass projections
+    --------------------------------
+    Total                          23
+
+  Fallback (toggled via USE_FEATURES):
+    (d) blob_circularity            roundness of the blob
+    (e) blob_aspect                 blob width / height
+    (j) hu_moments                  rotation-invariant moments (0..6)
+
+7.1 does NOT:
+  - scale or clean (that is 1.7.1 / 1.7.2)
+  - split by role (splits.csv is joined at 1.5.3)
+  - train anything
+  - decide which features matter (that is 1.6.3's job)
+
+================================================================================
+2. TOOLING
+================================================================================
+
+Libraries (all in requirements.txt):
+  os      -> folder walk, path join
+  csv     -> features.csv writing
+  cv2     -> cvtColor not needed here (masks are grayscale); used for
+             connectedComponentsWithStats, findContours, arcLength,
+             HuMoments, moments, threshold, imread
+  numpy   -> array_split, argmax, log10, sign
+  config  -> MASK_ROOT, FEATURES_CSV, USE_FEATURES, PROJ_BINS,
+             KEEP_HU_MOMENTS, MIN_HOLE_AREA_PX
+  constants -> CLASS_IDS
+
+No new dependencies.
+
+================================================================================
+3. THE CODE - src/features.py
+================================================================================
+
+    """
+    7.1 EXTRACT SHAPE FEATURES FROM NUMERAL-REGION MASK
+
+    For each mask in MASK_ROOT/<class>/, derive a fixed-length feature
+    vector describing the numeral geometry. Writes features.csv with one
+    row per surviving mask.
+
+    Design reference: designtracker-1.5.2
+    Run from repo root:
+        python src/features.py
+    """
+
+    import os
+    import csv
+    import cv2
+    import numpy as np
+
+    import config
+    import constants as C
+
+
+    KNOWN_FEATURES = {
+        "hole_count",
+        "connected_component_count",
+        "blob_area_ratio",
+        "blob_circularity",
+        "blob_aspect",
+        "hole_area_ratio",
+        "hole_aspect",
+        "hole_centroid",
+        "projections",
+        "hu_moments",
+    }
+
+
+    def check_use_features(use_features):
+        """Warn on unknown feature names; return list of unknowns."""
+        unknown = [f for f in use_features if f not in KNOWN_FEATURES]
+        if unknown:
+            print(f"[WARN] Unknown features in USE_FEATURES: {unknown}")
+            print(f"[WARN] Known: {sorted(KNOWN_FEATURES)}")
+        return unknown
+
+
+    def largest_blob(mask):
+        """Return (blob_mask_uint8, stats_row) for the largest component."""
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+        if n <= 1:
+            return None, None
+        idx = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+        blob = (labels == idx).astype(np.uint8) * 255
+        return blob, stats[idx]
+
+
+    def find_holes(blob_mask, min_area_px):
+        """Return stats rows for holes (bg components NOT touching border)."""
+        inv = cv2.bitwise_not(blob_mask)
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(inv, 8)
+        h, w = blob_mask.shape
+        holes = []
+        for i in range(1, n):
+            x, y, ww, hh, area = stats[i]
+            if x == 0 or y == 0 or x + ww == w or y + hh == h:
+                continue
+            if area < min_area_px:
+                continue
+            holes.append(stats[i])
+        return holes
+
+
+    def projections_binned(blob_mask, n_bins, blob_area):
+        """Return (x_bins, y_bins), each length n_bins, normalised."""
+        col_sums = (blob_mask > 0).sum(axis=0).astype(float)
+        row_sums = (blob_mask > 0).sum(axis=1).astype(float)
+        x_chunks = np.array_split(col_sums, n_bins)
+        y_chunks = np.array_split(row_sums, n_bins)
+        x_bins = np.array([c.sum() for c in x_chunks]) / max(1.0, blob_area)
+        y_bins = np.array([c.sum() for c in y_chunks]) / max(1.0, blob_area)
+        return x_bins, y_bins
+
+
+    def features_from_mask(mask, use_features, proj_bins, keep_hu, min_hole_area):
+        """Return dict of {feature_name: value}, or None if mask unusable."""
+        blob, blob_stat = largest_blob(mask)
+        if blob is None:
+            return None
+
+        h, w = mask.shape
+        crop_area = float(h * w)
+        blob_area = float(blob_stat[cv2.CC_STAT_AREA])
+        bw = float(blob_stat[cv2.CC_STAT_WIDTH])
+        bh = float(blob_stat[cv2.CC_STAT_HEIGHT])
+
+        feats = {}
+
+        holes = find_holes(blob, min_hole_area)
+        if "hole_count" in use_features:
+            feats["hole_count"] = len(holes)
+
+        if "connected_component_count" in use_features:
+            n_cc, _, _, _ = cv2.connectedComponentsWithStats(mask, 8)
+            feats["connected_component_count"] = n_cc - 1
+
+        if "blob_area_ratio" in use_features:
+            feats["blob_area_ratio"] = blob_area / crop_area
+
+        if "blob_circularity" in use_features:
+            contours, _ = cv2.findContours(blob, cv2.RETR_EXTERNAL,
+                                           cv2.CHAIN_APPROX_SIMPLE)
+            per = cv2.arcLength(contours[0], True) if contours else 0.0
+            feats["blob_circularity"] = (
+                4.0 * np.pi * blob_area / (per ** 2) if per > 0 else 0.0
+            )
+
+        if "blob_aspect" in use_features:
+            feats["blob_aspect"] = bw / max(1.0, bh)
+
+        if holes:
+            hx, hy, hw, hh, harea = max(holes, key=lambda s: s[cv2.CC_STAT_AREA])
+
+            if "hole_area_ratio" in use_features:
+                feats["hole_area_ratio"] = float(harea) / blob_area
+            if "hole_aspect" in use_features:
+                feats["hole_aspect"] = float(hw) / max(1.0, hh)
+            if "hole_centroid" in use_features:
+                blob_cx = blob_stat[cv2.CC_STAT_LEFT] + bw / 2.0
+                blob_cy = blob_stat[cv2.CC_STAT_TOP] + bh / 2.0
+                hole_cx = hx + hw / 2.0
+                hole_cy = hy + hh / 2.0
+                feats["hole_centroid_dx"] = (hole_cx - blob_cx) / max(1.0, bw)
+                feats["hole_centroid_dy"] = (hole_cy - blob_cy) / max(1.0, bh)
+        else:
+            if "hole_area_ratio" in use_features:
+                feats["hole_area_ratio"] = 0.0
+            if "hole_aspect" in use_features:
+                feats["hole_aspect"] = 0.0
+            if "hole_centroid" in use_features:
+                feats["hole_centroid_dx"] = 0.0
+                feats["hole_centroid_dy"] = 0.0
+
+        if "projections" in use_features:
+            xb, yb = projections_binned(blob, proj_bins, blob_area)
+            for i, v in enumerate(xb):
+                feats[f"proj_x_{i}"] = float(v)
+            for i, v in enumerate(yb):
+                feats[f"proj_y_{i}"] = float(v)
+
+        if keep_hu and "hu_moments" in use_features and holes:
+            hx, hy, hw, hh, harea = max(holes, key=lambda s: s[cv2.CC_STAT_AREA])
+            inv = cv2.bitwise_not(blob)
+            n, labels, stats, _ = cv2.connectedComponentsWithStats(inv, 8)
+            hole_label = None
+            for i in range(1, n):
+                x, y, ww, hh2, area = stats[i]
+                if (x, y, ww, hh2, area) == (hx, hy, hw, hh, harea):
+                    hole_label = i
+                    break
+            if hole_label is not None:
+                hole_mask = (labels == hole_label).astype(np.uint8) * 255
+                hu = cv2.HuMoments(cv2.moments(hole_mask)).flatten()
+                hu_scaled = -np.sign(hu) * np.log10(np.abs(hu) + 1e-12)
+                for i, v in enumerate(hu_scaled):
+                    feats[f"hu_{i}"] = float(v)
+            else:
+                for i in range(7):
+                    feats[f"hu_{i}"] = 0.0
+
+        return feats
+
+
+    def build_features(mask_root, class_ids, out_csv,
+                       use_features, proj_bins, keep_hu, min_hole_area):
+        """Walk mask folders, extract features per mask, write features.csv."""
+        rows = []
+
+        for cid in class_ids:
+            folder = os.path.join(mask_root, str(cid))
+            if not os.path.isdir(folder):
+                continue
+            for fname in sorted(os.listdir(folder)):
+                if not fname.lower().endswith(".png"):
+                    continue
+                mask = cv2.imread(os.path.join(folder, fname),
+                                  cv2.IMREAD_GRAYSCALE)
+                if mask is None:
+                    continue
+                mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)[1]
+
+                feats = features_from_mask(mask, use_features, proj_bins,
+                                           keep_hu, min_hole_area)
+                if feats is None:
+                    continue
+
+                if fname.endswith("_mask.png"):
+                    base = fname[:-len("_mask.png")]
+                else:
+                    base = fname
+                row = {"filename": f"{cid}/{base}.png"}
+                row.update(feats)
+                rows.append(row)
+
+        if not rows:
+            print("[WARN] no feature rows produced; check config.MASK_ROOT")
+            with open(out_csv, "w", newline="") as f:
+                f.write("filename\n")
+            return 0
+
+        fieldnames = ["filename"] + sorted(
+            k for k in rows[0].keys() if k != "filename"
+        )
+
+        with open(out_csv, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            for r in rows:
+                w.writerow(r)
+
+        return len(rows)
+
+
+    def main():
+        unknown = check_use_features(config.USE_FEATURES)
+        if unknown:
+            print("[WARN] Proceeding with known subset only.")
+
+        n = build_features(
+            config.MASK_ROOT,
+            C.CLASS_IDS,
+            config.FEATURES_CSV,
+            config.USE_FEATURES,
+            config.PROJ_BINS,
+            config.KEEP_HU_MOMENTS,
+            config.MIN_HOLE_AREA_PX,
+        )
+        print(f"[DONE] wrote {n} rows to {config.FEATURES_CSV}")
+
+
+    if __name__ == "__main__":
+        main()
+
+
+================================================================================
+4. SKELETAL EXPLANATION - WITH [PARAMS] & DESCRIPTION
+================================================================================
+
+4.1 check_use_features([USE_FEATURES]) -> list[str]
+
+    def check_use_features(use_features):
+        [unknown = [f for f in use_features if f not in KNOWN_FEATURES]]
+        if unknown:
+            [print WARN unknown]
+            [print WARN known set]
+        return unknown
+
+    PARAMS:
+      [USE_FEATURES]     config.USE_FEATURES
+                         = ["hole_count", "connected_component_count",
+                            "blob_area_ratio", "hole_area_ratio",
+                            "hole_aspect", "hole_centroid",
+                            "projections"]
+      KNOWN_FEATURES     module constant, 10-element set covering all
+                         default + fallback feature names
+
+    DESCRIPTION:
+      Startup sanity check required by the devtracker 7.1 spec
+      ("Add a startup check comparing USE_FEATURES against the known
+      feature set. Warn on unknown names"). Protects against typo'd
+      config: a misspelled "hole_aspect " (with trailing space) would
+      otherwise silently produce no column in the CSV.
+
+      Emits a warning but does not raise - the caller (main) proceeds
+      with the known subset, so a typo degrades gracefully to "fewer
+      features than intended" rather than "crash before any work
+      happens." This is deliberate: 7.1 is not a gate, it is a
+      producer. A partial CSV is still useful; a crash is not.
+
+
+4.2 largest_blob([MASK]) -> (blob_uint8, stats_row) | (None, None)
+
+    def largest_blob(mask):
+        [n, labels, stats, _ = connectedComponentsWithStats(mask, 8)]
+        if n <= 1:
+            return None, None
+        [idx = 1 + argmax(stats[1:, CC_STAT_AREA])]
+        [blob = (labels == idx).astype(uint8) * 255]
+        return blob, stats[idx]
+
+    PARAMS:
+      [MASK]     uint8 {0,255}, one mask PNG from mask_png/<class>/
+      8 (2nd arg to connectedComponentsWithStats)
+                 8-connectivity: diagonal pixels count as connected
+      "1 +"      offset: skip label 0 (background) before argmax
+
+    DESCRIPTION:
+      Isolates the ball's white patch (the ball patch stencil) as a
+      single connected component. Any stray specks or speckle from
+      cloth bleed are dropped - only the largest component survives.
+
+      Returns the isolated blob as uint8 0/255 plus the stats row for
+      that component (which carries AREA, LEFT, TOP, WIDTH, HEIGHT -
+      used downstream by hole_centroid and blob_area_ratio).
+
+      Returns (None, None) if the mask contains only background. The
+      caller (features_from_mask) treats this as "skip this crop,"
+      which is the mask-level equivalent of the 6.1 rejection path.
+      In practice this never fires on 6.3 output (6.1 already rejected
+      any mask under MIN_MASK_AREA=30 pixels; a usable mask cannot be
+      background-only), but the guard is defensive.
+
+
+4.3 find_holes([BLOB], [MIN_HOLE_AREA_PX]) -> list[stats_row]
+
+    def find_holes(blob_mask, min_area_px):
+        [inv = bitwise_not(blob_mask)]
+        [n, labels, stats, _ = connectedComponentsWithStats(inv, 8)]
+        [h, w = blob_mask.shape]
+        holes = []
+        for i in range(1, n):
+            [x,y,ww,hh,area = stats[i]]
+            if [touches border]: continue    # background, not a hole
+            if [area < min_area_px]: continue  # noise
+            holes.append(stats[i])
+        return holes
+
+    PARAMS:
+      [BLOB]               uint8 {0,255}, output of largest_blob
+      [MIN_HOLE_AREA_PX]   config.MIN_HOLE_AREA_PX = 5
+
+    DESCRIPTION:
+      Inverting the blob makes the numerals stand out as white islands
+      inside a black surround. Connected-component analysis on the
+      inverted image finds those islands, but with a filter:
+      components that touch the image border are background, not holes.
+
+      This is what distinguishes a numeral hole from the surrounding
+      black background - the numeral is fully enclosed by white, the
+      background surrounds the blob. Without the border check, the
+      "background" component of the inverted image (which is huge)
+      would be counted as a hole, and hole_count would be inflated by
+      exactly 1 on every crop.
+
+      The min_area_px filter drops speckle caused by scan artefacts or
+      uneven thresholding inside the numeral itself. 5 px is a floor,
+      not a target.
+
+      Returned stats rows carry AREA, WIDTH, HEIGHT, LEFT, TOP -
+      exactly what hole_area_ratio, hole_aspect, and hole_centroid_*
+      need.
+
+
+4.4 projections_binned([BLOB], [N_BINS], [BLOB_AREA]) -> (x_bins, y_bins)
+
+    def projections_binned(blob_mask, n_bins, blob_area):
+        [col_sums = (blob_mask > 0).sum(axis=0).astype(float)]
+        [row_sums = (blob_mask > 0).sum(axis=1).astype(float)]
+        [x_chunks = array_split(col_sums, n_bins)]
+        [y_chunks = array_split(row_sums, n_bins)]
+        [x_bins = [c.sum() for c in x_chunks] / max(1.0, blob_area)]
+        [y_bins = [c.sum() for c in y_chunks] / max(1.0, blob_area)]
+        return x_bins, y_bins
+
+    PARAMS:
+      [BLOB]          uint8 {0,255}, output of largest_blob
+      [N_BINS]        config.PROJ_BINS = 8
+      [BLOB_AREA]     blob_stat[cv2.CC_STAT_AREA]
+
+    DESCRIPTION:
+      "Shadow" projection - collapse the 2D blob into two 1D mass
+      distributions by summing along each axis, then bucket into n_bins
+      bins. The result is a coarse silhouette profile per axis:
+
+        - "8"  ->  mass concentrated in middle bins of both axes
+        - "1"  ->  single tall spike in proj_x mid-bins, broad in proj_y
+        - "0"  ->  mass split between left/right edge bins of proj_x
+
+      Normalising by blob_area (not by the bin count) is essential:
+      without it, larger crops would produce larger bin values,
+      breaking the invariance we need. Two "8"s of different crop
+      sizes must produce the same proj_x vector.
+
+      The max(1.0, ...) guard prevents divide-by-zero for degenerate
+      blobs (single-pixel, theoretically possible though statistically
+      impossible after 6.1's floor).
+
+
+4.5 features_from_mask([MASK], [USE], [PROJ_BINS], [KEEP_HU], [MIN_HOLE])
+    -> dict | None
+
+    def features_from_mask(mask, use_features, proj_bins, keep_hu, min_hole_area):
+        [blob, blob_stat = largest_blob(mask)]
+        if blob is None: return None
+
+        [crop_area = h * w]
+        [blob_area = blob_stat[AREA]]
+        [bw, bh   = blob_stat[WIDTH], blob_stat[HEIGHT]]
+
+        feats = {}
+        [holes = find_holes(blob, min_hole)]
+
+        if "hole_count"                in USE: feats[...] = len(holes)
+        if "connected_component_count" in USE: feats[...] = n_cc - 1
+        if "blob_area_ratio"           in USE: feats[...] = blob_area/crop_area
+        if "blob_circularity"          in USE: feats[...] = circularity(blob)
+        if "blob_aspect"               in USE: feats[...] = bw/bh
+
+        if holes:
+            [hx, hy, hw, hh, harea = max(holes, key=AREA)]
+            if "hole_area_ratio" in USE: feats[...] = harea/blob_area
+            if "hole_aspect"     in USE: feats[...] = hw/hh
+            if "hole_centroid"   in USE:
+                feats[...] = (hole_cx - blob_cx)/bw, (hole_cy - blob_cy)/bh
+        else:
+            [zero-fill hole-derived features]
+
+        if "projections" in USE:
+            [xb, yb = projections_binned(blob, proj_bins, blob_area)]
+            [feats: proj_x_0..7, proj_y_0..7]
+
+        if keep_hu and "hu_moments" in USE and holes:
+            [isolate hole label, compute Hu moments, scale by -sign*log10(abs)]
+
+        return feats
+
+    PARAMS:
+      [MASK]        uint8 {0,255}, one PNG read from mask_png/<class>/
+      [USE]         config.USE_FEATURES
+      [PROJ_BINS]   config.PROJ_BINS = 8
+      [KEEP_HU]     config.KEEP_HU_MOMENTS = False
+      [MIN_HOLE]    config.MIN_HOLE_AREA_PX = 5
+
+    DESCRIPTION:
+      The single-crop feature factory. Called once per mask by
+      build_features. Produces the 23-feature default vector plus any
+      fallback features that were enabled.
+
+      Every feature is guarded by "<name>" in use_features so toggling
+      a feature in config.py is a one-line change with no code edits.
+      This is what makes the fallback path (blob_circularity,
+      blob_aspect, hu_moments) a config-level switch rather than a
+      code-level refactor.
+
+      Hole-derived features are computed against the LARGEST hole only
+      (max(holes, key=AREA)). For two-digit numerals 10-15, the largest
+      hole dominates and the second digit's hole is ignored. This is a
+      known limitation that MUST be documented in EDA (§8.2): the
+      hole_count feature was designed around single-digit-hole
+      assumptions, and two-digit numerals will affect its distribution.
+
+      When no holes exist (e.g., numeral "1"), hole-derived features
+      are zero-filled rather than omitted. This keeps the CSV column
+      set identical across every row, which the DictWriter in
+      build_features relies on for correct header inference.
+
+      Hu moments are computed on the HOLE, not the blob, and only when
+      KEEP_HU_MOMENTS=True. Default is off because 1.6.3's redundancy
+      analysis predicts hu moments to be redundant with hole_aspect and
+      hole_area_ratio for single-digit numerals. The code path exists
+      as a fallback in case default features under-deliver, but is
+      untested under the current dataset (see §8 caveat 2).
+
+
+4.6 build_features([MASK_ROOT], [CLASS_IDS], [OUT_CSV], [USE], [PROJ_BINS],
+    [KEEP_HU], [MIN_HOLE]) -> int
+
+    def build_features(mask_root, class_ids, out_csv, use_features, proj_bins,
+                       keep_hu, min_hole_area):
+        rows = []
+        for cid in class_ids:
+            [folder = mask_root/cid]; if not isdir: continue
+            for fname in sorted(listdir(folder)):
+                if not .png: continue
+                [mask = imread(grayscale, folder/fname)]
+                if mask is None: continue
+                [mask = threshold(mask, 127, 255, BINARY)]
+
+                [feats = features_from_mask(mask, ...)]
+                if feats is None: continue
+
+                [strip "_mask.png" -> base]
+                [row = {"filename": f"{cid}/{base}.png"}]
+                [row.update(feats)]
+                [rows.append(row)]
+
+        if not rows: [write header-only CSV, warn, return 0]
+
+        [fieldnames = ["filename"] + sorted(other keys)]
+        [DictWriter: header + rows]
+
+        return len(rows)
+
+    PARAMS:
+      [MASK_ROOT]   config.MASK_ROOT = ~\mask_png
+      [CLASS_IDS]   constants.CLASS_IDS = [1..15]
+      [OUT_CSV]     config.FEATURES_CSV = ~\features.csv
+      [USE], [PROJ_BINS], [KEEP_HU], [MIN_HOLE]  as above
+
+    DESCRIPTION:
+      The orchestrator. Three behaviours deserve pointing out:
+
+      (1) sorted(listdir)
+          Deterministic iteration, matching 6.1's behaviour. Row order
+          in features.csv becomes stable, so re-running 7.1 on the same
+          masks produces byte-identical CSVs (modulo timestamps). This
+          matters for the report: a reviewer can diff two runs to
+          confirm nothing changed unless the input changed.
+
+      (2) threshold(..., 127, 255, BINARY)
+          Defensive re-binarisation. cv2.imwrite at 6.1 preserved the
+          {0,255} mask values exactly, but PNG compression or re-saving
+          could conceivably leave intermediate greys. This guarantees a
+          strictly binary input to connectedComponentsWithStats, which
+          assumes {0, 255} in the uint8 matrix.
+
+      (3) "_mask.png" suffix strip
+          The integration point that 1.5.2 left implicit. The filename
+          column written here must match the filename column written by
+          5.1's splits.csv, because 1.5.3 inner-joins on that column.
+
+          splits.csv holds   "<class>/<crop_name>.png"
+          masks on disk are  "<class>/<crop_name>_mask.png"
+
+          Without the strip, the join at 1.5.3 silently drops 100% of
+          rows. This is the single most likely integration failure in
+          the whole pipeline, and the strip is the smallest possible
+          intervention that preserves 1.5.3's design as written.
+
+      Header inference via sorted(other keys) guarantees canonical
+      column order regardless of dict insertion order. Combined with
+      1.5.3's own ["filename", "label", "role"] + feature_columns
+      reorder at load time, this means a reviewer can diff two
+      features.csv files with `diff` and see only semantic changes,
+      never column-order noise.
+
+
+4.7 main()
+
+    def main():
+        [unknown = check_use_features(config.USE_FEATURES)]
+        if unknown: [print WARN proceeding with known subset]
+
+        [n = build_features(config.MASK_ROOT, C.CLASS_IDS,
+                            config.FEATURES_CSV, config.USE_FEATURES,
+                            config.PROJ_BINS, config.KEEP_HU_MOMENTS,
+                            config.MIN_HOLE_AREA_PX)]
+        [print f"[DONE] wrote {n} rows to {config.FEATURES_CSV}"]
+
+    PARAMS:
+      None (reads config + constants)
+
+    DESCRIPTION:
+      Orchestrates startup check + build. Single summary line only -
+      per-class detail already lives in
+      logs/rejects_mask.csv (6.1's rejects) and will be re-produced at
+      the joined level by 8.1's balance.py. A third per-class table
+      here would add a fourth source of truth.
+
+================================================================================
+5. DESIGN DECISIONS - ALL CONFIRMED
+================================================================================
+
+(a) Feature set: 7 categories / 23 sub-features default; 3 fallbacks.
+    Reference: 1.5.2 §4 feature catalogue.
+
+(b) Class scheme: flat 15-class. Rejected: two-stage tens/units.
+    Reference: 1.5.2 §5(e).
+
+(c) Hu moments: OFF by default. Rejected: ON as primary.
+    Rationale: rotation invariance destroys 6/9 distinction - the one
+    pair the classical pipeline cannot afford to confuse. Available as
+    fallback via KEEP_HU_MOMENTS=True. Reference: 1.5.2 §4(j).
+
+(d) Filename contract: strip "_mask.png" on write so that the
+    filename column matches splits.csv's crop name.
+    Reference: 1.5.3 §0 directory tree update.
+
+(e) Hole extraction: connected components on inverted blob, excluding
+    border-touching components.
+    Rejected: findContours with RETR_CCOMP hierarchy (fussier border
+    filtering). Reference: 1.5.2 §5(a).
+
+(f) Projection normalisation: divide by blob_area, not by total
+    white pixels or by bin sum.
+    Reference: 1.5.2 §5(h).
+
+(g) Blob area normalisation: divide by crop_area (h*w), not by total
+    white pixels or by largest blob only.
+    Reference: 1.5.2 §5(g).
+
+(h) USE_FEATURES guard: every feature wrapped in
+    "name" in use_features, so config toggles feature without code
+    edit. Fallback path is a config switch, not a refactor.
+
+(i) Deterministic row order via sorted(listdir).
+    Rationale: CSV diffs between runs reveal semantic changes only.
+
+(j) Defensive re-binarisation via threshold(127, 255, BINARY).
+    Rationale: guards against PNG round-trip greys entering
+    connectedComponentsWithStats.
+
+(k) Startup check via check_use_features().
+    Rationale: typo'd config degrades gracefully to "fewer features"
+    not "crash before work".
+
+(l) Filename-key strip "_mask.png" -> base + ".png".
+    Rationale: 1.5.3 inner-join contract. Non-negotiable.
+
+(m) No per-class stats in main().
+    Rationale: 4.3 audit.py and 8.1 balance.py already provide per-class
+    counts. A third table here would need syncing with two others.
+
+================================================================================
+6. VERIFY LINE (for 7.2, not this note)
+================================================================================
+
+Expected 7.2 output shape given 6.3's written=492:
+
+  [x] features.csv row count == 492 (one per surviving mask; matches
+      6.3's written count).
+
+  [x] Column count == 24 (filename + 23 features).
+
+  [x] hole_count in {0, 1, 2} for the vast majority of rows.
+      Any row with hole_count >= 3 warrants inspection (two-digit
+      numerals 10-15 or mask artefacts).
+
+  [x] blob_area_ratio in (0, ~0.5] typically.
+      Values near 1.0 indicate a mask that captured almost the whole
+      crop - likely a genuine cloth-leak issue to flag.
+
+  [x] proj_x_0..7 sum to 1.0 (within float tolerance) per row.
+      proj_y_0..7 sum to 1.0 (within float tolerance) per row.
+
+  [x] No NaN anywhere.
+
+  [x] Spot-check 3 rows for plausible ranges (hole_count small int;
+      blob_area_ratio not extreme; projections sum ~1).
+
+================================================================================
+7. CARRY-FORWARD WATCH ITEMS (from 6.3, unresolved by 7.1)
+================================================================================
+
+Class 3's train cell will read 7 rows in features.csv, not 15.
+  6.3's rejects_mask.csv shows 8 class-3 crops rejected (all in train):
+    clip2 x 7 (frames 000887, 001125, 001344, 001596, 001821, 002024,
+              002295)  +  clip4 x 1 (frame 000050).
+  Train class-3 was 15 in 5.3; post-6.3 it is 7.
+  Still above the hard floor of 5, but the tightest margin in the
+  dataset. Watch it through 7.2 and 7.3.
+
+Class 5 test cell will read 6 rows in features.csv, not 7.
+  6.3 rejected 5/clip1_frame003328_ball5.png (24 px, just below
+  MIN_MASK_AREA=30). Only one class-5 crop lost; still above the hard
+  floor of 1.
+
+Class 6 test cell will read 8 rows in features.csv, not 10.
+  6.3 rejected 2 class-6 test crops (clip1 frames 000058, 000791).
+  Still above the hard floor.
+
+Class 8 train cell will read 14 rows in features.csv, not 15.
+  6.3 rejected 8/clip2_frame000158_ball9.png (28 px).
+  Still above the hard floor.
+
+Classes 7 and 10 are UNCHANGED by 6.3's rejects. The 5.3 soft misses
+survive intact:
+  val class 10 = 2  (still thin, still above hard floor of 1)
+  test class 7 = 1  (still the only single-crop test cell)
+
+================================================================================
+8. CAVEATS - PRE-7.2
+================================================================================
+
+Caveat 1 - Two-digit numerals (10-15) and hole_count.
+  Classes 10-15 have two-digit numerals. The mask will contain TWO
+  holes (one per digit) UNLESS the digits touch and merge into one
+  component. hole_count for two-digit numerals will therefore be
+  either 1 (merged) or 2 (separate). The 1.5.2 feature set was designed
+  around single-digit-hole assumptions (1-9). Expect the hole_count
+  distribution in 8.2 to be flatter than ideal for classes 10-15.
+  Document in EDA - do not "fix" by re-engineering hole_count before
+  seeing the plot.
+
+Caveat 2 - Hu moments code path is untested under current dataset.
+  KEEP_HU_MOMENTS=False means the hu_moments branch never executes in
+  the default run. If a later stage enables it, re-run 7.1 with
+  KEEP_HU_MOMENTS=True and inspect a handful of rows manually. The
+  label-matching logic for isolating the largest hole's connected
+  component could produce zero-fills on pathological masks (e.g., if
+  two holes coincidentally share the same (x,y,w,h,area) tuple).
+  Non-issue for the default path; flag only if the config is toggled.
+
+Caveat 3 - proj_x / proj_y are rotation-sensitive by design.
+  This is the classical-ML ceiling. If a numeral is rotated, its
+  projection profile shifts. 1.5.1 §5 and pre-1.5.1 §5 both note this
+  as the expected Phase 2 limitation. Document in EDA (§8.2) as the
+  Phase-2-to-Phase-4 narrative driver: "classical features plateaued
+  at X%; CNN with augmentation reached Y%." Do not attempt to fix
+  rotation sensitivity via feature engineering - the fix is Phase 4.
+
+================================================================================
+9. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+  6.3  mask_png/<class>/<name>_mask.png (492 files)
+  5.3  splits.csv, 505 rows (join target)
+  config  MASK_ROOT, FEATURES_CSV, USE_FEATURES, PROJ_BINS,
+          KEEP_HU_MOMENTS, MIN_HOLE_AREA_PX
+  constants  CLASS_IDS
+
+DOWNSTREAM:
+  7.2  runs features.py; produces features.csv (492 rows, 24 cols)
+  7.3  inner-joins features.csv + splits.csv -> dataset.csv
+  8.1  balance.py reads dataset.csv for class balance
+  8.2  distributions.py reads dataset.csv for feature distributions
+  8.3  correlations.py reads dataset.csv for correlation analysis
+  1.6.3  from the roadmap's original numbering; now merged into 8.3
+  1.7.1  clean.py reads dataset.csv + retained_features.txt
+  Phase 2  consumes via 1.7.3's Pipeline
+
+================================================================================
+10. RESCALE / FALLBACK TRIGGERS
+================================================================================
+
+- If 7.2 produces fewer than 480 rows:
+    -> some masks failed features_from_mask (blob is None). Trace to
+       6.3's reject log; if all 13 rejects are accounted for, check
+       for read failures on specific PNGs.
+
+- If any row has NaN in a feature column:
+    -> upstream bug in features_from_mask. Common causes:
+         - unguarded division: check max(1.0, ...) in blob_aspect,
+           hole_aspect, projections_binned
+         - hu moments log of zero: 1e-12 guard, already present
+       Fix at source. Do NOT impute at 1.7.1.
+
+- If any row has hole_count >= 3:
+    -> inspect that specific mask. Likely two-digit numeral (expected)
+       or a mask artefact (unexpected). If artefact, note the file
+       and flag for potential 6.1 threshold review. Do not modify
+       MIN_HOLE_AREA_PX just for one crop - trades a systematic
+       threshold for a case-by-case exception.
+
+- If default 23-feature set produces poor class separation at 8.2:
+    -> try fallbacks in order:
+         (1) blob_circularity + blob_aspect (add to USE_FEATURES)
+         (2) hu_moments (set KEEP_HU_MOMENTS = True and add to
+             USE_FEATURES)
+         (3) drop projections (remove from USE_FEATURES) if 8.3 flags
+             them as dominated by rotation sensitivity
+
+- If PROJECTIONS dominate the feature matrix (all other features
+  negligible in scatter plots at 8.2):
+    -> check normalisation. Must divide by blob_area, not by total
+       pixel count or bin count. If normalisation is correct and
+       projections still dominate, that is a real signal.
+
+- If class 3 train falls below 5 at 7.3's join:
+    -> this cannot happen unless 7.2 drops more than expected. 6.3's
+       count leaves class 3 train at 7. Verify 7.2 row count per
+       class against the expected post-6.3 matrix.
+
+================================================================================
+11. REPORT SURFACE
+================================================================================
+
+PRELIMINARY ML §3 (feature catalogue + rationale)
+  - Feature list with rationale (default 7 categories = 23
+    sub-features; fallbacks named but not enabled).
+  - Statement: "Features describe the numeral's geometry (holes,
+    ratios, projections). Colour histograms, Hu moments, contours,
+    and ORB were considered and rejected for the OCR subcomponent per
+    the pre-1.5.1 note."
+  - Sample rows from features.csv (3-5).
+  - Normalisation choices stated: blob_area_ratio divides by crop
+    area (h*w); proj_x_* and proj_y_* divide by blob area.
+  - Projection sum-to-1 invariant: "proj_x_0..7 and proj_y_0..7 sum
+    to 1 per row by construction (design constraint, not a bug)."
+  - Caveat (two-digit numerals and hole_count) noted as expected
+    limitation, to be evidenced at 8.2.
+
+FULL ML §6 (methodology)
+  - One sentence: "Features were extracted by thresholding high-V
+    low-S pixels in the mask, finding the largest connected component,
+    counting holes inside it, and deriving shape and projection
+    ratios."
+  - Only if fallbacks were enabled: which ones and why.
+
+FULL ML §8 / DL §6 (limitations)
+  - Rotation sensitivity of proj_x / proj_y noted as the classical
+    ceiling. Sets up Phase 4's CNN improvement narrative.
+  - Two-digit-numeral hole_count limitation if observed at 8.2.
+
+================================================================================
+12. CHECKLIST STATUS
+================================================================================
+
+[x] 7.1 Write features.py
+    -> src/features.py written
+    -> functions: check_use_features, largest_blob, find_holes,
+       projections_binned, features_from_mask, build_features, main
+    -> default 23 features (7 categories); 3 fallbacks (config-gated)
+    -> Hu moments OFF by default (would erase 6/9 distinction)
+    -> filename-key strip: "_mask.png" -> base + ".png" so join at
+       1.5.3 matches splits.csv
+    -> deterministic row order via sorted(listdir)
+    -> startup USE_FEATURES check warns on unknown names
+    -> config.py extended with Features (1.5.2) parameter block
+[ ] 7.2 Run features.py
+[ ] 7.3 Write + run assemble.py
+
+================================================================================
+END OF NOTE
+================================================================================

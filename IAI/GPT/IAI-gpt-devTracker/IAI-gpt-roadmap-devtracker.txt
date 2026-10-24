@@ -397,7 +397,7 @@ SECTION 6 - MASK EXTRACTION
         Numeral not visible as a hole:
             MORPH_CLOSE_ITER > 0 -> set to 0.
 
-[ ] 6.3  FULL RUN
+[x] 6.3  FULL RUN
     Type: run
     Prereq: 6.2 passes
     Action: Remove cap. Full run.
