@@ -1,0 +1,294 @@
+================================================================================
+8.3 WRITE + RUN correlations.py - PASS
+================================================================================
+
+1. ESSENCE & DATA FLOW
+----------------------
+What: Diagnostic + Config Generator. Computes Pearson (feature-feature 
+      redundancy) and ANOVA/Mutual Info (feature-label relevance).
+How:  Loads dataset.csv (train only). Computes 23x23 correlation matrix. 
+      Computes F-scores and MI for each feature vs label. Saves heatmap, 
+      relevance CSV, and log. Human writes retained_features.txt.
+
+Input:  dataset.csv (from 7.3). 492 rows, 26 cols.
+Output: 
+  - corr_heatmap.png (figures folder).
+  - feature_label_relevance.csv (data root).
+  - logs/1.6.3_redundancy_flags.txt (log).
+  - retained_features_correlations.txt (HUMAN-WRITTEN config, consumed by 9.1).
+
+
+2. CORE CONCEPTS EXPLAINED
+--------------------------
+PEARSON CORRELATION (r):
+  - Measures LINEAR relationship between two continuous features.
+  - Pairing: Computes all possible pairs (23x23 matrix). No clever selection.
+  - Formula: cov(A, B) / (std(A) * std(B)).
+  - Range: [-1.0, 1.0]. 1.0 = move together (duplicates). -1.0 = opposite. 
+    0.0 = independent.
+  - Use: Feature-Feature redundancy. If |r| >= 0.9, they are duplicates.
+
+ANOVA F-SCORE:
+  - Tests if the means of a continuous feature differ significantly across classes.
+  - Formula: Between-class variance / Within-class variance.
+  - Input: 1 feature column + Label column (15 classes).
+  - Output: F-value (higher = better separation) + p-value (<0.05 is good).
+  - NaN: Occurs if variance is 0 (dead feature, divide-by-zero).
+
+MUTUAL INFORMATION (MI):
+  - Measures ANY relationship (linear or non-linear) between feature and label.
+  - Mechanics: Entropy-based. How much does knowing the feature reduce 
+    uncertainty about the label?
+  - Range: [0, ∞). Higher = more information. 0.0 = completely independent.
+
+HEATMAP:
+  - Visual grid. Red = +1.0, Blue = -1.0, White = 0.0. Instant visual scan for 
+    clusters of redundant features.
+
+LABELS ORIGIN:
+  - Put there during 4.2 (manual sort into folders 1-15). 
+  - Folder name became the label. 
+  - 7.3 (assemble.py) extracted the prefix "1/" and wrote the `label` column.
+
+
+3. CODE - src/correlations.py
+------------------------------
+"""
+8.3 COMPUTE CORRELATIONS
+
+Computes feature-feature Pearson correlation and feature-label relevance
+(ANOVA F + mutual info). Flags highly correlated pairs.
+Saves corr_heatmap.png and feature_label_relevance.csv.
+
+Design reference: designtracker-1.6.3
+Run from repo root:
+    python src/correlations.py
+"""
+
+import os
+import sys
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.feature_selection import f_classif, mutual_info_classif
+
+import config
+import constants as C
+
+FEATURE_COLUMNS = [
+    "hole_count", "connected_component_count", "blob_area_ratio",
+    "hole_area_ratio", "hole_aspect", "hole_centroid_dx", "hole_centroid_dy",
+    "proj_x_0", "proj_x_1", "proj_x_2", "proj_x_3", "proj_x_4", "proj_x_5", "proj_x_6", "proj_x_7",
+    "proj_y_0", "proj_y_1", "proj_y_2", "proj_y_3", "proj_y_4", "proj_y_5", "proj_y_6", "proj_y_7",
+]
+
+REDUNDANCY_THR = 0.9
+FIG_DPI = 150
+
+def _tee_stdout(log_path):
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    log_file = open(log_path, "w")
+
+    class _Tee:
+        def write(self, s):
+            log_file.write(s)
+            sys.__stdout__.write(s)
+        def flush(self):
+            log_file.flush()
+            sys.__stdout__.flush()
+
+    sys.stdout = _Tee()
+
+
+def compute_correlations(dataset_csv, fig_dir, root_dir):
+    df = pd.read_csv(dataset_csv)
+    df = df[df["role"] == "train"]
+
+    # 1. Feature-Feature Pearson Correlation
+    corr = df[FEATURE_COLUMNS].corr(method="pearson")
+
+    fig, ax = plt.subplots(figsize=(12, 10))
+    sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm",
+                center=0, square=True, ax=ax, cbar_kws={"shrink": 0.8})
+    ax.set_title("Feature-feature correlation (train)")
+    plt.tight_layout()
+    out_png = os.path.join(fig_dir, "corr_heatmap.png")
+    plt.savefig(out_png, dpi=FIG_DPI)
+    plt.close(fig)
+    print(f"[INFO] wrote {out_png}")
+
+    # Flag redundant pairs
+    flagged = []
+    for i, a in enumerate(FEATURE_COLUMNS):
+        for b in FEATURE_COLUMNS[i+1:]:
+            if abs(corr.loc[a, b]) >= REDUNDANCY_THR:
+                flagged.append((a, b, round(corr.loc[a, b], 3)))
+
+    print(f"\nRedundant pairs (|r| >= {REDUNDANCY_THR}):")
+    for a, b, r in flagged:
+        print(f"  {a} <-> {b} : r = {r}")
+    if not flagged:
+        print("  (none)")
+
+    # 2. Feature-Label Relevance
+    X = df[FEATURE_COLUMNS].values
+    y = df["label"].values
+
+    f_scores, p_vals = f_classif(X, y)
+    mi_scores       = mutual_info_classif(X, y, random_state=42)
+
+    relevance = pd.DataFrame({
+        "feature":   FEATURE_COLUMNS,
+        "anova_F":   f_scores,
+        "anova_p":   p_vals,
+        "mut_info":  mi_scores,
+    }).sort_values("mut_info", ascending=False)
+
+    print("\nFeature-label relevance (sorted by mutual information):")
+    print(relevance.to_string(index=False))
+
+    out_csv = os.path.join(root_dir, "feature_label_relevance.csv")
+    relevance.to_csv(out_csv, index=False)
+    print(f"\n[INFO] wrote {out_csv}")
+
+
+def main():
+    log_path = os.path.join(config.LOGS_DIR, "1.6.3_redundancy_flags.txt")
+    _tee_stdout(log_path)
+    compute_correlations(config.DATASET_CSV, config.FIGURES_DIR, config.DATA_ROOT)
+    print(f"\n[INFO] log: {log_path}")
+
+if __name__ == "__main__":
+    main()
+
+
+4. SKELETAL EXPLANATION
+-----------------------
+compute_correlations([DATASET_CSV], [FIG_DIR], [ROOT_DIR])
+    [df = df[df.role == "train"]] -> Skips val/test to prevent leakage.
+    [df[FEATURE_COLUMNS].corr(method="pearson")] -> 23x23 matrix.
+    [sns.heatmap(..., center=0, annot=True)] -> Red/Blue grid.
+    [f_classif(X, y)] -> ANOVA F-score + p-value.
+    [mutual_info_classif(X, y)] -> Non-linear relevance metric.
+
+    PARAMS:
+      [DATASET_CSV]   config.DATASET_CSV
+      [FIG_DIR]       config.FIGURES_DIR
+      [ROOT_DIR]      config.DATA_ROOT
+      [REDUNDANCY_THR] 0.9
+
+
+5. OUTPUT & INTERPRETATION
+--------------------------
+DEAD FEATURES (8 total, dropped):
+  - hole_count, hole_area_ratio, hole_aspect, hole_centroid_dx, 
+    hole_centroid_dy, proj_x_7, proj_y_0, proj_y_7.
+  - Reason: Variance = 0. ANOVA returns NaN. MI = 0.0.
+  - Root cause: Resolution ceiling (post-7.2). No enclosed holes, 
+    no white mass at extreme crop edges.
+
+LIVE FEATURES (15 total, retained):
+  - Dominant (MI > 1.0): blob_area_ratio (1.68), proj_y_2 (1.51), 
+    proj_x_3 (1.39), proj_y_3 (1.27).
+  - Moderate (MI 0.5 - 1.0): proj_x_2, proj_y_4, proj_x_4, proj_y_1, 
+    proj_y_5, proj_x_5, proj_y_6, proj_x_6, connected_component_count.
+  - Weak (MI < 0.5): proj_x_1, proj_x_0.
+
+REDUNDANCY:
+  - (none) flagged. Highest off-diagonal is 0.77 (proj_x_2 <-> proj_x_4).
+  - Structural constraint (sum-to-1) causes mild correlation, but not redundant.
+
+REPORT NARRATIVE:
+  - 8 features are zero-variance (dead).
+  - blob_area_ratio is the strongest discriminator (separates solids vs stripes).
+  - Projection arrays carry the bulk of the remaining signal.
+
+
+6. FEATURE IDENTITY GLOSSARY (PROJECTIONS)
+------------------------------------------
+Each proj_* is a coarse silhouette bucket. Recall how it's computed (from 
+features.py):
+  1. Take the mask's largest white blob.
+  2. Sum white pixels per column → 1D horizontal profile (length = blob width).
+  3. Sum white pixels per row → 1D vertical profile (length = blob height).
+  4. Split each profile into 8 equal-width chunks. Sum each chunk.
+  5. Divide by blob area → values in [0,1], sum to 1 per axis.
+
+Feature     Position in blob         Numeric meaning
+----------  -----------------------  -----------------------------------------
+proj_x_0    Leftmost vertical slice  Mass in the leftmost 1/8 of width
+proj_x_1    2nd slice from left      Mass at ~12–25% width
+proj_x_2    3rd slice                ~25–37% width
+proj_x_3    4th slice                ~37–50% width (just left of horizontal centre)
+proj_x_4    5th slice                ~50–62% width (just right of centre)
+proj_x_5    6th slice                ~62–75% width
+proj_x_6    7th slice                ~75–87% width
+proj_y_0    Topmost horizontal slice Mass in top 1/8 of height
+proj_y_1    2nd from top             ~12–25% height
+proj_y_2    3rd from top             ~25–37% height
+proj_y_3    4th from top             ~37–50% height (just above vertical centre)
+proj_y_4    5th from top             ~50–62% height (just below centre)
+proj_y_5    6th from top             ~62–75% height
+proj_y_6    7th from top             ~75–87% height
+proj_y_7    Bottommost slice         Mass in bottom 1/8 of height
+
+INTUITION — WHERE INK IS DENSEST:
+  - "1": tall thin vertical stroke → high proj_x_3/proj_x_4 (centre columns), 
+    spread proj_y_*.
+  - "0": hollow oval → left/right edges of proj_x, top/bottom edges of proj_y.
+  - "7": heavy at top, tail to lower-left → high proj_y_1/proj_y_2, asymmetric proj_x.
+
+WHY 7 OUT OF 8 SURVIVE:
+  - proj_y_0 and proj_y_7 (extreme top/bottom) are zero — blob doesn't reach 
+    the crop edge (padding is intentional).
+  - proj_x_7 (extreme right) is zero — mask is left-weighted across the dataset.
+  - proj_x_0 survives (MI 0.12) because some numerals do reach the left edge.
+
+WHICH 8 FEATURES DIED, IN PLAIN TERMS:
+  - 5 hole-* features: no enclosed holes detected (resolution ceiling, post-7.2).
+  - 3 projection edges: no white mass in extreme left/right/top/bottom slices. 
+    Geometric artefact of the mask, not the numeral.
+
+
+
+
+
+7. RETAINED FEATURES CONFIG
+---------------------------
+Note: Config file saved as `retained_features_correlations.txt` (plain text, 
+not .csv, because it is a persistent human decision, not a data table).
+Update [RETAINED_TXT] in 9.1 to point to this filename.
+
+Content:
+# Retained features after 1.6.3 correlation analysis
+# Dropped (dead, MI=0, NaN F): hole_count, hole_area_ratio, hole_aspect,
+#   hole_centroid_dx, hole_centroid_dy, proj_x_7, proj_y_0, proj_y_7
+# Retained (live, MI>0): 15 features
+
+connected_component_count
+blob_area_ratio
+proj_x_0
+proj_x_1
+proj_x_2
+proj_x_3
+proj_x_4
+proj_x_5
+proj_x_6
+proj_y_1
+proj_y_2
+proj_y_3
+proj_y_4
+proj_y_5
+proj_y_6
+
+
+8. CHECKLIST STATUS
+-------------------
+[x] 8.3 Write + run correlations.py
+    - Feature-feature heatmap saved.
+    - Feature-label relevance CSV saved.
+    - 8 dead features identified, 15 live features retained.
+    - Human decision file (retained_features_correlations.txt) created.
+[ ] 9.1 Write + run clean.py
+================================================================================

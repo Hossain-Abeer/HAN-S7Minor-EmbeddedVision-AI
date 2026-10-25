@@ -500,7 +500,7 @@ SECTION 8 - EDA
         SEVERE -> plan class_weight='balanced' in Phase 2 for SVC and RF.
                   Document in report Section 3.
 
-[ ] 8.2  WRITE AND RUN distributions.py
+[x] 8.2  WRITE AND RUN distributions.py
     Type: code + run
     Design: designtracker-1.6.2
     Prereq: 8.1

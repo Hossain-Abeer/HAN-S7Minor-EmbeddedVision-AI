@@ -57,7 +57,7 @@ use a box like [ ] for each subsection, such that once it's complete, i will tic
 
 
 
-before that, give a % or progress bar depicting the workflow state. make sure to count in the weight/significance of a task also, not just a count of the number of tasks
+before that, give a % or progress bar depicting the workflow state. make sure to count in the weight/significance of a task also, not just a count of the number of tasks, exclude the drafting of the Prelim ML report itself
 
 
 
@@ -76,11 +76,21 @@ conclude a really short .txt writeup. include all being related to & discussed a
 
 
 [7.3] 
-explain its essence - what it is, how it works. 
+explain its essence - what it is, how it works.  
+data - input (what & from who); output (what & to who).
 
 proceed to produce the code for copy-pasting. 
 
 then proceed to explanation of the code, by using skeletal codeblocks with [params] & description. also brief on what to expect.
+
+
+
+
+
+
+
+[8.2]
+conclude with a txt writeup, make sure you include all that's being discussed & related to, like code, skeletal with params & description, explanation/teaching of concepts, data input(what & from who) & output (what & to who)
 
 
 
