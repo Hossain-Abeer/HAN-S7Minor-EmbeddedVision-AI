@@ -32,7 +32,8 @@ i don't understand. explain them first, one by one in terms:
 2. where - who feeds data to it, who gets data fed by it? by who, i refer to the components in pipeline. 
 3. when - sequence of events of workflow. 
 4. codebase - which libraries are involved, skeletal codesnippets with [params] & description. 
-5. recommendations - relevance to my project, with reasons.
+5. recommendations - relevance to my project, with reasons. 
+
 
 [1.7.3]
 sufficient discussion. do the txt writeup of all that's being discussed, including all that was explained as a part of teaching me
@@ -95,7 +96,7 @@ conclude with a txt writeup, make sure you include all that's being discussed & 
 
 
 
-just so you know, the game app itself creates a bottleneck: the graphics resolution of standard 1080p gets cropped to about standard 720p while screenrecording, and then whatever remains get into the pipeline, resulting in small crops with hardly any pixels in them, furthermore those pixels together rarely form a clear number. 
-If data ingestion was from real-life gameplay and not graphical game, powerful, hi-res camera could have captured the clips, for instance, the use of a mid-range smartphone often with 108MP sensor.
-this should be noted down, taken into consideration & proceed to the next steps in pipeline of our current method of ingested data. I have no doubt that it would have yield much better - frames, crops, masks, features and the rest of the downstream components.
-our work should concerns more of the use/development of a world-standard AI (ML/DL) pipeline, and less or flexibly relates to the end-point program/functions.
+I have run out of prompts for this particular chat. I will have to open a new DeepSeek chat, it will be a continuum of this workflow. 
+to give it context, give me the names of the files that I need to upload. 
+to give it focus on the next or current step/ subsec, mention the files. 
+I will be uploading the project's gitlab (material), src & gpt files in batches. Why in batches - to help it better catagorize. provide a prompt that'll ready the GPT for it.

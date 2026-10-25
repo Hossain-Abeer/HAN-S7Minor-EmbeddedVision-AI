@@ -1,0 +1,119 @@
+================================================================================
+9.1 DATA CLEANING - PASS
+================================================================================
+
+1. ESSENCE & DATA FLOW
+----------------------
+Type: Conditional transform + diagnostic.
+What: Checks for NaN, computes IQR bounds on TRAIN only, clips/removes outliers.
+Why:  Prevents extreme values from destroying distance-based models (SVM/KNN).
+      Protects projection sum-to-1 invariant from clipping damage.
+
+Input Feeds:
+  - dataset.csv (from 7.3)
+  - retained_features_correlations.txt (from 8.3)
+
+Output Feeds:
+  - dataset_clean.csv (to 9.2)
+  - logs/1.7.1_cleaning_report.txt (human evidence)
+
+2. CODE - src/clean.py
+----------------------
+import os, sys, pandas as pd, numpy as np, config
+
+DATASET_CSV      = config.DATASET_CSV
+RETAINED_TXT     = os.path.join(config.DATA_ROOT, "retained_features_correlations.txt")
+OUT_DIR          = config.DATA_ROOT
+LOG_PATH         = os.path.join(config.LOGS_DIR, "1.7.1_cleaning_report.txt")
+CLIP_OR_REMOVE   = "clip"
+MIN_IQR_FLOOR    = 1e-6
+IQR_K            = 1.5
+
+EXCLUDED_FEATURES = [
+    "connected_component_count",
+    "proj_x_0", "proj_x_1", "proj_x_2", "proj_x_3", "proj_x_4", "proj_x_5", "proj_x_6",
+    "proj_y_1", "proj_y_2", "proj_y_3", "proj_y_4", "proj_y_5", "proj_y_6",
+]
+
+def _tee_stdout(log_path):
+    # (Standard Tee omitted for brevity)
+
+def clean_data():
+    df = pd.read_csv(DATASET_CSV)
+    with open(RETAINED_TXT, "r") as f:
+        retained = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+    feats = [f for f in retained if f in df.columns]
+    
+    print(f"[INFO] Cleaning {len(feats)} retained feature columns.")
+    print("\nMissing values per column (retained set):")
+    print(df[feats].isna().sum().to_string())
+
+    cleanable = [f for f in feats if f not in EXCLUDED_FEATURES]
+    print(f"\n[INFO] Cleanable features ({len(cleanable)}): {cleanable}")
+    print(f"[INFO] Excluded ({len(EXCLUDED_FEATURES)}): {EXCLUDED_FEATURES}")
+
+    train_df = df[df["role"] == "train"]
+    q1 = train_df[cleanable].quantile(0.25)
+    q3 = train_df[cleanable].quantile(0.75)
+    iqr = (q3 - q1).clip(lower=MIN_IQR_FLOOR)
+    
+    lower = q1 - IQR_K * iqr
+    upper = q3 + IQR_K * iqr
+
+    outlier_mask = (df[cleanable] < lower) | (df[cleanable] > upper)
+    print("\nOutliers per cleanable column (bounds from train):")
+    print(outlier_mask.sum().to_string())
+
+    if CLIP_OR_REMOVE == "clip":
+        df[cleanable] = df[cleanable].clip(lower=lower, upper=upper, axis=1)
+        
+        # Assert invariants
+        proj_x_cols = [c for c in feats if c.startswith("proj_x_")]
+        proj_y_cols = [c for c in feats if c.startswith("proj_y_")]
+        if proj_x_cols: assert np.allclose(df[proj_x_cols].sum(axis=1), 1.0, atol=1e-3)
+        if proj_y_cols: assert np.allclose(df[proj_y_cols].sum(axis=1), 1.0, atol=1e-3)
+        print("[OK] Projection sum-to-1 invariants hold.")
+            
+        df.to_csv(os.path.join(OUT_DIR, "dataset_clean.csv"), index=False)
+        print(f"[INFO] Clipped columns. Wrote dataset_clean.csv")
+    # (remove / keep branches omitted)
+
+
+3. SKELETAL EXPLANATION - WITH [PARAMS]
+---------------------------------------
+clean_data()
+    [feats] -> 15 live features loaded from 8.3.
+    [cleanable] -> 1 feature: blob_area_ratio.
+    [EXCLUDED] -> 14 features. Preserves small-int variance and projection sum-to-1.
+    [train_df] -> Bounds computed on train ONLY (prevents val/test leakage).
+    [iqr.clip(lower=1e-6)] -> Prevents division-by-zero if a feature is constant.
+    [outlier_mask] -> Train bounds applied to ALL roles.
+    [assert np.allclose(...)] -> Guards the sum-to-1 invariant from clipping damage.
+
+PARAMS:
+  [DATASET_CSV]    -> config.DATASET_CSV
+  [RETAINED_TXT]   -> retained_features_correlations.txt
+  [CLIP_OR_REMOVE] -> "clip"
+  [IQR_K]          -> 1.5
+  [MIN_IQR_FLOOR]  -> 1e-6
+
+4. CORE CONCEPTS / EXECUTION
+----------------------------
+NaN CHECK: 0 found. features.py uses max(1.0, ...) guards, so no division-by-zero.
+EXCLUDED LOGIC:
+  - connected_component_count: Discrete integers (1,2,3). IQR would kill valid minority values.
+  - Projections: Bounded [0,1] and sum-to-1. Clipping breaks the invariant.
+OUTLIER CHECK: 0 outliers found in blob_area_ratio.
+INVARIANT: Passed. Proj_x and Proj_y sum to 1.0.
+
+CONCLUSION: Data was mathematically clean. dataset_clean.csv is identical to 
+dataset.csv. The pipeline is structurally safe for 9.2 scaling.
+
+5. CHECKLIST STATUS
+-------------------
+[x] 9.1 Write + run clean.py
+    -> 0 NaNs, 0 outliers.
+    -> 1 cleanable / 14 excluded.
+    -> dataset_clean.csv written.
+[ ] 9.2 Write + run scale.py
+================================================================================

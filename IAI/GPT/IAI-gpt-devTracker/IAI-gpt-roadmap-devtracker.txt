@@ -520,7 +520,7 @@ SECTION 8 - EDA
         These verdicts feed Preliminary ML Section 3's feature-quality
         table.
 
-[ ] 8.3  WRITE AND RUN correlations.py
+[x] 8.3  WRITE AND RUN correlations.py
     Type: code + run
     Design: designtracker-1.6.3
     Prereq: 8.2
@@ -550,7 +550,7 @@ SECTION 8 - EDA
 SECTION 9 - PREPROCESSING
 ================================================================================
 
-[ ] 9.1  WRITE AND RUN clean.py
+[x] 9.1  WRITE AND RUN clean.py
     Type: code + run
     Design: designtracker-1.7.1 (apply R1 addendum corrections)
     Prereq: 8.3
