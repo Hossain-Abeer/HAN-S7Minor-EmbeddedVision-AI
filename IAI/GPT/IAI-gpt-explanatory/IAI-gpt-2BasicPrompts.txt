@@ -3,7 +3,7 @@ brief. step-by-step walkthrough. wait for me to upload results. validate results
 
 if valid, do a really detailed .txt writeup, including all that's being discussed, explained, creation of new files,, change of things, and all that's relevant.
 
-validate. if valid, do a really short .txt writeup. if not, explain & prompt for relevant data that'd be required to get this done.
+validate. if valid, do   if not, explain & prompt for relevant data that'd be required to get this done.
 
 teach me how to use it, and how it works - how it takes input from me, how it processes (the mechanics of it), what output it produces, how's the output stored or if not stored theb how's the output fed in the pipeline.
 
@@ -64,6 +64,24 @@ before that, give a % or progress bar depicting the workflow state. make sure to
 
 
 validate. if valid, do the .txt writeup, include all being related to & discussed about it. you need to include - 'the code, then explanation of the code, by using skeletal codeblocks with [params] & description'
+
+
+
+
+[7.1]
+conclude a really short .txt writeup. include all being related to & discussed about it. you need to include - 'the code, then explanation of the code, by using skeletal codeblocks with [params] & description', and then prompt for the next 
+
+
+
+
+
+[7.3] 
+explain its essence - what it is, how it works. 
+
+proceed to produce the code for copy-pasting. 
+
+then proceed to explanation of the code, by using skeletal codeblocks with [params] & description. also brief on what to expect.
+
 
 
 

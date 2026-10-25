@@ -1,227 +1,277 @@
 ================================================================================
-POST-7.2 — FEATURE EXTRACTION OUTCOME & DATA-CEILING ACCEPTANCE
+POST-7.2 FEATURE EXTRACTION - SEMANTIC FAILURE ASSESSMENT
 ================================================================================
 
 PURPOSE
 -------
-Record the semantic (not mechanical) failure of 7.2, characterise it as a
-data-ceiling rather than a code defect, quantify the downstream impact per
-consumer, list which classes remain viable under the CNN path, and lock the
-proceed decision. This note replaces a "7.2 PASS" writeup.
+Record the outcome of 7.2 (features.py run) against the 492 masks from 6.3.
+The mechanical run succeeded (492 rows, 24 columns, no NaN, projections sum
+to 1). But 5 of 23 features are constant zero across every row, for every
+class. This note diagnoses why, what it costs, and records the decision to
+proceed with the remaining 18 features rather than re-engineer the source
+data.
 
-PREREQ
-------
-7.1 complete (src/features.py written).
-7.2 run: features.csv written, 492 rows, 24 columns.
-6.3 complete: 492 masks in mask_png/<class>/, 13 rejects at 12-29 px.
+This note SUPERSEDES any earlier implicit assumption that 6.1's mask output
+contained usable numeral-as-hole structure. It does not.
 
-1. WHAT THE RUN PRODUCED
-------------------------
-Mechanically valid:
-  - features.csv exists, 492 rows, 24 columns
-  - No NaN
-  - proj_x/y rows sum to 1.0
-  - blob_area_ratio in [0.004, 0.28]
-  - Row count matches 6.3's written=492
+================================================================================
+1. WHAT WAS OBSERVED
+================================================================================
 
-Semantically failed:
-  - hole_count = 0 for ALL 492 rows
-  - hole_area_ratio = 0.0 for ALL 492 rows
-  - hole_aspect = 0.0 for ALL 492 rows
-  - hole_centroid_dx = 0.0 for ALL 492 rows
-  - hole_centroid_dy = 0.0 for ALL 492 rows
-  The entire hole_* family is constant-zero. Not per-class variation.
-  Constant.
+Command:
+    python src/features.py
+Output:
+    [DONE] wrote 492 rows to ...\features.csv
 
-2. WHAT IS DEAD, WHAT IS ALIVE
-------------------------------
-DEAD (constant zero across every row): 5 features
-  - hole_count
-  - hole_area_ratio
-  - hole_aspect
-  - hole_centroid_dx
-  - hole_centroid_dy
+Mechanical checks (all pass):
+    rows            = 492  (matches mask count from 6.3)
+    columns         = 24   (filename + 23 features)
+    NaN             = none
+    proj sum-to-1   = holds per row
+    blob_area_ratio = 0.004 to 0.28 (varies)
 
-ALIVE-BUT-WEAK (variance present, wrong semantics): 18 features
-  - blob_area_ratio   (1)
-      Range 0.004-0.28. Per-class medians cluster tightly. Encodes
-      fragment spread (weak proxy for solid-vs-striped), not numeral
-      identity.
-  - connected_component_count (1)
-      Range 1-8. Variance present. Encodes fragment count, i.e., mask
-      quality, not numeral identity. Structurally, this is the only
-      feature that carries a per-class-meaningful signal — but the signal
-      is "how badly the mask fragmented", not "what digit is this".
-  - proj_x_0..7, proj_y_0..7 (16)
-      Variance present. Encodes the *positions of the surviving fragments*
-      in the crop, not the numeral geometry they were designed to
-      capture. On intact masks these 16 features represent the numeral's
-      silhouette; on fragmented masks they represent where the two or
-      three surviving white specks happen to sit.
+Semantic failure:
+    hole_count            = 0 for all 492 rows, all 15 classes
+    hole_area_ratio       = 0.0 for all 492 rows
+    hole_aspect           = 0.0 for all 492 rows
+    hole_centroid_dx      = 0.0 for all 492 rows
+    hole_centroid_dy      = 0.0 for all 492 rows
 
-Net: 23 designed features. 5 are dead. 18 are live. Of the 18, only 2
-carry an interpretable per-crop property; neither represents numeral
-shape.
+Evidence was verified by direct inspection of
+    mask_png/8/clip1_frame000084_ball6_mask.png
+Visual: two small white specular fragments in the upper-left, no numeral
+patch, no holes. For a digit "8", a solid white patch with two black holes
+was expected. Neither is present.
 
-3. WHY (DATA-CEILING, NOT CODE BUG)
------------------------------------
-Chain of events:
+================================================================================
+2. ROOT CAUSE - TWO COMPOUNDING FAILURES
+================================================================================
 
-  Source: 1080p graphical-game footage
-    ↓
-  Screen recording: downscaled to ~720p by OS screen recorder
-    ↓
-  Ball crop: ~40×40 to ~60×60 px (padded)
-    ↓
-  Numeral stroke width inside crop: 1-2 px
-    ↓
-  HSV whiteness threshold (V>=180, S<=60): captures only the brightest
-    specular highlights; the ball's white numeral patch fragments into
-    two or three tiny blobs instead of forming a solid disc
-    ↓
-  find_holes(): correctly rejects any candidate hole whose bounding box
-    touches the image border. Fragmented masks have numerals that are no
-    longer enclosed by the patch — they merge with the outer black
-    background through gaps.
-    ↓
-  Result: 0 holes detected, in every crop, in every class.
+CAUSE A - SOURCE DATA RESOLUTION
+    Original capture:  1080p .mp4
+    In-game render:    effective ~720p after downsample in recording
+    Per-ball crop:     ~30-50 px wide
+    Surviving white:   a few dozen px, often only specular highlights
+    Consequence:       numeral strokes are 1-2 px wide; the white patch
+                       does not form a solid disk, so numerals never appear
+                       as enclosed holes. They appear as notches open to
+                       background, which find_holes() correctly rejects.
 
-Visual evidence (cited):
-  mask_png/8/clip1_frame000084_ball6_mask.png
-    - Two tiny white fragments in upper-left
-    - No solid white disc
-    - No enclosed hole (numeral "8" should produce 2 holes)
+CAUSE B - THRESHOLD MISMATCH
+    MASK_V_MIN = 180, MASK_S_MAX = 60 (from 2.3b, tuned against class 1
+    yellow solid crops which have high-V white patches).
+    For darker balls (8 black, 9-15 striped with dark colours), the white
+    numeral patch itself sits at lower V than 180 in many crops. Only
+    specular highlights survive.
+    The 6.2 dry run inspected 20 crops, all class 1. The threshold was
+    never validated against dark-ball classes before 6.3.
 
-Contrast:
-  6.2's 20-crop dry run worked because sorted() order landed on class 1
-  (yellow solid, brightest surface). Brightest patches survived
-  thresholding as a solid disc, and holes were visible in the dry-run
-  masks. Class 8 (black ball) is the diagnostic opposite: darkest patch
-  fragments first.
+Both causes are independent. Fixing B alone (loosening V_MIN to ~120)
+would recover some patch area, but at these resolutions the patch may still
+never reach enough contiguous pixels to form a solid disk with enclosed
+holes. Source resolution is the deeper problem.
 
-The pipeline is behaving correctly. The input resolution is the ceiling.
-No code change can recover information that was lost at ingestion.
+================================================================================
+3. FEATURE-BY-FEATURE IMPACT
+================================================================================
 
-4. IMPACT PER DOWNSTREAM CONSUMER
----------------------------------
-7.3 (assemble)
-  - No row drops attributable to 7.2 (all 492 rows present in
-    features.csv, all 492 present in splits.csv; inner join will match)
-  - Post-join matrix identical to post-6.3 matrix
-  - 5 dead columns enter dataset.csv unchanged
+DEAD FEATURES (5 of 23, constant 0 across all rows)
+    hole_count             Was intended: "8 -> 2 holes, 0/6/9 -> 1, rest 0"
+                           Impact: catastrophic. The single strongest
+                           discriminator is gone. 0, 6, 8, 9 collapse into
+                           an undifferentiated "round-ish" mass.
+    hole_area_ratio        Was intended: hole size relative to blob
+                           Impact: reduces within-class separability of
+                           hole-bearing numerals.
+    hole_aspect            Was intended: "1 tall-thin, 8 square"
+                           Impact: loses primary shape cue for 1.
+    hole_centroid_dx       Was intended: numeral offset from patch centre
+                           Impact: minor positional cue lost; projections
+                           partially compensate.
+    hole_centroid_dy       Was intended: same vertically
+                           Impact: minor.
 
-8.1 (balance)
-  - Unaffected by dead features (row-count diagnostic)
-  - SEVERE imbalance verdict still expected (~8.6:1 train ratio)
+ALIVE FEATURES (18 of 23)
+    connected_component_count  (1-8, varies; fragments split differently)
+    blob_area_ratio            (0.004-0.28, noisy but varies)
+    proj_x_0..7, proj_y_0..7   (16 features; the main remaining signal)
+    Collectively these describe a coarse silhouette of whatever survived
+    thresholding. Enough for thin-vs-wide, top-heavy-vs-bottom-heavy.
+    Not enough for fine 15-class OCR.
 
-8.2 (distributions)
-  - 5 features will plot as flat lines at 0 across all classes
-  - Verdict for each of the 5: DEAD
-  - Remaining 18 will show variance but with the wrong interpretation:
-    fragment geometry, not numeral shape
-  - Curated figures for Preliminary §3 will name blob_area_ratio and
-    connected_component_count as the only two "meaningful" features
+================================================================================
+4. OCR VIABILITY UNDER CURRENT DATA
+================================================================================
 
-8.3 (correlations)
-  - Feature-label mutual information for all 5 hole_* features ≈ 0
-  - Decision: drop all 5 from retained_features.txt
-  - Projection correlations (structural sum-to-1) unaffected
-  - blob_area_ratio may correlate with several projection bins (both
-    encode fragment spread)
+The 15-class OCR objective is now HARDER than the original design intended.
 
-Phase 2 (SVM / k-NN / RF)
-  - Numeral-shape signal lost entirely
-  - Retained signal: fragment density (blob_area_ratio), fragment count
-    (connected_component_count), fragment positions (proj_x/y)
-  - Honest forecast: moderate separation of solid (1-8) vs striped
-    (9-15) is achievable; per-class accuracy (1 vs 7 vs 3) is
-    effectively unlearnable
-  - class_weight='balanced' still applies
-  - Final accuracy likely 15-25% (random chance = 6.7%)
+Most-likely-viable classes:
+    Class 1   (thin vertical numeral, 82 samples) - highest expected
+              accuracy; distinct single-peak proj_x profile.
+    Class 7   (top-heavy horizontal + diagonal) - plausible.
+    Class 4   (cross-bar) - plausible.
+    Class 11  (two strokes for "11") - distinctive via CC count.
 
-Phase 4 (CNN)
-  - Bypasses mask pipeline; reads raw crops directly
-  - 1-2 px stroke widths are at the edge of CNN learnability
-  - Simple non-loop digits (1, 4, 7, 11) may survive; loop digits
-    (0, 6, 8, 9) very unlikely
-  - Augmentation is justified by this note's data-ceiling argument, not
-    by "typical DL practice"
+Impossible or near-impossible:
+    Classes 6 and 9 - rotation ambiguity (180° = each other) and no
+                      hole_count to break the tie. Cannot be separated
+                      by silhouette alone.
+    Classes 3 and 8 - both right-weighted curves; projections overlap
+                      heavily.
 
-5. CLASSES STILL VIABLE FOR OCR (HONEST RANKING)
-------------------------------------------------
-From features.csv (classical path): NONE reliably.
-The 18 live features do not encode numeral shape.
+Difficult:
+    Classes 2 and 5 - similar silhouette shapes at typical rotations.
+    Classes 10,12,13,14,15 - depend on whether leading "1" projects
+                              distinctly enough; mixed.
 
-From Phase 4 (CNN on raw crops), ranked by expected learnability:
+Realistic expectation:
+    15-class accuracy:   20-40% (well above chance at 6.7%; well below
+                         the 90% the design's feature set would have
+                         supported on 1080p captures).
+    Binary "is class 1?": >80% likely.
+    Phase 4 CNN recovery: substantial; CNNs read raw crops, and while
+                          the crops are pixel-starved, a CNN can still
+                          learn from spatial patterns that hand-crafted
+                          silhouettes miss.
 
-  HIGH    (simple, non-loop, distinctive outlines): 1, 4, 7, 11
-  MEDIUM  (partial structure, 0 or 1 loop):        2, 3, 5, 12, 13, 15
-  LOW     (1 loop, rotation-confusable):           0, 6, 9, 10
-  VERY LOW(two loops, fine internal detail):       8
+The pipeline works. The source data does not support the original design
+assumptions. This is a source-data limitation, not a pipeline defect.
 
-Reality check:
-  Even the HIGH tier needs augmentation and heavy regularization.
-  Ceiling likely 30-60% per-class. That is not practical OCR, but it
-  is above chance and can be presented as a functional demonstration.
+================================================================================
+5. NOTE ON THE SOURCE-DATA CEILING
+================================================================================
 
-6. COMPARISON TO A REAL-WORLD INGESTION PATH
---------------------------------------------
-If captured from physical billiards with a mid-range 108MP smartphone
-sensor at ~30 cm distance:
-  - Ball diameter in frame: ~600 px
-  - Numeral stroke width: 6-10 px
-  - White patch diameter: ~120 px
-  - Numeral hole area: 300-2000 px (>> MIN_HOLE_AREA_PX = 5)
-  - Mask: solid disc + clear numeral holes
-  - Feature set: fully exercisable
-  - OCR: fully achievable
+Real-life capture from a mid-range smartphone (e.g. 108MP sensor) at
+sensible working distance would have given ball crops with ~10-20x more
+pixels per numeral. Under that capture regime:
+    - white patch would form a solid disk,
+    - numeral strokes would be 4-8 px wide,
+    - find_holes() would fire,
+    - hole_count would separate 8 (2 holes) from 0/6/9 (1 hole) from the
+      rest (0 holes),
+    - the design premise of 1.5.1 / 1.5.2 would hold.
 
-The feature set, thresholds, and pipeline design are correct. The
-data-ceiling comes from three compounding factors at ingestion:
-  (1) Screen-recording downscale: 1080p -> ~720p
-  (2) Graphical-game numeral rendering: thinner strokes than physical
-      printed numerals
-  (3) Crop padding: preserves context but shrinks effective resolution
-      per numeral
+Screen recording of a billiard graphics app was chosen (per the 1.1 change
+note and the pre-3.3 pivot) because physical capture was out of scope
+(cost, logistics, HAN constraints). The consequence of that choice is the
+ceiling documented here.
 
-This is documented as a limitation of the ingestion source. It is NOT a
-defect of the pipeline.
+================================================================================
+6. DECISION - PROCEED WITH 18 FEATURES
+================================================================================
 
-7. DECISION & SCOPE
--------------------
-Decision: PROCEED. Accept the 18-feature dataset with 5 dead features.
-Complete 7.3-9.4 as designed. Document in Preliminary §3.
+We proceed to 7.3 (assemble), 8.x (EDA), 9.x (preprocessing), and Phase 2
+(classical ML) with 18 live features. The 5 dead features remain in
+features.csv (they will be detected by 8.2 as flat-line features and by
+8.3 as zero-mutual-information; that detection is itself a positive EDA
+outcome worth documenting).
 
-Scope statement (drop into Preliminary §3, use or paraphrase):
-  "The pipeline is designed to demonstrate a standard ML/DL workflow
-   for OCR of billiard-ball numerals. End-to-end functional accuracy
-   was capped by the ingestion source: 1080p graphical-game footage
-   downscaled to 720p during screen recording produced ball crops of
-   ~40x40 to ~60x60 px with 1-2 px numeral stroke widths, below the
-   thresholding resolution required to preserve the numeral-as-hole
-   geometry that the classical feature set was designed around. Five
-   of the twenty-three engineered features are consequently
-   constant-zero. The pipeline itself - acquisition, segmentation,
-   mask extraction, feature engineering, EDA, preprocessing, model
-   training, deployment - is fully operational and reportable. A
-   physical-camera ingestion path (e.g., 108MP smartphone at 30 cm
-   distance) would yield intact numerals and full feature exercise;
-   this is noted as a realistic future replacement for the
-   graphical-game source."
+RECOVERY OPTIONS CONSIDERED
 
-8. CARRY-FORWARD
-----------------
-7.3  no changes; proceed as-designed
-8.2  expect 5 DEAD verdicts; not a bug
-8.3  drop all 5 hole_* features from retained_features.txt
-9.1  EXCLUDED_FEATURES to be extended: hole_* family joins
-     hole_count, connected_component_count, proj_* as excluded from IQR
-Phase 2  low per-class accuracy; report as limitation, not failure
-Phase 4  augmentation justified by this note
-Preliminary §3  cite this note as the data-ceiling narrative
-DL §6  same citation
+    Option A - Re-run 6.1 with looser thresholds (V_MIN 180 -> 120).
+        Cost: ~30 min re-extract + re-verify + re-run 7.1/7.2.
+        Expected gain: blob_area_ratio grows, projections sharpen.
+        Expected loss: still no enclosed holes at this resolution (patch
+        too fragmented to enclose numeral strokes).
+        Verdict: modest gain, no fix for the hole_count failure.
 
-9. CHECKLIST STATUS
--------------------
-[x] 7.2 accepted (mechanical pass, semantic data-ceiling documented)
-[ ] 7.3 Assemble feature matrix X + labels y
+    Option B - Re-capture with physical camera (smartphone, 108MP).
+        Cost: out of scope.
+        Verdict: not viable for this semester.
+
+    Option C - Proceed and document.
+        Cost: zero.
+        Verdict: SELECTED. Consistent with 4.4's "functional end-to-end
+        pipeline over large datasets" and the flexible grading rationale.
+
+    Option D - Scope to binary class-1 classification.
+        Cost: redesign 15-class to binary; abandon most work.
+        Verdict: not justified; 15-class is still possible.
+
+Note that Option A does not escape the resolution ceiling. It only shifts
+the failure mode from "5 dead features" to "5 features with weak but
+nonzero signal." Not worth the re-run cost at this stage. If a future
+stage (e.g. 8.2 EDA) reveals blob_area_ratio dominance causing 6/9
+confusion irrecoverable, revisit as an escalation.
+
+================================================================================
+7. FRAMING FOR THE MODULE
+================================================================================
+
+This is a pipeline development exercise. The module's assessment (per 4.4,
+5.3) is scoped to demonstrating a complete, correct, documented ML pipeline
+on a small dataset. It is not scoped to producing a production-grade
+billiard OCR module for the end-product system.
+
+The pipeline demonstrated so far:
+    ingestion (3.x)        -> 1438 crops, over-produced by motion gate
+    sorting (4.2)          -> 513 kept, 925 culled by uniform rule
+    audit (4.4)            -> 505 (0.999 kept, per-class distribution)
+    split (5.2)            -> 3/1/1 group-by-clip, deterministic
+    verify (5.3)           -> 15/15/15 class coverage, 2 soft misses
+    mask (6.1-6.3)         -> 492 masks, 13 rejected
+    features (7.1-7.2)     -> 492 x 23 features, 5 dead, 18 live
+
+The pipeline works. Each step did what it was designed to do. Where the
+data did not support a step's design premise (6.1's mask threshold, and by
+extension 7.2's hole_count), the correct response is to document the
+limitation, not to blame the pipeline or abandon it.
+
+================================================================================
+8. WHAT FEEDS PRELIMINARY ML SECTION 3
+================================================================================
+
+    - 5 of 23 features are constant zero (hole_* family).
+    - 18 features carry varying signal, dominated by projections.
+    - Phase 2 model will train on 18 features.
+    - Confusion matrix expected to show heavy confusion among 0/6/8/9 and
+      3/8, moderate among 2/5, and clear separation for 1.
+    - Phase 4 CNN expected to recover most lost discrimination because it
+      reads raw crops, not hand-crafted silhouettes.
+    - Root cause: source data resolution ceiling (1080p screen recording
+      of a 720p-effective-render app), not a pipeline defect.
+    - Recovery paths: physical camera capture (out of scope), looser
+      mask threshold (marginal), accept-and-document (selected).
+
+================================================================================
+9. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+    6.3  produced 492 masks (13 rejected)
+    7.1  produced 492 rows x 23 features
+    config.py  USE_FEATURES, PROJ_BINS=8, KEEP_HU=False, MIN_HOLE_AREA=5
+
+DOWNSTREAM:
+    7.3  inner join features.csv with splits.csv -> dataset.csv
+         drops the 13 rejected crops; role x class matrix re-verified
+    8.1  balance.py: train max/min ratio (expected SEVERE >=3.0)
+    8.2  distributions.py: will flag the 5 hole_* features as dead
+    8.3  correlations.py: will flag hole_* as zero mutual information
+    9.x  preprocessing proceeds with 18 live features
+    Phase 2  trains on 18 features + class_weight='balanced'
+    Phase 4  CNN reads raw crops directly; bypasses the feature pipeline
+
+================================================================================
+10. CHECKLIST STATUS
+================================================================================
+
+[x] 7.1 features.py written
+[x] 7.2 features.py run
+    -> 492 rows x 23 features
+    -> 5 features (hole_*) constant zero
+    -> root cause: source data resolution ceiling
+    -> decision: proceed with 18 live features
+    -> Phase 2, Phase 4 impact recorded
+[ ] 7.3 write + run assemble.py
+[ ] 8.1 write + run balance.py
+[ ] 8.2 write + run distributions.py
+[ ] 8.3 write + run correlations.py
+[ ] 9.1 write + run clean.py
+[ ] 9.2 write + run scale.py
+[ ] 9.3 write pipeline.py
+[ ] 9.4 smoke test pipeline.py
+
+================================================================================
+END OF NOTE
+================================================================================

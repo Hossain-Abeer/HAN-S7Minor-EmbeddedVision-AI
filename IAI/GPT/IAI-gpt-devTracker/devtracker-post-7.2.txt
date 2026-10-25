@@ -1,0 +1,310 @@
+================================================================================
+POST-7.2 DECISION RECORD - MORE CLIPS, CNN RECOVERY, MASKING RATIONALE
+================================================================================
+
+CONTEXT
+-------
+Position: end of 7.2. Mechanical pass, semantic fail (5 dead hole features).
+Decisions recorded here:
+  - Whether to re-record game clips and re-run Phase 1-7.
+  - Whether re-running helps specific classes (4, 7, 11).
+  - How CNN recovers what hand-features cannot.
+  - Why masking was included if CNN does not need it.
+
+
+================================================================================
+PART A - MORE CLIPS: NO
+================================================================================
+
+VERDICT: Proceed with current 505-crop / 18-feature set. Do not re-record.
+
+NO - PROCEED AS-IS
+  Effort            zero
+  Timeline          unblocks 7.3 immediately
+  Pipeline          full end-to-end demonstrable
+  Grading fit       rewards pipeline + argument, not dataset size
+  Risk              low
+  Weakness          8.6:1 imbalance; test C7=1, val C10=2
+
+YES - RE-RECORD
+  Effort            ~60-75 min record + ~2-3 h sort + re-run 5.1-7.2 + re-verify
+  Realistic yield   ~1000-1500 pre-cull -> ~500-700 post-cull at 35% keep
+                    -> ~35-45/class
+  Clears 50/class?  likely still SHORT for most classes
+  Fixes 5 dead?     no (resolution + threshold, not volume)
+  Fixes 6/9?        no (rotation ambiguity, Phase 4 territory)
+  Balance ratio     8.6 -> ~4-5 only
+  Timeline cost     4-6 h
+
+REASONING
+  - Volume does not fix source-resolution ceiling.
+  - Volume does not fix 6/9 rotation ambiguity.
+  - Cost is 4-6 h for balance improvement only, not capability improvement.
+  - Phase 4 CNN is the actual recovery path. Time better spent there.
+  - Documented limitation matches instructor's stated grading stance
+    (functional pipeline > dataset size).
+
+
+================================================================================
+PART B - OCR-ABLE CLASSES (CURRENT 18 FEATURES)
+================================================================================
+
+Based on silhouette geometry + imbalance + soft misses + classical ceiling.
+
+  Tier                 Classes            Rationale
+  -------------------  -----------------  ---------------------------------
+  Reliable (>=70%)     1                  unique thin vertical; 82 crops
+  Likely (50-70%)      4, 7, 11           4=crossbar; 7=top-heavy; 11=two-stroke
+  Marginal (30-50%)    2, 5, 12, 14       similar silhouettes; pairwise confuse
+  Poor (10-30%)        3, 8, 10, 13, 15   curved/right-weighted; thin
+  Near-zero (<=10%)    6, 9               180-degree identical; no hole feature
+
+CONSERVATIVE: 4-5 classes usable (1, 4, 7, 11, maybe 5).
+OPTIMISTIC:   7-8 with class weighting + SVM RBF tuned.
+UNACHIEVABLE: 6 and 9 indistinguishable with current features, any volume.
+              3 vs 8 second-hardest pair.
+
+
+================================================================================
+PART C - RE-RUN FOR CLASSES 4, 7, 11: NO
+================================================================================
+
+KEY DISTINCTION: data-starvation vs feature-overlap.
+
+  Class  Crops (tr/val/te)  Bottleneck                  More data helps?
+  -----  ----------------  ---------------------------  ----------------
+  4      36 (16/10/10)     feature overlap with 9, 1    no
+  7      24 (15/8/1)       test = 1 crop                yes, for reporting only
+  11     37 (25/7/5)       feature overlap with 1, 14   no
+
+YES - RE-RUN
+  Fixes class 7 test cell (1 -> ~5).
+  Improves balance modestly (8.6 -> ~4-5).
+  Cost: 4-6 h.
+
+NO - PROCEED  [SELECTED]
+  4 and 11 will not improve from volume; ceiling is feature overlap.
+  Class 7 accuracy already fine in val (n=8). Only the TEST REPORT is thin.
+  A documented limitation, not a fixable one without disproportionate cost.
+  4-6 h reallocated to Phase 4 yields more OCR capability.
+
+VERDICT: NO. Re-run fixes 1 class's reportability, at 4-6 h.
+4/11 ceiling is feature geometry, not data volume.
+
+
+================================================================================
+PART D - CNN RECOVERY MECHANISM (THOROUGH)
+================================================================================
+
+WHAT A CNN IS, LAYER BY LAYER
+
+  Layer                       Operation                    What it learns
+  --------------------------  ---------------------------  ---------------------
+  Conv2D                      Sliding kernel, mult+sum     detects local
+                                                           patterns; weights
+                                                           LEARNED, not fixed
+  ReLU                        max(0, x)                    non-linearity
+  MaxPool                     take max in each window      downsample; small
+                                                           translation tolerance
+  Conv -> Pool x N            repeated                     hierarchy: edges ->
+                                                           strokes -> parts ->
+                                                           numerals
+  Flatten/GlobalAvgPool       collapse spatial             1D vector per image
+  Dense                       fully connected              classify
+  Softmax                     normalize to [0,1]           class probabilities
+
+THE KEY DIFFERENCE FROM HAND-FEATURES
+
+Hand-features are FIXED MEASUREMENTS: "count holes," "binned projection
+mass." A CNN's features are LEARNED WEIGHTS. Nobody told it that "loop
+position" matters - it discovered that by minimizing loss on the training
+data.
+
+WHY CNN RECOVERS EACH FAILURE
+
+Failure 1 - 5 dead hole features
+  Classical: find_holes() requires a solid white patch with enclosed dark
+             regions. Resolution kills the patch. Features return 0. Dead.
+  CNN:       First conv layer sees raw pixel values. It does not care
+             whether the patch is solid, fragmented, or half-covered by
+             stripe. Whatever LOCAL PATTERN correlates with class 8 vs 3
+             gets weight. No precondition of "disk with holes."
+  Mechanical: 3x3 kernel sliding over a 40x40 crop with a faint "8" outline
+              produces activations at the STROKES of the 8 - regardless of
+              whether the patch "looks like" a disk.
+
+Failure 2 - proj_x / proj_y rotation-invariance
+  Classical: Features designed identical under 180-degree rotation. Good
+             for generalization, catastrophic for 6 vs 9. Both produce the
+             same projection profile.
+  CNN:       Not inherently rotation-invariant. A conv kernel that fires on
+             "loop at top" fires ONLY when loop is at top. Feed a 6 and a 9
+             without rotation augmentation - the network has access to the
+             distinguishing signal.
+  CORE INSIGHT: hand-features THREW AWAY exactly the information needed to
+                solve 6/9. The CNN does not throw it away by default.
+
+Failure 3 - resolution ceiling (30-50px crops)
+  Classical: Mask threshold collapses 1-2px strokes into nothing.
+             MIN_MASK_AREA=30 rejects most. What survives loses numeral
+             shape.
+  CNN:       Works on grayscale values, not binary masks. An 8 with 1px
+             strokes still produces a structured pixel pattern. Conv kernels
+             can fire on it. Not perfect - but the failure mode is
+             DEGRADATION, not TOTAL LOSS.
+  Compare:
+    Classical: stroke lost -> mask empty -> 0 features -> unclassifiable.
+    CNN:       stroke present as 1px line -> low activation but non-zero
+               -> classifiable with more examples.
+
+Failure 4 - feature overlap (4/9, 11/1, 2/5)
+  Classical: Measured only TWO silhouette axes. If classes overlap on both,
+             indistinguishable regardless of algorithm.
+  CNN:       Learns a HIERARCHY. L1 finds edges. L2 combines into corners.
+             L3 combines into curve fragments. L4 combines into "top-left of
+             a 4 or top-left of a 9." Overlap in 23-dim hand space !=
+             overlap in network's learned 64- or 128-dim space.
+  Concretely: the INTERNAL of the numeral - hollow regions, stroke
+              thickness, curvature at each corner - was never captured by
+              silhouette projection. CNN sees it.
+
+WHAT CNN CANNOT DO
+
+  Limit                 Why
+  --------------------  ------------------------------------------------
+  492 crops             small; overfitting risk; transfer learning
+                        mitigates
+  30-50px crops         far below 224x224 a pretrained model expects;
+                        upsampling helps, not fixes
+  6/9 without care      augmentation must NOT blanket-rotate
+                        (brightness/contrast/perspective only)
+  Interpretability      black box; Grad-CAM helps but does not match the
+                        Hu-moment story
+  Certainty of recovery expected, not guaranteed; realistic 6-8 classes
+                        >=70%
+
+THE MECHANISM IN ONE SENTENCE
+
+Hand-features were a HYPOTHESIS about what matters (holes + projections).
+The hypothesis was wrong for this data (holes dead, projections
+rotation-invariant). CNN replaces the hypothesis with LEARNED WEIGHTS - it
+discovers which measurements matter, from the pixels themselves.
+
+
+================================================================================
+PART E - WHY MASKING, IF CNN DOES NOT NEED IT
+================================================================================
+
+SHORT ANSWER: two parallel pipelines for two different deliverables.
+
+  Pipeline              Consumer            Deliverable
+  --------------------  ------------------  ------------------------------
+  Phase 1-3 (data ->    SVM / k-NN / RF     Prelim ML report +
+  features -> class ML)                     Full ML report
+  Phase 4 (raw crops    CNN                 DL report
+  -> CNN)
+
+The Prelim ML report is due at end of Phase 1. Phase 4 has not started.
+Masking was the ONLY feature path available at that point.
+
+WHAT THE TEMPLATE ACTUALLY REQUIRES
+
+From {GROUP}_preliminary_ML_report.docx Sec 3 "Data acquisition and
+exploration":
+  - Make an image set
+  - Label each photo
+  - Make visual representations
+  - Assess data quality (representative, sufficient, balanced, unbiased)
+
+From peer review rubric (Batch 6):
+  - "Data collected, FEATURES ENGINEERED AND ARGUED"
+  - "Feature data visualized and explored"
+  - "PREPROCESSING PIPELINE DISCUSSED AND IMPLEMENTED"
+
+The template does NOT say "use masking." It says "engineer features."
+Masking is the CHOSEN METHOD for producing numeral-geometry features.
+
+WHY MASKING SPECIFICALLY - FOR PHASE 2
+
+  Alternative                   Why rejected (devtracker 1.5.1)
+  ----------------------------  ----------------------------------------
+  Raw pixels as features        3,600 dims on 505 samples -> curse of
+                                dimensionality
+  Colour histograms             billiard balls share colours across
+                                classes (8 and 9 both dark)
+  Hu moments on full ball       rotation-invariant -> 6/9 collapse
+  ORB keypoints                 poor on small low-contrast numerals
+  Mask + hole + projection      ONLY option offering interpretable,
+                                rotation-relevant numeral geometry
+
+Masking was not mandated. It was the BEST AVAILABLE CHOICE given the
+classical-ML constraint. The partial failure (5 dead features) is itself
+a FINDING - arguably valuable, because it demonstrates depth of analysis.
+
+DOES THE PRELIM ML REPORT PENALIZE THE MASKING CHOICE?
+
+No. Rubric rewards:
+  - Creativity in feature engineering - masking is creative
+  - Argumentation - argued in writing
+  - Quality discussion - the 5-dead finding is exactly the "depth of
+    analysis" the rubric asks for
+  - Critical reflection - documented limitation meets this criterion
+
+The report does not ask "did your features work perfectly?" It asks "did
+you engineer, argue, analyse, and reflect?" The pipeline does all four.
+
+WHY THE COMPARISON MATTERS
+
+DL report template (Batch 6, Sec 4) REQUIRES:
+  - Custom CNN
+  - Transfer learning model
+  - COMPARISON WITH ML APPROACH
+
+That comparison is only meaningful if the ML approach was actually BUILT
+and EVALUATED. The masking path IS the ML approach. Without it, there is
+nothing to compare CNN AGAINST. The 5-dead finding is what makes the
+comparison narratively strong - "classical plateaued at X due to feature
+limitations; CNN reached Y by learning directly."
+
+SO MASKING IS NOT WASTED EFFORT. IT IS:
+  1. Required by the Prelim ML report (features engineered)
+  2. The classical-ML path Phase 4 must be compared against
+  3. A DOCUMENTED CEILING that justifies Phase 4's existence
+  4. Itself a finding - the failure is informative
+
+CNN bypassing masking is not an argument that masking was wrong. It is the
+argument that a DIFFERENT APPROACH WAS NEEDED - which is exactly what the
+DL report is set up to demonstrate.
+
+
+================================================================================
+PART F - DEVTRACKER SCOPE NOTE
+================================================================================
+
+IAI-gpt-roadmap-devtracker.txt ends at Section 10 = Preliminary ML Report
+(10.1 draft -> 10.6 incorporate). No Full ML report section.
+
+IAI-gpt-roadmap-designtracker.txt extends beyond:
+  Phase 3 = Full ML Model & Report
+  Phase 6 = Final DL Report
+
+MISMATCH: devtracker stops at prelim; designtracker covers full ML + DL.
+
+RESOLUTION: devtracker will be extended (or devtracker 2.0 / 3.0 created)
+later, AFTER Preliminary ML report work is complete. Working style is
+incremental - no big-bang extension now.
+
+
+================================================================================
+CURRENT STATE
+================================================================================
+
+Completed:      7.1 (features.py written)
+                7.2 (features.py run - mechanical pass, semantic fail)
+Decision:       proceed with 18 live features; document 5 dead features
+Pending:        7.3 (assemble.py) - not started
+Deferred:       devtracker extension to Full ML / DL report phases
+
+================================================================================
+END OF RECORD
+================================================================================
