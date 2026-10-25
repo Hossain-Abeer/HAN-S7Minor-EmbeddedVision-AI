@@ -1,0 +1,150 @@
+================================================================================
+8.2 WRITE + RUN distributions.py - PASS
+================================================================================
+
+1. ESSENCE & DATA FLOW
+----------------------
+Type: Diagnostic (Visual EDA). Not a producer of data.
+Function: Visualizes feature distributions per class to check for separation.
+Input: dataset.csv (from 7.3).
+Output: 23 individual boxplots + 1 grid overview (figures/feature_dist/).
+Feeds: Preliminary ML §3 (feature quality: informative, discriminating).
+
+
+2. CODE - src/distributions.py
+------------------------------
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import config
+
+FEATURE_COLUMNS = [
+    "hole_count", "connected_component_count", "blob_area_ratio",
+    "hole_area_ratio", "hole_aspect", "hole_centroid_dx", "hole_centroid_dy",
+    "proj_x_0", "proj_x_1", "proj_x_2", "proj_x_3", "proj_x_4", "proj_x_5", "proj_x_6", "proj_x_7",
+    "proj_y_0", "proj_y_1", "proj_y_2", "proj_y_3", "proj_y_4", "proj_y_5", "proj_y_6", "proj_y_7",
+]
+
+GRID_COLS = 4
+FIG_DPI   = 150
+
+def plot_distributions(dataset_csv, out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    df = pd.read_csv(dataset_csv)
+    df = df[df["role"] == "train"]
+
+    # 1. Individual figures
+    for feat in FEATURE_COLUMNS:
+        fig, ax = plt.subplots(figsize=(10, 4))
+        sns.boxplot(data=df, x="label", y=feat, ax=ax)
+        ax.set_title(f"Distribution of '{feat}' per class (train)")
+        ax.set_xlabel("Class (ball number)")
+        ax.set_ylabel(feat)
+        plt.tight_layout()
+        plt.savefig(os.path.join(out_dir, f"feature_dist_{feat}.png"), dpi=FIG_DPI)
+        plt.close(fig)
+
+    # 2. Grid overview
+    n = len(FEATURE_COLUMNS)
+    nrows = (n + GRID_COLS - 1) // GRID_COLS
+    fig, axes = plt.subplots(nrows, GRID_COLS, figsize=(4*GRID_COLS, 3*nrows))
+    axes = axes.ravel()
+
+    for ax, feat in zip(axes, FEATURE_COLUMNS):
+        sns.boxplot(data=df, x="label", y=feat, ax=ax)
+        ax.set_title(feat, fontsize=9)
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+
+    for ax in axes[n:]:
+        ax.axis("off")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, "feature_dist_GRID.png"), dpi=FIG_DPI)
+    plt.close(fig)
+    
+    print(f"[INFO] wrote 23 individual plots + 1 grid to {out_dir}")
+
+def main():
+    out_dir = os.path.join(config.FIGURES_DIR, "feature_dist")
+    plot_distributions(config.DATASET_CSV, out_dir)
+
+if __name__ == "__main__":
+    main()
+
+
+3. SKELETAL EXPLANATION - WITH [PARAMS] & DESCRIPTION
+-----------------------------------------------------
+plot_distributions([DATASET_CSV], [OUT_DIR])
+    [FEATURE_COLUMNS] -> 23 features (must match assemble.py).
+    [GRID_COLS] -> 4 (4x6 grid for 23 features).
+    [df = df[df.role == "train"]] -> Plots train only. Val/test remain unseen.
+    [sns.boxplot(x="label", y=feat)] -> X=class, Y=feature. Saves one PNG per feature.
+    [axes.ravel()] -> Flattens subplots for grid.
+    [zip] -> Maps feature to subplot.
+    [plt.close(fig)] -> Prevents RAM overflow.
+
+    PARAMS:
+      [DATASET_CSV] -> config.DATASET_CSV (492 rows, 26 cols from 7.3)
+      [OUT_DIR]     -> config.FIGURES_DIR / "feature_dist"
+      [FIG_DPI]     -> 150
+
+
+4. CORE CONCEPTS: WHAT IS A FEATURE?
+------------------------------------
+A feature is a MEASUREMENT. Upstream, you have an image (e.g., 60x60 pixels = 
+3,600 numbers). Downstream, the ML model (SVM/KNN) only understands a flat list 
+of numbers. A feature collapses the 2D image into a 1D single number that 
+summarises one specific property. 
+
+THE 23 FEATURES EXPLAINED:
+- hole_count (1): Number of enclosed holes inside the white patch. Intended: 
+  "8" -> 2 holes, "0/6/9" -> 1 hole, rest -> 0.
+- connected_component_count (1): How many separate white fragments the mask splits 
+  into. (e.g., "11" often splits into two pieces).
+- blob_area_ratio (1): Size of the white patch / total crop area. 
+  Acts as a solid-vs-stripe detector.
+- hole_area_ratio, hole_aspect, hole_centroid_dx, hole_centroid_dy (4): Geometry 
+  of the largest hole. (All dead in our case).
+- proj_x_0..7, proj_y_0..7 (16): "Projections" or shadows. 
+  Sum white pixels along columns (x) and rows (y). Split into 8 chunks. 
+  proj_y_0 = top of the mask, proj_y_7 = bottom.
+
+UPSTREAM VS DOWNSTREAM:
+- Upstream (Computer Vision): Image -> Crop -> Mask -> Feature Vector (23 numbers).
+- Downstream (Machine Learning): Feature Vector (23 numbers) -> Classifier -> Label (1-15).
+- The ML model is BLIND to the image. It only sees dataset.csv.
+
+WHY BOXPLOTS?
+X-axis = class 1-15. Y-axis = feature value. Distinct heights = separable. 
+Overlap = blind spot for the model.
+
+WHY ARE PROJECTIONS WEAK?
+Balls spin. A sideways "1" casts the exact same shadow as an upright "7". 
+The boxes overlap because rotation destroys spatial invariance.
+
+
+5. OUTPUT INTERPRETATION
+------------------------
+DEAD FEATURES (Flat lines at 0.0):
+- hole_count, hole_area_ratio, hole_aspect, hole_centroid_dx, hole_centroid_dy.
+- Confirms post-7.2 finding. Mask resolution destroys enclosed holes.
+
+INFORMATIVE FEATURES (Distinct boxes):
+- blob_area_ratio: Clear split. Classes 1-8 (solids) low. Classes 9-15 (stripes) high.
+- connected_component_count: Higher counts for multi-digit numbers.
+
+WEAK FEATURES (Heavy overlap):
+- proj_x_* and proj_y_*.
+- Expected. Classical ceiling due to ball rotation.
+
+
+6. CHECKLIST STATUS
+-------------------
+[x] 8.2 Write + run distributions.py
+    - 23 individual plots + 1 grid saved.
+    - Dead features visually confirmed.
+    - Informative features visually confirmed.
+    - Human verdict ready for §3.
+[ ] 8.3 Write + run correlations.py

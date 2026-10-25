@@ -1,0 +1,141 @@
+================================================================================
+8.1 WRITE + RUN balance.py - PASS
+================================================================================
+
+1. ESSENCE
+----------
+Type: Diagnostic (not a producer of machine-consumed data).
+Input: dataset.csv (from 7.3).
+Output: Printed table, class_balance.png, logs/1.6.1_balance_report.txt.
+Function: Quantifies class imbalance on the TRAIN split. Branches to a verdict.
+Decision: Determines if Phase 2 requires class weighting (class_weight='balanced').
+Feeds: Preliminary ML §3 (data quality) and Phase 2 classifier setup.
+
+================================================================================
+2. SKELETAL CODE - WITH [PARAMS] & DESCRIPTION
+================================================================================
+
+def check_balance([DATASET_CSV], [FIG_DIR])
+    [df = pd.read_csv(DATASET_CSV)]
+    [overall = value_counts()]
+    [pivot = groupby(role, label).unstack()]
+    
+    [train_df = df[df.role == "train"]]
+    [min_c = train_df.label.value_counts().min()]
+    [max_c = train_df.label.value_counts().max()]
+    [ratio = max_c / max(min_c, 1)]
+    
+    if [ratio >= 3.0]: [verdict = "SEVERE"]
+    elif [ratio >= 1.5]: [verdict = "MODERATE"]
+    else: [verdict = "BALANCED"]
+    
+    [sns.countplot(data=df, x=label, hue=role)]
+    [plt.savefig(FIG_DIR / "class_balance.png")]
+
+    PARAMS:
+      [DATASET_CSV]   config.DATASET_CSV (492 rows, 26 cols from 7.3)
+      [FIG_DIR]       config.FIGURES_DIR
+      [SEVERE_RATIO]  3.0  (trigger for class weighting)
+      [MODERATE_RATIO]1.5  (trigger for documentation only)
+
+    DESCRIPTION:
+      Calculates imbalance strictly on the TRAIN set. Val/test are held out 
+      and must remain untouched to preserve the group-by-clip split integrity. 
+      Generates a grouped bar chart for visual evidence.
+
+================================================================================
+3. OUTPUT
+================================================================================
+Class counts (overall):
+1: 82 | 2: 24 | 3: 24 | 4: 36 | 5: 25 | 6: 33 | 7: 24 | 8: 33
+9: 25 | 10: 12| 11: 37| 12: 45| 13: 23| 14: 34| 15: 35
+
+Per-role / per-class counts:
+       1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+train 43  14   7  16   5  17  15  14  12   5  25  28   7  16  21
+val   22   5   3  10  14   8   8   6   6   2   7  11   3  13  10
+test  17   5  14  10   6   8   1  13   7   5   5   6  13   5   4
+
+TRAIN imbalance:
+  min class count = 5
+  max class count = 43
+  max/min ratio   = 8.60
+  verdict         = SEVERE
+  action          = Apply class_weight='balanced' in Phase 2 for SVC and RF. 
+                    Do not resample unless weighting proves insufficient.
+
+[INFO] wrote ...\figures\class_balance.png
+[INFO] log: ...\logs\1.6.1_balance_report.txt
+
+================================================================================
+4. INTERPRETATION OF OUTPUT
+================================================================================
+- Total samples: 492. Uniform expectation: ~32.8/class.
+- Train max/min ratio: 8.60. SEVERE imbalance.
+- Class 1 dominates (43 train). Class 5 and 10 are lowest (5 train).
+- Val C10 (n=2) and Test C7 (n=1) remain thin (soft misses from 5.3).
+- Action: Phase 2 must pass class_weight='balanced' to SVC and RF.
+- KNN cannot accept class_weight. Document as a limitation in §3.
+- Do NOT resample. It breaks the "unbiased data" claim for the report.
+
+================================================================================
+5. FUNDAMENTALS & DATA FLOW
+================================================================================
+
+--- 5.1 Phase 1: Data Engineering Pipeline (Produces dataset.csv) ---
+- extract_crop.py
+  Input: .mp4 video frames (numpy arrays).
+  Output: Crops written to disk (unsorted_png/1/...png).
+- mask.py
+  Input: RGB crops from disk.
+  Output: Binary masks (mask_png/1/..._mask.png), where pixels are 0 or 255.
+- features.py
+  Input: Binary masks.
+  Output: features.csv. Converts 2D mask into 1D vector of 23 numerical features.
+- assemble.py
+  Input: features.csv + splits.csv.
+  Output: dataset.csv. Merges features, labels, and roles into a single tabular file.
+
+--- 5.2 Phase 2: Classical ML Pipeline (Consumes dataset.csv) ---
+Data Loader (pandas)
+  Input: dataset.csv.
+  Output: 2D numpy array X (shape [N, 18]), 1D array y (shape [N,]).
+sklearn.pipeline.Pipeline
+  Step 1: StandardScaler
+    Input: X (raw feature values).
+    Output: X_scaled (mean=0, variance=1).
+  Step 2: Classifier (KNN / SVM / RF)
+    Input: X_scaled, y.
+    Output: y_pred (array of predicted labels 1-15).
+
+Key Boundary: mask.py is strictly upstream. The ML pipeline never sees masks 
+or images; it only sees the dataset.csv numerical table.
+
+--- 5.3 Algorithm Fundamentals ---
+KNN (K-Nearest Neighbors)
+  Fundamental (k): Number of nearest neighbors. Distance metric usually Euclidean.
+  Prediction: Majority vote among the k closest training samples.
+  Input: X_train (Shape: [255, 18]), y_train (Shape: [255,]).
+  Output: y_pred (Shape: [M,]). Consumes arrays from Pipeline.
+
+SVM (Support Vector Machine)
+  Fundamental (C, gamma): C = penalty (regularization). gamma = kernel width.
+  Function: Finds hyperplane maximizing margin between classes.
+  Input: X_train (Shape: [255, 18]), y_train (Shape: [255,]).
+  Output: y_pred (Shape: [M,]). Also decision_function (Shape: [M, 15]). 
+
+RF (Random Forest)
+  Fundamental (n_estimators, max_features): n_estimators = number of trees. 
+  max_features = features considered for best split. Uses Gini impurity.
+  Input: X_train (Shape: [255, 18]), y_train (Shape: [255,]).
+  Output: y_pred (Shape: [M,]). Also predict_proba (Shape: [M, 15]).
+
+================================================================================
+CHECKLIST STATUS
+================================================================================
+[x] 8.1 Write + run balance.py
+    -> dataset.csv loaded (492 rows).
+    -> ratio = 8.60 (SEVERE).
+    -> class_balance.png saved.
+    -> log 1.6.1_balance_report.txt saved.
+[ ] 8.2 Write + run distributions.py

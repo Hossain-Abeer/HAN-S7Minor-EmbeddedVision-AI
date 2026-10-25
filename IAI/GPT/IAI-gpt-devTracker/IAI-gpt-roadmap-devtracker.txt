@@ -412,7 +412,7 @@ SECTION 6 - MASK EXTRACTION
 SECTION 7 - FEATURE EXTRACTION AND ASSEMBLY
 ================================================================================
 
-[ ] 7.1  WRITE features.py
+[x] 7.1  WRITE features.py
     Type: code
     Design: designtracker-1.5.2
     Prereq: 6.3
@@ -434,7 +434,7 @@ SECTION 7 - FEATURE EXTRACTION AND ASSEMBLY
     Output: ~\features.csv
     Verify: Imports cleanly.
 
-[ ] 7.2  RUN features.py
+[x] 7.2  RUN features.py
     Type: run
     Prereq: 7.1
     Action: python src/features.py
@@ -450,7 +450,7 @@ SECTION 7 - FEATURE EXTRACTION AND ASSEMBLY
         NaN anywhere -> bug in 7.1. Fix at source. Do not impute.
         Missing columns -> USE_FEATURES typo. Check the warning printed.
 
-[ ] 7.3  WRITE AND RUN assemble.py
+[x] 7.3  WRITE AND RUN assemble.py
     Type: code + run
     Design: designtracker-1.5.3
     Prereq: 7.2
@@ -477,7 +477,7 @@ SECTION 7 - FEATURE EXTRACTION AND ASSEMBLY
 SECTION 8 - EDA
 ================================================================================
 
-[ ] 8.1  WRITE AND RUN balance.py
+[x] 8.1  WRITE AND RUN balance.py
     Type: code + run
     Design: designtracker-1.6.1
     Prereq: 7.3
