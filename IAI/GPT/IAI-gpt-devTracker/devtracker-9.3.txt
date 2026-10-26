@@ -1,0 +1,495 @@
+================================================================================
+9.3 BUILD PREPROCESSING PIPELINE
+================================================================================
+
+DECISION SUMMARY
+----------------
+Type:             Code-level artefact. No data written.
+Input:            9.2 scaler decision (StandardScaler);
+                  8.3 retained_features_correlations.txt (context only).
+Output:           build_pipeline(classifier) function in src/pipeline.py.
+                  Optional smoke-test printout confirming step order.
+Libraries:        sklearn.pipeline.Pipeline,
+                  sklearn.preprocessing.StandardScaler.
+New dependencies: none.
+Feeds:            Phase 2 (2.1, 2.2, 2.3) instantiates with each classifier.
+                  Phase 3 (3.2.2) persists fitted Pipeline for deployment.
+Does NOT feed:    any CSV. No data artefact from this step.
+                  Phase 4 (CNN) bypasses it entirely.
+
+
+================================================================================
+1. ESSENCE
+================================================================================
+WHAT IT IS
+  An sklearn Pipeline: one object chaining scaling and classifier.
+  Externally looks like any sklearn estimator.
+
+  Methods:
+      .fit(X, y)      -> fit_transform() on each intermediate step,
+                         fit() on the final step (classifier).
+      .predict(X)     -> transform() on each intermediate step,
+                         predict() on the final step.
+      .score(X, y)    -> score on the final step.
+
+HOW IT WORKS
+  Steps are (name, object) tuples. For this project, two steps:
+      ("scaler", StandardScaler())
+      ("clf",    <classifier>)
+
+  Instantiation is cheap. Fitting is what runs the chain.
+
+WHY IT EXISTS SEPARATE FROM 9.2
+  9.2 fitted StandardScaler on the FULL training set. Correct for its own
+  figures and parameter reporting. NOT correct for cross-validation.
+
+  CV splits the training set into K folds. For each fold:
+      - fit on K-1 folds
+      - evaluate on the held-out fold
+
+  If scaling is done BEFORE CV (as 9.2 does), each fold's held-out portion
+  already influenced the scaler. That is DATA LEAKAGE. Accuracy estimates
+  inflate.
+
+  The Pipeline sits INSIDE cross_val_score / GridSearchCV. sklearn RE-FITS
+  the entire pipeline per fold, using only that fold's training portion.
+  Held-out portion transformed using fold-train statistics only. No leakage.
+
+THE KEY CONSEQUENCE
+  9.3 writes NO CSV. It produces a Python function.
+  First code-only artefact in the pipeline. Deliberate and correct.
+
+SCOPE OF THE PIPELINE
+  Contains exactly two steps:
+      Step 1: scaling      (StandardScaler)
+      Step 2: classifier   (SVM / k-NN / RF — supplied by Phase 2)
+
+  Does NOT contain cleaning (9.1). Rationale:
+      - 9.1's cleaning is conditional and one-shot.
+      - Practical impact on this dataset is small (0 outliers found).
+      - Wrapping cleaning in a custom transformer adds complexity for
+        marginal benefit.
+      - Documented as accepted simplification in Preliminary ML §3 and
+        Full ML §6.
+
+WHAT IT IS NOT
+  - NOT a data file. No CSV written.
+  - NOT a trained model. Factory; each call returns unfitted Pipeline.
+  - NOT a replacement for 9.2's figures. Those remain valid.
+  - NOT a component of Phase 4.
+
+
+================================================================================
+2. WHERE
+================================================================================
+WHO FEEDS 9.3
+  9.2  scaler decision (StandardScaler). Data NOT passed.
+  8.3  retained_features_correlations.txt. Context only; the caller
+       (Phase 2) slices columns before passing X to the Pipeline.
+  9.1  dataset_clean.csv. Read by Phase 2, not by 9.3 itself.
+  1.4.1 role column. Used by Phase 2 to slice train/val/test.
+
+WHO 9.3 FEEDS
+  Phase 2 (2.1.x)  instantiates build_pipeline(SVC()),
+                   build_pipeline(KNeighborsClassifier()),
+                   build_pipeline(RandomForestClassifier()).
+  Phase 2 (2.2.x)  wraps in GridSearchCV / cross_val_score.
+                   Scaler refits inside each fold automatically.
+  Phase 2 (2.3.x)  evaluates best Pipeline on val, then test.
+  Phase 3 (3.2.2)  reuses Pipeline shape for deployment; persists
+                   fitted Pipeline with joblib.
+
+WHO 9.3 DOES NOT FEED
+  1.6.x  EDA runs on raw dataset, not through the Pipeline.
+  9.1, 9.2  already ran; Pipeline wraps their decisions, does not
+            re-run them.
+  Phase 4  CNN bypasses 9.x entirely.
+
+PIPELINE POSITION
+  9.1  data cleaning
+         |
+         v
+  9.2  feature scaling (diagnostic; one-shot fit)
+         |
+         v
+  9.3  build_pipeline             [THIS STEP]
+         |  -> defines build_pipeline(classifier)
+         v
+  Phase 2  instantiate + fit + tune + evaluate
+         |
+         v
+  Phase 3  persist fitted Pipeline for deployment
+
+CHANNELS
+  DATA channel:      none. No CSV.
+  CODE channel:      build_pipeline() function.
+  DECISION channel:  documented in this note and in the report.
+
+
+================================================================================
+3. WHEN - SEQUENCE OF EVENTS
+================================================================================
+  1. 9.1 has produced dataset_clean.csv (492 rows).
+  2. 9.2 has chosen StandardScaler and produced inspection figures.
+  3. 9.3 runs:
+     - define build_pipeline(classifier) -> Pipeline
+     - (optional) smoke test: instantiate with DummyClassifier,
+       print the Pipeline, confirm two steps in correct order.
+     - NO data loaded. NO fitting. NO CSVs written.
+  4. Phase 2 (2.1.x):
+     - calls build_pipeline(SVC())
+     - calls build_pipeline(KNeighborsClassifier())
+     - calls build_pipeline(RandomForestClassifier())
+     - one Pipeline per classifier candidate.
+  5. Phase 2 (2.2.x):
+     - wraps each Pipeline in GridSearchCV / cross_val_score.
+     - scaler refits inside each fold.
+  6. Phase 2 (2.3.x):
+     - evaluates best Pipeline on val, then test.
+  7. Phase 3 (3.2.2):
+     - retrains best Pipeline on full training set.
+     - persists with joblib.dump().
+
+BEFORE 9.3: preprocessing exists as separate scripts producing files
+            (or in-memory matrices for 9.2).
+AFTER 9.3:  preprocessing is encapsulated in one reusable object.
+            Phase 2 no longer touches feature files directly.
+
+
+================================================================================
+4. CODEBASE
+================================================================================
+LIBRARIES
+  sklearn.pipeline.Pipeline                the chain
+  sklearn.preprocessing.StandardScaler     the scaler (from 9.2)
+  sklearn.dummy.DummyClassifier            smoke test only
+  No new dependencies.
+
+PARAMETERS
+  SCALER_CLASS          = StandardScaler     (from 9.2 decision)
+  FEATURE_STEP_NAME     = "scaler"           (routes scaler params)
+  CLASSIFIER_STEP_NAME  = "clf"              (routes classifier params)
+
+CODE — src/pipeline.py
+--------------------------------------------------------------------------------
+
+"""
+9.3 BUILD PREPROCESSING PIPELINE
+
+Factory that returns an sklearn Pipeline: scaler -> classifier.
+
+Why a Pipeline instead of a pre-scaled dataset:
+    When a Pipeline sits inside cross_val_score / GridSearchCV, sklearn
+    RE-FITS the entire pipeline -- including the scaler -- inside each CV
+    fold, using only that fold's training portion. The held-out fold is
+    transformed using scaler parameters derived only from the training
+    portion. No leakage. Val/test statistics never touch the scaler.
+
+Design reference: designtracker-1.7.3 (R1 addendum applied)
+
+Run from repo root:
+    python src/pipeline.py        # smoke test
+"""
+
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+# ============================================================================
+# [PARAMETERS - FILL IN BEFORE RUN]
+# ============================================================================
+SCALER_CLASS          = StandardScaler
+FEATURE_STEP_NAME     = "scaler"
+CLASSIFIER_STEP_NAME  = "clf"
+
+# ============================================================================
+# FACTORY
+# ============================================================================
+def build_pipeline(classifier):
+    """
+    Return an sklearn Pipeline: scaler -> classifier.
+
+    PRECONDITIONS (caller's responsibility):
+      * X must contain NUMERIC FEATURE COLUMNS ONLY.
+        Do NOT pass filename, label, or role columns. StandardScaler
+        will raise ValueError at fit time with a message that points
+        at the scaler, not at the actual mistake.
+      * X must contain the same 15 retained feature columns used at 8.3.
+        Column order does not matter to the scaler, but consistency
+        across train/val/test is required.
+
+    DO NOT:
+      * Pass a pre-fitted scaler. The Pipeline must own it, so that
+        GridSearchCV / cross_val_score can refit per fold.
+      * Pass a pre-fitted classifier. The Pipeline must own both steps
+        in an unfitted state; refit-per-fold requires this.
+
+    Arguments:
+        classifier : an UNFITTED sklearn classifier
+                     (SVC(), KNeighborsClassifier(),
+                      RandomForestClassifier())
+
+    Returns:
+        sklearn.pipeline.Pipeline with two steps:
+            ("scaler", StandardScaler())
+            ("clf",    classifier)
+    """
+    return Pipeline([
+        (FEATURE_STEP_NAME,    SCALER_CLASS()),
+        (CLASSIFIER_STEP_NAME, classifier),
+    ])
+
+# ============================================================================
+# SMOKE TEST (run once before Phase 2 commits)
+# ============================================================================
+if __name__ == "__main__":
+    from sklearn.dummy import DummyClassifier
+
+    pipe = build_pipeline(DummyClassifier())
+    print(pipe)
+    # Expect:
+    #   Pipeline(steps=[('scaler', StandardScaler()),
+    #                   ('clf',    DummyClassifier())])
+
+    print("\nHyperparameter grid keys for Phase 2:")
+    print("  clf__C, clf__gamma               (for SVC)")
+    print("  clf__n_neighbors, clf__weights   (for KNeighborsClassifier)")
+    print("  clf__n_estimators, clf__max_depth (for RandomForestClassifier)")
+
+--------------------------------------------------------------------------------
+
+SKELETAL EXPLANATION
+--------------------------------------------------------------------------------
+
+4.1 build_pipeline([CLASSIFIER]) -> Pipeline
+
+    def build_pipeline(classifier):
+        return Pipeline([
+            ([FEATURE_STEP_NAME],    [SCALER_CLASS]()),
+            ([CLASSIFIER_STEP_NAME], classifier),
+        ])
+
+    PARAMS:
+      [CLASSIFIER]           unfitted sklearn classifier
+                             e.g. SVC(), KNeighborsClassifier(),
+                                  RandomForestClassifier()
+      [SCALER_CLASS]         StandardScaler  (chosen in 9.2)
+      [FEATURE_STEP_NAME]    "scaler"  (grid-search prefix: "scaler__*")
+      [CLASSIFIER_STEP_NAME] "clf"     (grid-search prefix: "clf__*")
+
+    DESCRIPTION:
+      Constructs the Pipeline object. Does NOT fit. Does NOT touch data.
+      Each call returns a fresh, unfitted Pipeline (~microseconds).
+      Caller is responsible for the shape of X (numeric-only, 15
+      retained columns) -- see PRECONDITIONS docstring.
+
+      Why fresh per call: if the factory cached a single Pipeline across
+      classifiers or across CV runs, the scaler would retain state from
+      a previous fit. Fresh-per-call guarantees refit-per-fold works
+      correctly.
+
+4.2 Module-level constants
+
+    SCALER_CLASS         = StandardScaler
+    FEATURE_STEP_NAME    = "scaler"
+    CLASSIFIER_STEP_NAME = "clf"
+
+    PARAMS: fixed labels + the scaler class from 9.2.
+
+    DESCRIPTION:
+      Named constants, not inline literals. Two reasons:
+        (a) if a later step swaps the scaler (e.g. rubric L4's
+            MinMaxScaler comparison), one edit changes both the
+            Pipeline and Phase 2's grid-search prefix;
+        (b) the "clf__" prefix appears in Phase 2's param_grid --
+            keeping the name in one place prevents drift.
+
+4.3 Smoke test block
+
+    if __name__ == "__main__":
+        from [DummyClassifier] import DummyClassifier
+        pipe = build_pipeline(DummyClassifier())
+        print(pipe)
+
+    PARAMS:
+      [DummyClassifier]   sklearn.dummy.DummyClassifier.
+                          Cheapest possible classifier; zero fitting cost.
+
+    DESCRIPTION:
+      Confirms the Pipeline assembles correctly: two steps in the right
+      order, correct names, no import errors. Uses DummyClassifier to
+      keep the test purely structural -- a real classifier would tempt
+      running .fit(), which is Phase 2's job, not 9.3's.
+
+      Expected output:
+          Pipeline(steps=[('scaler', StandardScaler()),
+                          ('clf',    DummyClassifier())])
+
+      If output shows only one step, or steps out of order, or the
+      scaler is missing: the factory tuple format is wrong. Fix before
+      Phase 2.
+
+4.4 What this file does NOT do (structural)
+
+      - Does NOT load data. No pd.read_csv.
+      - Does NOT call .fit() on anything except inside the smoke test
+        (DummyClassifier's fit is a no-op).
+      - Does NOT write any file. No CSV, no log, no figure.
+      - Does NOT import config or constants. Nothing path- or
+        class-dependent.
+
+      This is the first code-only step in the pipeline. Earlier steps
+      produced CSV, figure, or log artefacts. 9.3 produces a callable
+      object. The Pipeline is itself the artefact.
+
+
+================================================================================
+5. DESIGN DECISIONS - ALL CONFIRMED
+================================================================================
+(a) Pipeline shape: [StandardScaler, Classifier]. Two steps.
+(b) Cleaning stays OUTSIDE the Pipeline (accepted simplification).
+(c) One Pipeline instance per classifier candidate (SVM / k-NN / RF).
+(d) Hyperparameters tuned through the Pipeline with step-name prefixes.
+(e) Fitted final Pipeline serialized in Phase 3 for deployment.
+(f) No CSV output. No data-level artefact from this step.
+(g) Code-level artefact: build_pipeline(classifier) function.
+(h) Two preconditions in docstring: numeric-only X; unfitted estimator.
+    [R1 addition]
+
+
+================================================================================
+6. INTERACTIVITY
+================================================================================
+UPSTREAM:
+  9.1  dataset_clean.csv (492 rows)
+  9.2  StandardScaler decision + scaler parameters
+  8.3  retained_features_correlations.txt (15 feature names)
+  1.4.1 role column
+
+DOWNSTREAM:
+  Phase 2  instantiate / fit / tune / evaluate per classifier
+  Phase 3  retrain best Pipeline on full train; joblib.dump()
+  Preliminary ML §3  one sentence naming the Pipeline and the
+                     refit-inside-CV rationale
+  Full ML §6  one sentence confirming the same Pipeline is used for
+              tuning and final training; mention clf__ prefix
+
+LATERAL:
+  None. 9.3 writes only src/pipeline.py.
+
+
+================================================================================
+7. RECOMMENDATIONS FOR THIS PROJECT
+================================================================================
+a. Scaler choice — StandardScaler.
+   Matches 9.2. SVM RBF and k-NN are distance-based; StandardScaler is
+   the textbook pairing. RF is scale-invariant but scaling keeps the
+   shared pipeline uniform.
+   Rubric L4 (alternative preprocessing) can be reached with a 1-line
+   swap + comparison run.
+
+b. Keep cleaning OUTSIDE the Pipeline.
+   9.1's clip is one-shot. Wrapping in a custom transformer is
+   CV-correct but adds complexity for marginal benefit.
+   Document as accepted simplification in §3 and Full ML §6.
+
+c. One Pipeline per classifier.
+   SVM, k-NN, RF each get their own. Do NOT share one Pipeline.
+
+d. Tune through the Pipeline.
+
+       param_grid = {
+           "clf__C":     [0.1, 1, 10],
+           "clf__gamma": ["scale", 0.01, 0.1],
+       }
+
+   "clf__" routes to the classifier inside the Pipeline. Do NOT pass
+   the classifier separately to GridSearchCV.
+
+e. What to expect from 9.3's execution:
+   - No new CSV. No new figure. No log.
+   - Only artefact: src/pipeline.py exists and imports cleanly.
+   - Smoke test prints the two-step Pipeline.
+   - Runtime: ~0 seconds.
+   - This is a stop-and-check: if the object doesn't look right,
+     Phase 2 tuning will silently misbehave.
+
+f. Rubric alignment:
+   - Prelim ML §3 L3 "Preprocessing pipeline discussed and implemented"
+     satisfied cleanly.
+   - Prelim ML §3 L4 "at least one alternative preprocessing method"
+     reachable with a one-line MinMaxScaler swap + comparison.
+   - Report can claim "no data leakage across folds" because the
+     Pipeline structure guarantees it.
+
+WHAT TO AVOID
+  - Do not pass classifier OUTSIDE the Pipeline and a pre-scaled
+    dataset to cross_val_score. Reintroduces leakage.
+  - Do not feed 9.2's dataset_*_scaled.csv into the Pipeline.
+    Double-scaling.
+  - Do not include cleaning as a custom transformer unless time allows.
+    Marginal benefit, real complexity cost.
+  - Do not cache the fitted Pipeline across CV folds. Each fold must
+    refit. sklearn does this automatically when the Pipeline is inside
+    GridSearchCV / cross_val_score.
+
+TIMEBOX
+  10 minutes to write the factory and smoke-test it. No reading of
+  output required beyond the two-step print. No dedicated report
+  paragraph; covered by §3 preprocessing narrative.
+
+
+================================================================================
+8. RESCALE / FALLBACK TRIGGERS
+================================================================================
+- If a Pipeline fails to fit inside GridSearchCV:
+    -> check that the classifier is INSIDE the Pipeline, not alongside.
+    -> check param grid keys use clf__ prefix.
+
+- If CV scores are suspiciously high (>99% on 15 classes):
+    -> leakage. Confirm the Pipeline is inside cross_val_score /
+       GridSearchCV, not wrapping it.
+
+- If Phase 3 inference predictions differ from Phase 2 test predictions
+  on the same inputs:
+    -> the scaler was refitted on different data, or the wrong scaler
+       was loaded. Persist and reload the fitted Pipeline as a unit,
+       not the scaler and classifier separately.
+
+
+================================================================================
+9. REPORT SURFACE
+================================================================================
+PRELIMINARY ML §3 (preprocessing)
+  One sentence naming the Pipeline. Example:
+  "Preprocessing and classification are encapsulated in an sklearn
+   Pipeline so that the scaler refits inside each cross-validation
+   fold, preventing data leakage. Cleaning remains a once-only
+   operation preceding the Pipeline."
+
+FULL ML §6 (methodology)
+  One sentence confirming the same Pipeline is used for tuning and
+  final training. Mention the clf__ prefix for hyperparameter grids.
+
+FULL ML §8 / DL REPORT (limitations)
+  Only if relevant: cleaning is outside the Pipeline, so its thresholds
+  are shared across folds. Note as a minor accepted simplification.
+
+
+================================================================================
+10. CHECKLIST STATUS
+================================================================================
+[x] 9.3 Build preprocessing pipeline
+    -> type:          code-level artefact (no data output)
+    -> artefact:      build_pipeline(classifier) in src/pipeline.py
+    -> shape:         [StandardScaler, Classifier]
+    -> cleaning:      kept OUTSIDE the Pipeline (documented
+                      simplification)
+    -> rationale:     Pipeline refits scaler inside each CV fold,
+                      preventing leakage; 9.2's one-shot scaler
+                      would leak
+    -> preconditions: numeric-only X; unfitted classifier [R1]
+    -> consumers:     Phase 2 instantiates; Phase 3 persists fitted
+                      Pipeline for deployment
+    -> smoke test:    DummyClassifier confirms two-step order
+    -> report:        Preliminary ML §3 (preprocessing rubric line)
+[ ] 9.4 Smoke test pipeline.py

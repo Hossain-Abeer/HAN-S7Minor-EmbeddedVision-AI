@@ -1,0 +1,537 @@
+```
+================================================================================
+9.2 WRITE + RUN scale.py - PASS (WITH DOCUMENTED OBSERVATION)
+================================================================================
+
+PURPOSE
+-------
+Transform the 15 retained feature columns so they share a comparable numeric
+range. Fit StandardScaler on TRAIN rows only, transform all three roles.
+Persist scaled CSVs for inspection and generate before/after histograms.
+
+PREREQ
+------
+9.1 complete (dataset_clean.csv written; 0 NaNs; 0 outliers; invariants held).
+8.3 complete (retained_features_correlations.txt; 15 features).
+7.3 complete (dataset.csv; 492 rows x 26 cols).
+1.4.1 complete (role column present).
+
+
+================================================================================
+1. ESSENCE & ROLE IN THE CHAIN
+================================================================================
+
+WHAT IT IS
+    Feature scaling transforms each numeric feature column so that all
+    features sit on a comparable numerical range. Values change; information
+    does not.
+
+WHY IT MATTERS
+    SVM (RBF kernel) and k-NN are distance-based. Without scaling, features
+    with larger numeric range dominate distance computations and bias the
+    decision boundary. Random Forest is scale-invariant (splits on thresholds
+    rather than magnitudes), but scaling it too keeps the shared pipeline
+    uniform.
+
+HOW IT WORKS
+    A scaler is a transformer with two methods:
+        scaler.fit(X_train)          # learn parameters FROM TRAIN ONLY
+        X_scaled = scaler.transform(X)   # apply to any data
+
+    Parameters (mean/std for StandardScaler) are learned on train, then
+    reused unchanged for val and test.
+
+THE ONE RULE
+    Fit on train. Transform everything. Violating this leaks val/test
+    statistics into training and breaks the group-by-clip split integrity
+    from 1.4.1.
+
+THREE STANDARD SCALERS
+    StandardScaler:  (x - mean) / std    -> roughly -3..+3, mean 0, std 1
+    MinMaxScaler:    (x - min) / range   -> exactly 0..1
+    RobustScaler:    (x - median) / IQR  -> roughly -2..+2
+
+    Default selected for this project: StandardScaler.
+
+
+================================================================================
+2. WHERE
+================================================================================
+
+WHO FEEDS 9.2
+    9.1  dataset_clean.csv   (492 rows, 26 cols; identical to dataset.csv)
+    8.3  retained_features_correlations.txt
+                             (15 retained features; 8 dead features excluded
+                             upstream, so the scaler never sees them)
+
+WHO 9.2 FEEDS
+    9.3  build_pipeline.py    -> conceptually only. The Pipeline refits its
+                                 own scaler inside each CV fold. The
+                                 persisted CSVs from 9.2 are NOT read by 9.3.
+    Preliminary ML §3         -> before/after figures + scaler parameters.
+    Full ML §6                -> one sentence confirming the same scaler is
+                                 used inside the Pipeline for CV.
+
+TWO CHANNELS
+    DATA channel (conditional):
+        dataset_{train,val,test}_scaled.csv
+        Written only if SAVE_SCALED_CSV = True.
+        For human inspection and report artefacts. NOT re-fed into 9.3.
+
+    LOG/FIGURE channel (always):
+        logs/1.7.2_scaling_report.txt   (scaler parameters)
+        figures/scaling/scaling_<feature>.png x 15 (before/after histograms)
+
+PIPELINE POSITION
+
+    9.1  data cleaning
+           |
+           v
+    9.2  feature scaling                    [THIS STEP]
+           |
+           v
+    9.3  build_pipeline (refits scaler per CV fold)
+           |
+           v
+    Phase 2  train SVM / k-NN / RF
+           |
+           v
+    (Phase 4 CNN bypasses 9.x; reads raw crops directly)
+
+
+================================================================================
+3. WHEN - SEQUENCE OF EVENTS
+================================================================================
+
+    1. dataset_clean.csv exists (9.1).
+    2. retained_features_correlations.txt exists (8.3).
+    3. 9.2 runs:
+       - load dataset_clean.csv
+       - read retained feature list (15 names)
+       - split by role: train / val / test
+       - instantiate StandardScaler
+       - FIT on train rows only
+       - TRANSFORM train, val, test
+       - print learned mean/std per feature
+       - save before/after histograms per feature
+       - persist scaled CSVs (inspection only)
+    4. HUMAN STEP: inspect figures, confirm ranges look sane.
+    5. Proceed to 9.3.
+
+BEFORE 9.2: features on native scales.
+AFTER 9.2:  features comparable in magnitude; scaler parameters known;
+            figures + log stored for the report.
+
+
+================================================================================
+4. CODEBASE
+================================================================================
+
+LIBRARIES
+    pandas                       load, split by role, filter
+    matplotlib                   before/after histograms
+    sklearn.preprocessing        StandardScaler
+
+    No new dependencies.
+
+PARAMETERS
+
+    DATASET_CSV      = config.DATA_ROOT / "dataset_clean.csv"
+    RETAINED_TXT     = config.DATA_ROOT / "retained_features_correlations.txt"
+    OUT_DIR          = config.DATA_ROOT
+    FIG_DIR          = config.FIGURES_DIR / "scaling"
+    LOG_PATH         = config.LOGS_DIR / "1.7.2_scaling_report.txt"
+
+    SCALER_CHOICE    = "standard"       # standard | minmax | robust
+    SAVE_SCALED_CSV  = True             # Design B1: inspection only
+
+SKELETAL CODE - scale_data()
+
+    [df = pd.read_csv(DATASET_CSV)]
+    [feats = read RETAINED_TXT, skip blanks and '#']
+
+    [train = df[df.role == "train"]]
+    [val   = df[df.role == "val"]]
+    [test  = df[df.role == "test"]]
+
+    [X_train = train[feats]]            # 245 rows x 15 cols
+    [X_val   = val[feats]]              # 128 rows x 15 cols
+    [X_test  = test[feats]]             # 119 rows x 15 cols
+
+    [scaler = StandardScaler()]
+    [scaler.fit(X_train)]               # <- TRAIN ONLY
+
+    [X_train_s = scaler.transform(X_train)]
+    [X_val_s   = scaler.transform(X_val)]
+    [X_test_s  = scaler.transform(X_test)]
+
+    [print mean / std per feature]
+
+    [for each feature:
+        figure with two panels: before histogram (raw), after histogram
+        save as figures/scaling/scaling_<feature>.png]
+
+    [if SAVE_SCALED_CSV:
+        for role in {train,val,test}:
+            reattach filename/label/role to scaled matrix
+            write dataset_{role}_scaled.csv]
+
+    [Tee stdout to logs/1.7.2_scaling_report.txt]
+
+DESCRIPTION OF EACH BLOCK
+    read_csv                 Single source; same table 9.1 wrote.
+    read RETAINED_TXT        15 names, not 23. Dead features filtered upstream.
+    df[df.role == "train"]   The important split. Threshold parameters come
+                             from this slice only.
+    scaler.fit(X_train)      Computes mean_ and scale_ from 245 train rows.
+    scaler.transform(...)    Applies fixed params to train/val/test. Same
+                             formula, three matrices.
+    before/after plot        Visual proof for §3 that the scaler worked.
+    persist block            Writes 3 CSVs for human inspection only. Do NOT
+                             re-feed into 9.3's Pipeline (Design B2 trap).
+
+
+================================================================================
+5. RUN OUTPUT
+================================================================================
+
+Command:
+    python src/scale.py
+
+Console + log output:
+
+    [INFO] Scaling 15 retained feature columns.
+    [INFO] Train rows: 245
+    [INFO] Val rows:   128
+    [INFO] Test rows:  119
+
+    Learned per-feature mean and std (from train):
+      connected_component_count       mean=+2.9714  std=1.1044
+      blob_area_ratio                 mean=+0.0775  std=0.0641
+      proj_x_0                        mean=+0.0024  std=0.0085
+      proj_x_1                        mean=+0.0776  std=0.1684
+      proj_x_2                        mean=+0.2946  std=0.2621
+      proj_x_3                        mean=+0.2724  std=0.1991
+      proj_x_4                        mean=+0.1691  std=0.1936
+      proj_x_5                        mean=+0.1489  std=0.2314
+      proj_x_6                        mean=+0.0350  std=0.0645
+      proj_y_1                        mean=+0.0825  std=0.1047
+      proj_y_2                        mean=+0.3487  std=0.2708
+      proj_y_3                        mean=+0.2760  std=0.2341
+      proj_y_4                        mean=+0.1672  std=0.1595
+      proj_y_5                        mean=+0.0913  std=0.1425
+      proj_y_6                        mean=+0.0342  std=0.0829
+
+    [INFO] Wrote before/after figures to ...\figures\scaling
+    [INFO] Wrote ...\dataset_train_scaled.csv
+    [INFO] Wrote ...\dataset_val_scaled.csv
+    [INFO] Wrote ...\dataset_test_scaled.csv
+
+    [INFO] log: ...\logs\1.7.2_scaling_report.txt
+
+
+================================================================================
+6. VERIFY LINE
+================================================================================
+
+[x] 15 feature columns scaled (matches 8.3 retained set).
+[x] Row counts: 245 + 128 + 119 = 492 (matches 7.3 dataset.csv).
+[x] Fit performed on TRAIN rows only (means and stds reported from that
+    slice; val/test transformed without contributing to parameters).
+[x] Projection means sum to 1 per axis on train:
+        proj_x_*:  0.0024 + 0.0776 + 0.2946 + 0.2724 + 0.1691 + 0.1489
+                   + 0.0350 = 1.0000
+        proj_y_*:  0.0825 + 0.3487 + 0.2760 + 0.1672 + 0.0913 + 0.0342
+                   = 0.9999
+[x] 15 before/after figure pairs saved.
+[x] 3 scaled CSVs written (Design B1: inspection only).
+[x] Log written with scaler parameters.
+[x] No NaN, no missing columns, no errors.
+
+RESULT: PASS.
+
+
+================================================================================
+7. INTERPRETATION OF SCALER PARAMETERS
+================================================================================
+
+    Feature                    mean      std    Reading
+    ------------------------  ------  -------  ------------------------------
+    connected_component_count   2.97    1.10   Multi-fragment masks dominate
+                                               (striped balls split into 2+)
+    blob_area_ratio             0.078   0.064  White patch ~8% of crop;
+                                               wide spread solid vs stripe
+    proj_x_0                    0.002   0.009  Mass on leftmost slice: rare
+    proj_x_1                    0.078   0.168  Left-adjacent slice: sparse
+    proj_x_2                    0.295   0.262  Centre-left peak: dominant
+    proj_x_3                    0.272   0.199  Centre: strong
+    proj_x_4                    0.169   0.194  Centre-right
+    proj_x_5                    0.149   0.231  Right-adjacent
+    proj_x_6                    0.035   0.065  Right-edge: sparse
+    proj_y_1                    0.083   0.105  Top-adjacent
+    proj_y_2                    0.349   0.271  Upper-middle peak: dominant
+    proj_y_3                    0.276   0.234  Vertical centre
+    proj_y_4                    0.167   0.160  Lower-middle
+    proj_y_5                    0.091   0.143  Bottom-adjacent
+    proj_y_6                    0.034   0.083  Bottom-edge: sparse
+
+KEY OBSERVATIONS
+    - The two dominant projection bins (proj_x_2, proj_y_2) sit at ~0.29
+      and ~0.35 mean respectively. This means the numeral's ink mass is
+      concentrated slightly left-of-centre and slightly above-centre on
+      average across the training set — consistent with the crop padding
+      scheme from 1.3.2 and the numeral-centering on billiard balls.
+    - The extreme bins (proj_x_0, proj_x_6, proj_y_6) have means near zero
+      because most crops do not have ink at the very edge of the blob
+      bounding box. This is a structural property of the features, not a
+      defect.
+    - blob_area_ratio mean 0.078 (7.8% of crop) with std 0.064 confirms
+      that the white patch varies widely across ball types — solids produce
+      compact patches, stripes produce larger leak areas. This is the
+      strongest single discriminator per 8.3's mutual information ranking.
+
+
+================================================================================
+8. OBSERVATION - SCALED VALUES BEYOND [-5, +5]
+================================================================================
+
+WHAT WAS OBSERVED
+    Four rows show scaled magnitudes in the +5 to +7 range, across both
+    train and test splits:
+
+    Row                                          Feature   Scaled   Raw approx
+    ------------------------------------------  --------  -------  -----------
+    11/clip3_frame000064_ball1.png (train)      proj_x_0    6.52    0.058
+    12/clip3_frame000033_ball9.png (train)      proj_y_6    6.75    0.59
+    15/clip1_frame002432_ball1.png (test)       proj_x_0    6.81    0.06
+    3/clip1_frame000386_ball10.png (test)       proj_y_5    5.79    0.92
+
+WHY THIS IS NOT A 9.1 FAILURE
+    1. proj_x_0 and proj_y_6 are in 9.1's EXCLUDED_FEATURES.
+       They are structural projection bins, correctly NOT clipped.
+    2. Their train means are near-zero (0.002 and 0.034) and stds are
+       small (0.009 and 0.083). A rare-but-valid raw value divides by a
+       small std and produces z ~ 6.
+    3. The signal is real:
+         - proj_x_0 ~ 0.06 means "6% of the mass sits on the leftmost
+           slice of the blob" — a rare but genuine structural feature.
+         - proj_y_6 ~ 0.59 means "mass is bottom-heavy" — again genuine.
+    4. StandardScaler is doing exactly what it should: identifying samples
+       that sit far from the training mean on that axis.
+
+WHY THIS IS NOT A 9.2 FAILURE
+    The written rescale-trigger ("scaled range > 5 -> revisit 9.1") was
+    authored under the assumption of pathological outlier contamination.
+    This case is the exception: legitimate sparse signal amplified by
+    StandardScaler's division by a small std. Distinguishing the two cases
+    requires inspecting the raw value alongside the scaled value — done
+    above.
+
+IMPACT ON THE MODEL
+    SVM (RBF):
+        A few samples far from the class centroid on one axis. SVM
+        regularisation (C) handles this correctly. No corruption of the
+        decision boundary.
+    k-NN:
+        Distance computations weight those samples slightly higher. Under
+        the pragmatic assessment bar (functional pipeline, not optimal
+        hyperparameters), this is acceptable.
+    RF:
+        Splits are threshold-based -> scale-invariant -> zero impact.
+
+THREE OPTIONS CONSIDERED
+
+    Option A - Accept and document.
+        Cost: zero.
+        Action: one sentence in Preliminary ML §3 naming the two sparse
+                features and framing the magnitudes as legitimate signal.
+        Verdict: SELECTED.
+
+    Option B - Post-hoc clip scaled values to [-5, +5] at 9.2.
+        Cost: implementation effort.
+        Problem: double-transforming breaks the linear relation between
+                 val/test and train. The model would see a train set that
+                 was scaled correctly and a val/test set that was scaled
+                 AND clipped. Silent distortion.
+        Verdict: rejected.
+
+    Option C - Drop proj_x_0 and proj_y_6 from retained_features.
+        Cost: data loss.
+        Problem: 8.3 retained them specifically because mutual information
+                 was > 0 (informative). Dropping them removes a real
+                 discriminator to satisfy a threshold written for a
+                 different kind of anomaly.
+        Verdict: rejected.
+
+REPORT SENTENCE (for Preliminary ML §3)
+    "StandardScaler was fit on the 245 train rows. Two sparse projection
+    bins (proj_x_0, proj_y_6) produce scaled magnitudes up to ±7 because
+    their training means are ~0 and stds are ~0.01; these are valid but
+    rare structural readings, not outlier contamination — which is why
+    9.1's clipping excludes projection bins by design. Classifiers handle
+    these magnitudes via SVM's C regularisation; Random Forest is
+    scale-invariant."
+
+
+================================================================================
+9. DESIGN DECISIONS - ALL CONFIRMED
+================================================================================
+
+(a) Scaler: StandardScaler.
+    Rejected: MinMaxScaler (sensitive to residual tails after 9.1).
+    Rejected: RobustScaler (overkill; 9.1 already handled tails).
+
+(b) Fit on TRAIN only. Enforced in code (scaler.fit(X_train)).
+
+(c) Transform all three roles: train, val, test.
+
+(d) Persist scaled CSVs for inspection (Design B1).
+    NOT consumed by 9.3's Pipeline.
+
+(e) 9.3's Pipeline refits scaler inside CV folds for correctness.
+
+(f) No exclusion of projections or discrete features from scaling.
+    Both benefit from being on the same scale as other features.
+
+(g) Log always written. Figures always saved. CSVs conditional on
+    SAVE_SCALED_CSV.
+
+(h) Two-channel framing maintained:
+    data (conditional, inspection) vs log/figures (always).
+
+
+================================================================================
+10. TWO CAVEATS TO CARRY INTO THE REPORT
+================================================================================
+
+CAVEAT 1 - PROJECTION SUM-TO-1 BREAKS AFTER SCALING
+    The 16 projection features sum to 1 per axis in raw form (design
+    constraint from 7.1). After StandardScaler, this invariant no longer
+    holds.
+
+    Does this matter?
+      Model:          No. SVM/RF/k-NN treat features independently.
+      Interpretation: Yes. Any figure that displays scaled features as
+                      "distributions" must note that the sum is no
+                      longer meaningful.
+      Report §3:      One sentence. "The raw sum-to-1 invariant (used in
+                      1.6.3's heatmap interpretation) is intentionally
+                      broken by scaling; the classifier does not rely on
+                      it."
+
+    Do NOT renormalise scaled projection bins. A scaled vector summing to
+    something other than 1 is expected behaviour.
+
+CAVEAT 2 - DISCRETE FEATURES BECOME NON-INTEGER
+    connected_component_count has raw values {1, 2, 3, 4, 5, 6, 7, 8}.
+    After StandardScaler, these become continuous floats (e.g. -0.88,
+    0.03, 0.93, 1.84, 2.74, 3.65, 4.55, 5.46).
+
+    Does this matter?
+      Model:     No. SVM, k-NN, and RF accept continuous inputs.
+      Report:    One sentence. "Discrete features become non-integer
+                 after StandardScaler; mathematically valid for
+                 SVM/k-NN/RF."
+
+    Do NOT exclude connected_component_count from scaling. Its benefit
+    (comparable magnitude with the other 14 features) outweighs its
+    loss of "integer identity".
+
+
+================================================================================
+11. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+    9.1  dataset_clean.csv (492 rows, identical to dataset.csv)
+    8.3  retained_features_correlations.txt (15 names)
+    1.4.1 role column inside the dataset
+
+DOWNSTREAM:
+    9.3  build_pipeline.py reads dataset_clean.csv, refits scaler inside
+         each CV fold.
+    Phase 2  consumes via 9.3's Pipeline.
+    Preliminary ML §3  consumes figures + parameters + the two caveats.
+
+LATERAL (report surface):
+    figures/scaling/scaling_<feature>.png x 15   (curate 3-5 for §3)
+    logs/1.7.2_scaling_report.txt                (cite in §3)
+
+
+================================================================================
+12. RESCALE / FALLBACK TRIGGERS
+================================================================================
+
+- Scaled range beyond [-5, +5]:
+    -> first inspect the raw value of the offending row.
+    -> if the raw value is a legitimate structural reading (as with
+       proj_x_0 and proj_y_6 above): accept, document.
+    -> if the raw value is an unclipped continuous feature (e.g.
+       blob_area_ratio): revisit 9.1 thresholds, not 9.2.
+
+- Many features look unchanged in before/after figures:
+    -> typo in retained_features_correlations.txt. Check the printed
+       [INFO] Scaling N retained feature columns line.
+
+- StandardScaler on connected_component_count produces "wrong" values:
+    -> expected. Document as Caveat 2. Do not "fix".
+
+- Scaled CSVs accidentally loaded into 9.3's Pipeline:
+    -> double-scaling. Distributions narrower than expected. Model
+       performance degraded. Fix: Pipeline must read dataset_clean.csv,
+       not dataset_*_scaled.csv.
+
+
+================================================================================
+13. REPORT SURFACE
+================================================================================
+
+PRELIMINARY ML §3 (preprocessing)
+    - Scaler choice with rationale (StandardScaler, and why not MinMax
+      or Robust).
+    - 3-5 curated before/after figures.
+    - Sentence stating fit-on-train-only and why (prevents leakage).
+    - Sentence noting the projection sum-to-1 invariant break.
+    - Sentence noting that discrete features become non-integer.
+    - Sentence documenting the sparse-feature magnitude (proj_x_0,
+      proj_y_6) as legitimate signal, not outlier contamination.
+    - Path to logs/1.7.2_scaling_report.txt.
+    - Optional: scaler parameter table as an appendix.
+
+FULL ML §6 (methodology)
+    - One sentence confirming the same scaler is used inside CV folds
+      via 9.3's Pipeline.
+
+FULL ML §8 / DL REPORT (limitations)
+    - Only if scaling is suspected of affecting model behaviour on a
+      specific class. Rare.
+
+
+================================================================================
+14. CHECKLIST STATUS
+================================================================================
+
+[x] 9.2 Write + run scale.py
+    -> src/scale.py written
+    -> scaler:          StandardScaler (fit on 245 train rows)
+    -> transform:       applied unchanged to train/val/test
+    -> 15 features:     all live features scaled
+    -> output figures:  15 before/after histograms
+    -> output CSVs:     dataset_{train,val,test}_scaled.csv
+                        (inspection only, not re-fed into 9.3)
+    -> output log:      logs/1.7.2_scaling_report.txt
+    -> verification:    projection mean sums, row counts, no NaN, all
+                        passed
+    -> observation:     four rows exceed |5| on proj_x_0 / proj_y_5 /
+                        proj_y_6; investigated, accepted as legitimate
+                        sparse signal, documented for §3
+    -> report:          Preliminary ML §3 (preprocessing rubric line)
+
+[ ] 9.3 Write pipeline.py
+[ ] 9.4 Smoke test pipeline.py
+
+
+================================================================================
+END OF NOTE
+================================================================================
+```

@@ -26,17 +26,28 @@ wait for me to upload results. validate results.
 validate. if not valid, prompt for data in order to complete this subsec. if valid, prompt with title of the next one
 
 
-[1.5.1] 
+[9.2] 
 i don't understand. explain them first, one by one in terms:
-1. essence - what it is, how it works, 
+1. essence - what it is, how it works, why is it required/relevant
 2. where - who feeds data to it, who gets data fed by it? by who, i refer to the components in pipeline. 
 3. when - sequence of events of workflow. 
 4. codebase - which libraries are involved, skeletal codesnippets with [params] & description. 
-5. recommendations - relevance to my project, with reasons. 
+5. recommendations - relevance to my project, with reasons OR what output to expect (whichever is relevant).
 
 
 [1.7.3]
 sufficient discussion. do the txt writeup of all that's being discussed, including all that was explained as a part of teaching me
+
+
+
+[9.2] 
+validate. interpret. teach
+
+
+
+[9.2]
+sufficient discussion. do the txt writeup of all that's being discussed about & related to the subsection, EVERY SINGLE thing
+
 
 [5.1] 
 proceed to produce the code for copy-pasting, then proceed to explanation of the code, by using skeletal codeblocks with [params] & description

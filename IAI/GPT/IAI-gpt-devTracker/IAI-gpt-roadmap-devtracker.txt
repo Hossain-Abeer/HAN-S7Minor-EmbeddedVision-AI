@@ -582,7 +582,7 @@ SECTION 9 - PREPROCESSING
     Record:  Method, threshold source (train), affected cell count.
              All feed Preliminary ML Section 3.
 
-[ ] 9.2  WRITE AND RUN scale.py
+[x] 9.2  WRITE AND RUN scale.py
     Type: code + run
     Design: designtracker-1.7.2
     Prereq: 9.1
@@ -606,7 +606,7 @@ SECTION 9 - PREPROCESSING
         Scaled range > 5 -> outlier escaped 9.1. Revisit thresholds.
                           Do not post-hoc correct here.
 
-[ ] 9.3  WRITE pipeline.py
+[x] 9.3  WRITE pipeline.py
     Type: code
     Design: designtracker-1.7.3 (apply R1 addendum docstring rules)
     Prereq: 9.2
@@ -623,7 +623,7 @@ SECTION 9 - PREPROCESSING
             Do NOT pass a pre-fitted classifier.
     Verify: Imports cleanly.
 
-[ ] 9.4  SMOKE TEST pipeline.py
+[x] 9.4  SMOKE TEST pipeline.py
     Type: run
     Prereq: 9.3
     Action: Run pipeline.py with __main__ block that builds a Pipeline

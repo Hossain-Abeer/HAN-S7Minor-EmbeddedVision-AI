@@ -1,0 +1,285 @@
+================================================================================
+9.4 SMOKE TEST pipeline.py - PASS
+================================================================================
+
+PURPOSE
+-------
+Execute src/pipeline.py once to confirm the factory assembles a two-step
+Pipeline in the correct order, with the correct step names, before Phase 2
+commits to it. 9.3 wrote the factory; 9.4 proves it works.
+
+PREREQ
+------
+9.3 complete (src/pipeline.py written and importable).
+
+
+================================================================================
+1. ESSENCE
+================================================================================
+
+WHAT IT IS
+  A single command run. No files written, no data loaded, no figures.
+  Console output only, ephemeral.
+
+WHY IT EXISTS
+  Writing the factory (9.3) is not proof it works. The smoke test block
+  inside src/pipeline.py sits under if __name__ == "__main__", which
+  never runs when the file is imported by Phase 2. Running the file
+  directly is the only way to exercise it.
+
+  This step is a stop-and-check between 9.3 and Phase 2. If step names
+  are typo'd, Phase 2's grid search fails with a ValueError that points
+  at the param grid, not at the typo. 9.4 catches the typo in ~2 seconds.
+
+WHY DummyClassifier
+  Cheapest sklearn classifier. fit() is a no-op. It cannot fail for data
+  reasons, so any 9.4 failure is guaranteed structural. Isolates assembly
+  from behaviour.
+
+WHAT 9.4 DOES NOT VERIFY
+  That the Pipeline fits real data. That is Phase 2's job. 9.4 is
+  assembly-only.
+
+
+================================================================================
+2. WHERE
+================================================================================
+
+WHO FEEDS 9.4
+  9.3   src/pipeline.py
+        Nothing else. No CSV, no config, no constants. The script is
+        self-contained.
+
+WHO 9.4 FEEDS
+  Human    reads the printed output, confirms 2 steps, confirms order.
+           No automated downstream consumer. No script reads 9.4 output.
+
+WHO 9.4 DOES NOT FEED
+  Phase 2 does not depend on 9.4 output. It depends only on 9.3 factory
+  existing. 9.4 is a human-confidence gate, not a data dependency.
+
+PIPELINE POSITION
+  9.3  write factory
+        |
+        v
+  9.4  run smoke test          [THIS STEP]  <- human checkpoint
+        |
+        v
+  Phase 2  use factory
+
+
+================================================================================
+3. WHEN - SEQUENCE OF EVENTS
+================================================================================
+
+  1. 9.3 complete: src/pipeline.py exists.
+  2. Activate venv:
+         C:\dev\envs\IAI-env\Scripts\Activate.ps1
+     Prompt shows (IAI-env).
+  3. cd to repo root:
+         cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI"
+  4. Run:
+         python src/pipeline.py | Tee-Object -FilePath
+             "D:\HAN\Semester 7 Minor\billiards-game-clips\logs\9.4_smoke_test.txt"
+     (Tee optional; captures console to log for the tracker note.)
+  5. Read output. Two outcomes:
+       PASS  -> Phase 2 unblocked.
+       FAIL  -> fix src/pipeline.py; re-run 9.4.
+  6. Only after 9.4 passes does Phase 2 (or Section 10 / 1.8) begin.
+
+  Runtime: ~2 seconds (import time dominates). No files except the
+  optional Tee log.
+
+
+================================================================================
+4. CODEBASE
+================================================================================
+
+LIBRARIES (execution path)
+  sklearn.pipeline.Pipeline
+  sklearn.preprocessing.StandardScaler
+  sklearn.dummy.DummyClassifier
+  No new dependencies.
+
+CODE EXECUTED (already inside src/pipeline.py)
+
+    if __name__ == "__main__":
+        from sklearn.dummy import DummyClassifier
+        pipe = build_pipeline(DummyClassifier())
+        print(pipe)
+        print("\nHyperparameter grid keys for Phase 2:")
+        print("  clf__C, clf__gamma          (for SVC)")
+        print("  clf__n_neighbors, clf__weights   (for KNeighborsClassifier)")
+        print("  clf__n_estimators, clf__max_depth (for RandomForestClassifier)")
+
+PARAMS / DESCRIPTION
+  [DummyClassifier()]   cheapest classifier; fit() is no-op; cannot fail
+                        for data reasons
+  [pipe]                the Pipeline object under test
+  [print(pipe)]         renders step list + step names
+  [clf__*]              reminds Phase 2 of the correct grid-search prefix
+
+WHAT TO CHECK IN THE OUTPUT (two checks)
+  Check                Expected                                Meaning
+  -------------------  --------------------------------------  ------------
+  Step count           steps=[('scaler', ...), ('clf', ...)]   two steps,
+                                                               correct order
+  Step names           exactly "scaler" then "clf"            grid-search
+                                                               prefix routing
+                                                               will work
+
+If either is wrong -> fix pipeline.py before Phase 2.
+
+
+================================================================================
+5. RUN OUTPUT
+================================================================================
+
+Command:
+    python src/pipeline.py
+
+Console output:
+
+    Pipeline(steps=[('scaler', StandardScaler()), ('clf', DummyClassifier())])
+
+    Hyperparameter grid keys for Phase 2:
+      clf__C, clf__gamma          (for SVC)
+      clf__n_neighbors, clf__weights   (for KNeighborsClassifier)
+      clf__n_estimators, clf__max_depth (for RandomForestClassifier)
+
+Log captured to:
+    logs/9.4_smoke_test.txt
+
+
+================================================================================
+6. VERIFY LINE
+================================================================================
+
+[x] Two steps present in the Pipeline.
+[x] Order correct: 'scaler' before 'clf'.
+[x] Step names exactly "scaler" and "clf".
+[x] No traceback.
+[x] Grid-key hints printed.
+[x] No files written (except optional Tee log).
+[x] No data loaded.
+
+RESULT: PASS.
+
+
+================================================================================
+7. FAILURE MODES - WHAT TO DO IF OUTPUT IS WRONG
+================================================================================
+
+  Symptom                                   Cause / Fix
+  ----------------------------------------  --------------------------------
+  ModuleNotFoundError: sklearn              venv not active.
+                                            Re-activate:
+                                              C:\dev\envs\IAI-env\Scripts\Activate.ps1
+  ModuleNotFoundError: pipeline             cd wrong directory.
+                                            Confirm repo root.
+  Only one step in steps=                   factory tuple format wrong.
+                                            Edit pipeline.py; ensure two
+                                            (name, object) tuples.
+  Steps out of order                        reorder tuples:
+                                            scaler first, clf second.
+  Names not "scaler" / "clf"                typo in FEATURE_STEP_NAME or
+                                            CLASSIFIER_STEP_NAME.
+                                            Fix constants; re-run 9.4.
+  AttributeError on StandardScaler          typo in import line.
+                                            Check top of pipeline.py.
+  AttributeError on DummyClassifier         typo in smoke-test import.
+                                            Check inside if __name__ block.
+
+After any fix, re-run 9.4 from a fresh terminal to confirm.
+
+
+================================================================================
+8. RECOMMENDATIONS
+================================================================================
+
+a. What to expect
+   - No CSV, no figure, no log (unless Tee used).
+   - Console output only, ephemeral.
+   - Exit code 0 on success.
+   - Runtime ~2 seconds.
+
+b. Do NOT skip 9.4
+   Phase 2 will import the factory and call build_pipeline(SVC()). If
+   a step name was typo'd ("scalar", "classifier"), Phase 2's
+   param_grid = {"clf__C": ...} fails with ValueError: Invalid
+   parameter 'clf' for estimator Pipeline. That error points at the
+   grid, not at the typo. 9.4 catches it in 2 seconds; Phase 2 catches
+   it after 15 minutes of confusion.
+
+c. Do NOT extend 9.4 into a real fit
+   Resisting pipe.fit(X_train, y_train) here is the point. Fitting
+   requires dataset_clean.csv, feature columns, label extraction -- all
+   Phase 2 concerns. Keep 9.4 structural only. Blurring the boundary
+   between "factory works" and "factory + data works" makes debugging
+   harder.
+
+d. Rubric relevance
+   None directly. 9.4 does not appear in any report section. It exists
+   only to prevent Phase 2 silent failures.
+
+e. Report surface
+   None. Do not mention 9.4 in Preliminary ML §3 or Full ML §6. The
+   report only needs 9.3's sentence ("preprocessing and classification
+   are encapsulated in an sklearn Pipeline so that the scaler refits
+   inside each CV fold").
+
+f. What unlocks after 9.4 passes
+   - Section 9 (Preprocessing) closes.
+   - Section 10 / 1.8 (Preliminary ML Report lifecycle) opens:
+       1.8.1  Draft Sections 1-3
+       1.8.2  Submit preliminary ML report (wk 40)
+       1.8.3  Peer review another team's report (wk 41)
+       1.8.4  Provide feedback via Excel template
+       1.8.5  Review received feedback
+       1.8.6  Incorporate feedback into report/model
+   - After 1.8 completes, Phase 2 (Classical ML Model) begins:
+       2.1  Train SVM, k-NN, RF
+       2.2  Cross-validate, grid search
+       2.3  Evaluate: confusion matrix, precision/recall/F1
+
+g. Pragmatic bar reminder
+   If 9.4 prints the two steps in the right order, stop. Do not fiddle
+   with DummyClassifier settings, add extra classifiers, or extend the
+   smoke test. The bar is "works", not "thorough".
+
+
+================================================================================
+9. INTERACTIVITY
+================================================================================
+
+UPSTREAM:
+  9.3  src/pipeline.py
+
+DOWNSTREAM:
+  Section 10 / 1.8  Preliminary ML Report lifecycle
+  Phase 2           instantiates build_pipeline() per classifier
+
+LATERAL:
+  None. 9.4 writes only the optional Tee log.
+
+
+================================================================================
+10. CHECKLIST STATUS
+================================================================================
+
+[x] 9.4 Smoke test pipeline.py
+    -> command:   python src/pipeline.py (Tee to logs/9.4_smoke_test.txt)
+    -> output:    Pipeline(steps=[('scaler', StandardScaler()),
+                                  ('clf', DummyClassifier())])
+    -> checks:    two steps, correct order, correct names, no traceback
+    -> runtime:   ~2 seconds
+    -> artefacts: logs/9.4_smoke_test.txt (optional)
+    -> status:    PASS
+
+SECTION 9 (PREPROCESSING) COMPLETE.
+
+[ ] 1.8.1  Draft Sections 1-3 of Preliminary ML Report
+
+================================================================================
+END OF NOTE
+================================================================================
