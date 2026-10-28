@@ -110,4 +110,12 @@ conclude with a txt writeup, make sure you include all that's being discussed & 
 I have run out of prompts for this particular chat. I will have to open a new DeepSeek chat, it will be a continuum of this workflow. 
 to give it context, give me the names of the files that I need to upload. 
 to give it focus on the next or current step/ subsec, mention the files. 
-I will be uploading the project's gitlab (material), src & gpt files in batches. Why in batches - to help it better catagorize. provide a prompt that'll ready the GPT for it.
+I will be uploading the project's gitlab (material), src & gpt files in batches. Why in batches - to help it better catagorize. provide a prompt that'll ready the GPT for it. 
+
+
+
+
+
+of the template, we do  things one section/subsection at a time. not sure if uploading of images and codesnippets are required, but if not, sometimes images could help explain better. I am not sure if, in case of images & codesnippets, appendix is where they go. in such instances, you tell me where to insert what. 
+
+starting off with the first, produce and wait for validation
