@@ -1,0 +1,1199 @@
+================================================================================
+CHECKPOINT 1.1 — L1: INTRODUCTION   (rev.3, page-complete)
+================================================================================
+Files: result-EVD2_–_Lesson_1_2526.txt
+       EVD2_Syllabus_2026_2027_v20260826.txt  §2, §3
+Sample-exam match: Q6 (4/8/m-path). Q1 (resolution/sampling). Q5 (aliasing).
+Progress tick: [ ] 1.1
+
+REVISION NOTE — rev.3 vs rev.2
+  rev.2 was missing content from L1 slides 2–5, 6–7, 11–14, 15–18, 19–23,
+  25, 28, 30–33, 36–39, 41, 61, 62. Every block below marked [NEW] or
+  [RESTORED] is content from those slides that was absent in rev.2.
+  All additions carry an inline pointer of the form:
+     [NEW — L1 slide NN: <short caption>]
+  so you can verify each against the source file.
+================================================================================
+
+1. ESSENCE
+--------------------------------------------------------------------------------
+L1 fixes three things every later lesson silently assumes:
+  (a) the physical→digital pipeline (acquisition → sampling → quantization)
+      and where information is irreversibly lost;
+  (b) the perceptual baseline (eye anatomy, Weber, illusions) that justifies
+      "enhancement for humans" in L6;
+  (c) the pixel-level grammar — neighborhoods, adjacency, connectivity, paths
+      — that defines "touching", "region", and "boundary".
+Get the grammar wrong and morphology, segmentation, and feature extraction
+all produce inconsistent answers.
+
+--------------------------------------------------------------------------------
+2. CONTENT & EXPLANATION  (depth pass, page-complete)
+--------------------------------------------------------------------------------
+
+2.0  COURSE SCOPE, LITERATURE, SUPPORT
+--------------------------------------------------------------------------------
+[NEW — L1 slide 2: "What will we do?"]
+Course scope:
+  Increase of Knowledge : illumination, lenses, cameras, image acquisition,
+                          image processing, classification, …and more.
+  Increase of Skills    : MATLAB, image processing.
+
+[NEW — L1 slide 3: "Literature"]
+  R.C. Gonzalez, R.E. Woods (2018) Digital Image Processing, 4th edition.
+    ISBN 978-0-13-335672-4.  Chapters 1 and 2 are compulsory; free download
+    at http://www.imageprocessingplace.com
+
+[NEW — L1 slide 5: literature part II]
+  Huiyu Zhou, Jiahua Wu, Jianguo Zhang (2010) Digital Image Processing,
+    Part I,  ISBN 978-87-7681-541-7  — free at http://bookboon.com
+  Huiyu Zhou, Jiahua Wu, Jianguo Zhang (2010) Digital Image Processing,
+    Part II, ISBN 978-87-7681-542-4  — free at http://bookboon.com
+
+[NEW — L1 slides 4–5: "Support"]
+  https://leren.han.nl    (OnderwijsOnline / MyX — schedule, answer PDFs)
+  Course Syllabus         (supporting material; chapters listed in §1.2)
+
+--------------------------------------------------------------------------------
+
+2.0b  APPLICATION DOMAINS AND MACHINE-VISION PIPELINE
+--------------------------------------------------------------------------------
+[NEW — L1 slide 6: "Medical applications"]
+  Medical modalities listed explicitly (four sub-bullets):
+      • Ultrasonic (US)
+      • X-ray
+      • Magnetic resonance imaging (MRI)
+      • Computerised tomography (CT)
+
+[NEW — L1 slide 7: other application domains]
+      • Forensic
+      • Military applications (image courtesy of Michigan Technological Univ.)
+      • Transportation
+      • Internet (film: "Eyes of Things")
+      • Industrial applications — Robotics
+      • Consumer electronics
+      • Research
+
+  Q2-3 expects this flat list. The four medical modalities are the only
+  sub-bulleted list on the slide and are the most-asked sub-item.
+
+[NEW — L1 slide 8: "Machine vision basic steps"]
+  Image Acquisition → Preprocessing → Segmentation → Labeling →
+  Feature extraction → Classification
+  Data flow annotation on the same slide:
+      data intensity  ───────────────────────►  data abstraction
+  Block ownership (which lesson formalises which block):
+      Acquisition      → L1/L2
+      Preprocessing    → L6, L7, L8, L9
+      Segmentation     → L12
+      Labeling         → L10
+      Feature extract. → L13
+      Classification   → L14
+
+[NEW — L1 slide 9: image-acquisition image classes]
+      • Reflection images   — light bounced off the object
+      • Emission images     — object emits (LEDs, fluorescence)
+      • Absorption images   — object absorbs (X-ray, back-lit scenes)
+
+[NEW — L1 slide 11: feature examples previewed]
+      Area, MajorAxisLength, Compactness, Anisometry, Eccentricity,
+      Perimeter
+  These are shown as examples of "Feature extraction" on the pipeline
+  slide; they return formally in L13 as regionprops measurements.
+
+--------------------------------------------------------------------------------
+
+2.1  DIGITAL IMAGE — definitions, classes, bit depth
+--------------------------------------------------------------------------------
+Definition
+  A digital image is a finite 2D array of picture elements (pixels). Each
+  pixel holds one or more numerical samples of a continuous 2D intensity
+  function f(x, y), where x, y are spatial coordinates and f is the value
+  returned by the sensor (irradiance → charge → digitized voltage).
+
+  Formal:   f_dig[m, n],  m = 0..M-1,  n = 0..N-1
+            image dimensions: M rows × N columns
+
+Coordinate conventions (they matter)
+  - (row, column) origin top-left. Row increases downward.
+  - MATLAB is 1-based: first pixel is (1, 1).
+  - The classic "spatial coordinate" convention (x, y) swaps row/column:
+    x = column, y = row. IPT is inconsistent about this — Q10-1 exploits it.
+  - Pixels sit at integer (row, col). Continuous coordinates fall between
+    integer positions; interpolation (L5) estimates f between pixel centres.
+
+Image types in the course
+  Binary     : pixel ∈ {0, 1}.  Masks, morphology output, BW images.
+  Grayscale  : pixel ∈ [0, 255] uint8; [0, 65535] uint16; [0, 1] double.
+  RGB        : 3 planes (R, G, B), each M × N.
+  Indexed    : M × N integer index into an L × 3 colormap (memory-saving).
+  HSV / HSI  : hue-saturation-value/intensity; perceptual, not device RGB.
+
+  [NEW — L1 slide 14 caveat] L1 prints the grayscale range as "0 - 256".
+  That is a typo for 0–255. 8-bit = 2^8 = 256 DISTINCT values counting 0.
+  Use 0–255 in every file-size and histogram calculation.
+
+Bit depth — the arithmetic you must know cold
+  b bits per pixel → 2^b distinct values.
+    1 bit   →    2 values   (binary)
+    3 bit   →    8 values
+    8 bit   →  256 values   (standard grayscale, uint8)
+   10 bit   → 1024 values
+   12 bit   → 4096 values
+   16 bit   → 65536 values  (uint16)
+  Memory per pixel: b/8 bytes. 8-bit = 1 B; 16-bit = 2 B; RGB 8-bit = 3 B.
+
+  Physical meaning: 8-bit does not mean "8 photons". It means 256 quantized
+  intensity steps spanning the sensor's usable range. A 12-bit sensor
+  distinguishes 16× finer intensity changes than an 8-bit one; that is why
+  scientific/machine-vision cameras use 10- or 12-bit ADCs.
+
+  [NEW — L1 slide 22] "8 bits represents 256 values (=2^8)" is stated
+  verbatim on the slide.
+
+True colour file cost
+  RGB 24-bit per pixel = 8 bit × 3 channels = 3 bytes / pixel.
+  An M × N RGB image therefore consumes 3·M·N bytes in memory (before header).
+
+--------------------------------------------------------------------------------
+
+2.1b  L1's OWN IMAGE EXAMPLES  (binary, grayscale, RGB)
+--------------------------------------------------------------------------------
+[NEW — L1 slide 13: binary 4×4 example]
+
+    0  0  0  1
+    0  0  1  1
+    0  1  1  1
+    1  1  1  1
+
+  Triangular block of 1s in the lower-right corner — the classic
+  rising-diagonal test pattern used later for adjacency/path exercises.
+
+[NEW — L1 slide 14: grayscale 4×4 example]
+
+    17  12  14  15
+    16  13  11  88
+    10  12  99  92
+    11  88  92  98
+
+  Hand-readable histogram facts:
+      Total pixels               = 16
+      Low cluster  (values ≤ 30) = 10 pixels (17,12,14,15,16,13,11,10,12,11)
+      High cluster (values ≥ 80) =  6 pixels (88,88,99,92,92,98)
+  Bimodal — the toy version of the Otsu problem in L12.
+
+[NEW — L1 slide 14: RGB example]
+  Twelve RGB triples printed as a 4-column array; reading is
+  "each pixel = 3 numbers":
+
+    18 128   1   122
+    23 119   8    45
+    45  22 155    77
+    12  45  14   199
+   128  28 121   125
+   156  19  78    19
+    88  54  55    66
+   122 101  77   240
+    45  88  99   204
+    15  79   8   119
+   155 122   9    11
+    83  51 255   140
+
+  Pixel (1,1) = RGB(18,128,1) — dominant green.
+  Pixel (12,4) = RGB(83,51,255) — dominant blue.
+  Memory check: 4×4 RGB uint8 = 4·4·3 = 48 bytes.
+
+--------------------------------------------------------------------------------
+
+2.1c  COLOUR FORMATS  (subtractive vs additive, indexed, perceptual, L*a*b)
+--------------------------------------------------------------------------------
+[NEW — L1 slide 14: subtractive vs additive]
+SUBTRACTIVE (paint/pigment)             ADDITIVE (light)
+  Mixing pigments removes wavelengths.    Mixing light sums wavelengths.
+  Primaries: Cyan, Magenta, Yellow.       Primaries: Red, Green, Blue.
+  K = black (key) plate.                  R + G + B = white.
+
+  RGB storage: 3 planes, each M × N, each 0–255 uint8 → 24-bit true colour.
+  Total colours = 256³ = 16 777 216. Memory = 3·M·N bytes.
+
+[NEW — L1 slide 15: indexed image]
+  Each pixel stores a small integer (the index) into an L × 3 colormap.
+  Saves memory and storage (b bits/pixel, not 24).
+  L1's exact wording: "Saves memory / Saves storage space."
+  MATLAB: [X, map] = imread('trees.tif');
+
+[NEW — L1 slide 16: perceptual colour space]
+  Hue         (NL: kleurtoon)     — the pure colour, an angle.
+  Saturation  (NL: verzadiging)   — colourfulness (0 = grey).
+  Brightness / Value / Lightness  — perceived intensity.
+  Three names for the same three-axis idea: HSI, HSL, HSV.
+
+[NEW — L1 slide 17: brightness formula]
+      Y  =  0.2989·R  +  0.5870·G  +  0.1140·B
+  Weights match human cone sensitivity (green strongest, blue weakest);
+  these are the weights used by MATLAB's rgb2gray.
+
+[NEW — L1 slide 17: L*a*b colour space]
+  L = lightness; a, b = opponent-colour axes.
+  Device-independent — same numeric value = same perceived colour across
+  monitors/printers. Used for colour matching rather than RGB.
+
+[NEW — L1 slide 21b: "Color's saturation"]
+  Two side-by-side patches: LOW saturation (washed-out, near grey) vs
+  HIGH saturation (vivid). In HSI: S = 1 − min(R,G,B)/max(R,G,B).
+  S = 0 for grey; S = 1 for a pure hue.
+
+--------------------------------------------------------------------------------
+
+2.1d  ELECTROMAGNETIC SPECTRUM
+--------------------------------------------------------------------------------
+[NEW — L1 slide 18: EM spectrum]
+  L1 places the spectrum directly under the colour-format slides as the
+  acquisition backdrop. Every sensor in L2 (CCD, CMOS, IR, X-ray, radar,
+  MRI) is a different band of the same spectrum.
+
+  Nominal bands in increasing frequency / decreasing wavelength:
+
+      Radio → Microwave → Infrared (IR) → Visible → Ultraviolet (UV) →
+      X-ray → Gamma
+
+  Visible window: approx 380 nm (violet) to 780 nm (red). The three cone
+  types S/M/L (§2.3b) respond to short / medium / long wavelengths within
+  this window.
+
+  Downstream use of specific bands:
+      IR     — heat; NDVI calculation in L4; low-light imaging in L2.
+      UV     — fluorescence microscopy (L2).
+      X-ray  — absorption imaging (§2.0b).
+      LIDAR  — 3-D from a light pulse (L2).
+
+--------------------------------------------------------------------------------
+
+2.1e  IMAGE FILE FORMATS AND METADATA
+--------------------------------------------------------------------------------
+[NEW — L1 slide 20: file-format table, verbatim]
+
+  Format name         Description                        Extension
+  ------------------  ---------------------------------  -----------------
+  JPG, JPEG, JPEG-2000 Joint Photographic Experts Group .jpg, .jpeg
+  BMP                 Windows bitmap                     .bmp
+  GIF                 Graphics Interchange Format        .gif
+  PCX                 Picture exchange                   .pcx
+  JPEG XR             JPEG Extended range                .jxr
+  PNG                 Portable Network Graphics          .png
+  TIFF                Tagged Image file format           .tif, .tiff
+  SUN-Raster          Sun raster graphics file format    .ras, .sun
+
+[NEW — L1 slide 21: metadata / Exif]
+  Exif = Exchangeable image file format.
+  MATLAB:   k = imfinfo('annemarie.jpg');
+            k.DigitalCamera        % struct with camera settings
+  Acquisition parameters (exposure, ISO, focal length) live in the header,
+  not in the pixel array. Feature extraction ignores Exif; diagnosing a bad
+  acquisition uses it.
+
+--------------------------------------------------------------------------------
+
+2.1f  BITPLANE SLICING AND "LEAST SIGNIFICANT BIT"
+--------------------------------------------------------------------------------
+[NEW — L1 slide 23: bitplanes]
+  An 8-bit image decomposes into 8 binary planes, bit 0 (LSB) to bit 7
+  (MSB). Two standard uses:
+    • Drop low planes (noise, imperceptible) → simple lossy compression.
+    • Keep only the MSB plane → strongest 1-bit silhouette of the image.
+
+[NEW — L1 slide 25: LSB annotation]
+  Bit b = 0 of each pixel = smallest intensity increment the quantizer can
+  resolve = one quantization step q. Losing the LSB plane is often invisible
+  to the eye but not to downstream arithmetic.
+
+--------------------------------------------------------------------------------
+
+2.2  DIGITIZATION = SAMPLING + QUANTIZATION  (two independent discretizations)
+--------------------------------------------------------------------------------
+The continuous scene is a function f: R² → R. Digitization discretizes
+BOTH domains:
+
+  Spatial domain   (x, y)  → discrete grid     → SAMPLING
+  Amplitude domain  f      → discrete levels   → QUANTIZATION
+
+Order (from the syllabus): usually sampling first, then quantization.
+
+SAMPLING — full picture
+  - 1D view: continuous g(t) sampled at t = nT_s → g[n].
+    Sampling rate f_s = 1/T_s, samples per second (or per mm in 2D).
+  - 2D view: Δx and Δy are spatial step sizes along each axis.
+    f[m, n] = f_continuous(m·Δx, n·Δy).
+  - Two parameters (L1 lists both explicitly):
+      * sampling RATE    = number of samples per unit length (dpi, ppi).
+      * sampling PATTERN = physical arrangement (rectangular grid most
+                           common; hexagonal or Bayer patterns exist).
+  - Higher sampling rate → more pixels → higher spatial resolution → finer
+    detail captured. Memory grows as the square of the rate.
+
+QUANTIZATION — full picture
+  - Continuous intensity is mapped to L = 2^b discrete levels.
+  - Step size: q = (max − min) / L  for uniform quantization.
+  - Every pixel value is snapped to the nearest multiple of q (plus offset).
+  - Higher b → finer steps → smoother gradients, less banding, bigger files.
+
+  Bit-depth visual effect
+    Low-bit images (2–3 bit) show visible contouring: smooth gradients become
+    stair-stepped bands. 8-bit is industry standard because it just hides this
+    from the human eye at normal viewing.
+
+  Interaction between the two
+      1024 × 1024, 1 bit   → very sharp spatial detail, harsh intensity
+        64 × 64, 256 levels → smooth intensity, chunky spatial blocks
+    Both are "digital images" — they trade off different information.
+
+--------------------------------------------------------------------------------
+
+2.2b  L1's QUANTIZATION DEMONSTRATIONS
+--------------------------------------------------------------------------------
+[NEW — L1 slide 33: spatial-resolution side-by-side]
+
+      1585 × 1333      (full resolution)
+        32 ×  27       (heavily subsampled)
+
+  Pixel ratio: (1585·1333) / (32·27) = 2 112 905 / 864 ≈ 2445× fewer pixels.
+  The 32×27 version is low-quality in the SAMPLING sense (pixelation, mosaic
+  appearance), not in the bit-depth sense. L1 uses this pair to keep the two
+  dials separate: spatial resolution vs bit depth.
+
+[NEW — L1 slide 41: bit-depth side-by-side, verbatim numbers]
+
+      8-bit, gray-level resolution 256, file size =   906 390 bytes
+      3-bit, gray-level resolution   8, file size =   214 727 bytes
+
+  Ratio 906 390 / 214 727 ≈ 4.22. Pure b/8 scaling would predict 8/3 ≈ 2.67;
+  the extra factor is header + per-row padding. For exam arithmetic always
+  use:
+        file_size = M·N·(b/8) + header
+  and treat the slide numbers as a sanity check, not a formula to reproduce.
+
+--------------------------------------------------------------------------------
+
+2.3  SPATIAL RESOLUTION  (measured in dpi / ppi)
+--------------------------------------------------------------------------------
+Definition
+  Number of pixels per unit physical length in the captured image.
+     dpi  = dots per inch (print)
+     ppi  = pixels per inch (display)
+  For a fixed physical scene, higher dpi = more pixels = finer detail, but
+  memory grows as (rate)².
+
+Why resolution alone does not guarantee detail
+  Resolution on the sensor is meaningless without FIELD OF VIEW (L2). A
+  4096-pixel sensor on a 10 m FOV has ~2.4 mm/pixel; the same sensor on a
+  10 cm FOV has ~24 μm/pixel.
+
+Bad-resolution artefacts (from L1)
+  - Pixelation      : individual pixels become visible blocks.
+  - Jaggedness      : diagonal edges appear stair-stepped.
+  - Loss of detail  : fine features vanish (football.jpg / text.png).
+  - Moiré patterns  : interference between scene frequency and sampling grid.
+
+Rule of thumb in machine vision
+  Feature of interest should span ≥ 2–3 pixels to be reliably detected —
+  this links back to Nyquist for spatial sampling.
+
+--------------------------------------------------------------------------------
+
+2.3b  HUMAN VISION AND PERCEPTUAL LIMITS
+--------------------------------------------------------------------------------
+[NEW — L1 slides 19–22: human vision]
+  L6 (image enhancement) is defined as "improve subjective quality for a
+  human viewer". The eye model is therefore part of L1, not L2.
+
+  Anatomy numbers (memorise):
+      Focal length of the human eye        f = 14 to 17 mm
+      Cones (colour, three types S, M, L)  ≈ 6–7 million
+      Rods  (low light, no colour)         ≈ 75–150 million
+      Fovea (sharpest-vision region)        1.5 × 1.5 mm²
+      Fovea density                         150 000 elements / mm²
+
+  [NEW — L1 slide 22: spectral sensitivity]
+  Three cone cell types — Short (S), Medium (M), Long (L) — absorb
+  preferentially at different wavelengths. The R/G/B weighting in the
+  brightness formula (0.2989·R + 0.5870·G + 0.1140·B, §2.1c) comes
+  directly from these three response curves.
+
+  L1's bridge claim (slide 19): "ability of eye to resolve detail is similar
+  to electronic imaging sensors." The eye, like a camera, is a spatial
+  sampler subject to the Nyquist limit of its own sample spacing.
+
+  OPTICAL ILLUSIONS  [NEW — L1 slides 20–21]
+    Checker-shadow illusion — E. H. Adelson (slide 21). Two pixels with the
+    same numeric RGB value look different because the brain discounts
+    perceived illumination. Meaning for image processing: human brightness
+    perception ≠ pixel intensity. "Enhance for a human" (histogram
+    equalisation, gamma) is not the same as "preserve intensity" (identity,
+    linear stretch).
+
+  WEBER'S LAW  [NEW — L1 slide 22]
+        ΔI / I  ≈  1 – 2 %
+    with I = luminance in cd/m². The just-noticeable-difference in luminance
+    is a fraction of the background, not an absolute amount. A 1-unit step
+    on I = 10 is far more visible than the same step on I = 200. This is the
+    psychophysical justification for log and gamma transforms (L6): they
+    compress bright ranges so ΔI stays near Weber's constant across the
+    display range.
+
+--------------------------------------------------------------------------------
+
+2.4  ALIASING AND THE NYQUIST THEOREM
+--------------------------------------------------------------------------------
+Mechanism of aliasing (be precise about the "why")
+  Sampling a sinusoid at frequency f_signal with sample rate f_s produces an
+  observed frequency that is "folded" back into the baseband [0, f_s/2]:
+
+     f_observed = | f_signal  −  k · f_s |      for the integer k that brings
+                                                f_observed into [0, f_s/2].
+
+  When f_signal > f_s/2 the folded f_observed is smaller than f_signal and the
+  reproduction looks WRONG — a slower oscillation masquerading as the real one.
+  The f_s/2 boundary is called the NYQUIST FREQUENCY (or fold-over frequency).
+
+Nyquist criterion
+  To reconstruct a signal faithfully, we must sample STRICTLY ABOVE twice the
+  highest frequency present in the scene:
+
+        f_s  >  2 · f_max
+
+  If the criterion is met, an ideal low-pass reconstruction filter recovers
+  f(t) exactly. If it is violated, information is lost irreversibly — no
+  post-processing can recover the original.
+
+Anti-aliasing (the pre-filter)
+  Before sampling at rate f_s, apply a low-pass filter with cutoff ≤ f_s/2.
+  This removes the high frequencies that would otherwise fold. imresize
+  (bilinear/bicubic) applies an internal low-pass filter when shrinking —
+  but NEAREST-neighbour imresize does NOT, which is the trap of sample-exam
+  Q5.
+
+Three canonical aliasing examples (memorize at least two)
+  1. Wagon-wheel effect (TEMPORAL aliasing). Spoked wheel rotating at rate
+     r seen at 30 fps appears to rotate backwards when r exceeds the Nyquist
+     rotation rate — the sampled "frames" under-sample the real motion.
+  2. Moiré pattern (SPATIAL aliasing). Two periodic patterns (scene and
+     pixel grid) beat at a low frequency, producing false large-scale
+     stripes — visible in scanned fabric, brick walls, sub-sampled
+     checkerboards.
+  3. Text/image sub-sampling. Downsampling a sharp text image by factor M
+     without pre-filtering produces jagged, unreadable letters — the
+     football.jpg / text.png exercise in syllabus §3.
+
+Spatial-sampling equivalent of Nyquist
+  Feature of size d in the scene must be sampled by pixel size p ≤ d/2.
+  Equivalently: at least two samples per feature diameter. This is the exact
+  statement sample-exam Q1 computes when it asks for "line pairs per mm".
+
+--------------------------------------------------------------------------------
+
+2.4b  L1's EXACT ALIASING SLIDES
+--------------------------------------------------------------------------------
+[NEW — L1 slide 36: wagon-wheel effect, verbatim]
+  "Imagine a spoked wheel moving to the right (rotating clockwise). Mark
+   wheel with dot so we can see what is happening.
+   If camera shutter is only open for a fraction of a frame time (frame time
+   1/30 sec. for video):
+   Without dot, wheel appears to be rotating slowly backwards!
+   (counterclockwise)"
+
+  The dot is the temporal phase marker. When T_spoke / T_frame = n + ε
+  (small ε), the sampled wheel advances by ε·T_spoke per frame — slowly
+  backwards. This is the temporal twin of f_observed = |f_signal − k·f_s|.
+
+[NEW — L1 slides 32, 37–39: good/bad sampling]
+  Moiré pattern (slide 32): interference between pixel grid and a fine
+  periodic scene (fabrics, brick walls, sub-sampled checkerboards).
+
+  Good / bad sampling (slides 37–39, verbatim captions):
+    IMAGE DIGITIZATION (37): "Digitization = sampling + quantization"
+                             ("Least significant bit" annotated on the
+                             quantization arrow)
+    SAMPLING (38):           "Good sampling:  • Sample often  or  • Sample
+                              wisely"
+                             "Bad sampling:   • Spatial aliasing!"
+    SAMPLING (39):           "Aliasing and Nyquist theorem"
+                             (sine sampled below Nyquist → false low-freq
+                             sine)
+
+  "Sample often or sample wisely" is the L1 rule:
+    • sample often  = raise f_s (more pixels — costs memory);
+    • sample wisely = pre-filter before sampling (Gaussian LPF at cutoff
+                      ≤ f_s/2). imresize applies this internally for
+                      bilinear/bicubic — NOT for nearest (Q5 trap).
+
+--------------------------------------------------------------------------------
+
+2.5  NEIGHBOURHOODS — N4, ND, N8  (depth)
+--------------------------------------------------------------------------------
+Fix a central pixel p = (x, y).
+
+3 × 3 NEIGHBOURHOOD  (the "Moore stencil")
+  - The complete local window of 9 pixels centred on p.
+
+          (x-1, y-1)   (x-1, y)   (x-1, y+1)
+          (x,   y-1)   (x,   y)   (x,   y+1)
+          (x+1, y-1)   (x+1, y)   (x+1, y+1)
+
+  - Standard support for 3×3 filters (convolution, median, Sobel, Prewitt,
+    Laplacian, hit-or-miss). Larger stencils (5×5, 7×7) generalise.
+
+4-NEIGHBOURHOOD  N4(p)
+  - 4 pixels that share an EDGE with p — north, south, east, west:
+        (x-1, y),  (x+1, y),  (x, y-1),  (x, y+1)
+  - Euclidean distance = 1; city-block distance = 1.
+  - Basis of 4-adjacency and the city-block metric.
+
+DIAGONAL NEIGHBOURHOOD  ND(p)
+  - 4 pixels that share only a CORNER with p:
+        (x-1, y-1),  (x-1, y+1),  (x+1, y-1),  (x+1, y+1)
+  - Euclidean distance = √2 ≈ 1.414; city-block distance = 2.
+
+8-NEIGHBOURHOOD  N8(p)  (Moore neighborhood)
+  - Union: N8(p) = N4(p) ∪ ND(p)
+  - All 8 pixels that touch p (edge or corner).
+  - Chessboard distance: max(|Δx|, |Δy|).
+
+Metric summary
+
+        Neighbourhood     metric           distance to neighbours
+        ------------      ---------------  -----------------------
+        N4                city-block (L1)  1
+        ND                —                √2  (Euclid); 2 (city-block)
+        N8                chessboard (L∞)  max(|dx|,|dy|) = 1
+
+  These metrics reappear:
+    - bwdist(a,'cityblock') in L12 distance transform.
+    - bwperim(..., 8) vs bwperim(..., 4) in L10.
+    - bwlabel(..., 8) vs bwlabel(..., 4) in L10/L13.
+    - regionprops Euler number depends on the connectivity used.
+
+--------------------------------------------------------------------------------
+
+2.5b  L1's PIXEL-ARRANGEMENT FIGURES
+--------------------------------------------------------------------------------
+[NEW — L1 slides 26–27]
+  Two 3×3 diagrams of the centre pixel's neighbours appear in L1, with
+  verbatim captions:
+
+    Slide 26 — "Pixel arrangement 8-adjacent to the centre pixel"
+               (all 8 surrounding cells shaded — Moore neighbourhood)
+
+    Slide 27 — "Pixel arrangement mixed-adjacent to the centre pixel"
+               (only the 4 edge-cells shaded; corner-cells NOT shaded
+               because in the arrangement shown each corner's two edge-
+               neighbours are both in V, so m-adjacency forbids those
+               diagonals)
+
+  Look up these two figures by those captions. They are the visual reference
+  for §2.6 and sample-exam Q6.
+
+--------------------------------------------------------------------------------
+
+2.6  ADJACENCY — 4-, 8-, and m-adjacency
+--------------------------------------------------------------------------------
+Set V (the allowed values)
+  V = {set of pixel values permitted on a path}. E.g. V = {1} means we may
+  only step on pixels whose value is 1. When the question says "V = {0,1}",
+  both 0-valued and 1-valued pixels are legitimate steps. This is why
+  sample-exam Q6 uses V = {0,1} — background pixels count.
+
+4-ADJACENCY
+  Two pixels p and q are 4-adjacent iff:
+        q ∈ N4(p)   AND   p, q ∈ V.
+  Local, symmetric. Unit-step distance 1.
+
+8-ADJACENCY
+  Two pixels p and q are 8-adjacent iff:
+        q ∈ N8(p)   AND   p, q ∈ V.
+  Still local and symmetric, now allows diagonal steps. Problem: it can
+  create AMBIGUOUS paths — two different paths between same endpoints with
+  same length. In connected-component analysis this inflates region counts
+  and thickness.
+
+m-ADJACENCY  (mixed, eliminates the ambiguity)
+  Two pixels p and q are m-adjacent iff (both in V and):
+
+        (i)   q ∈ N4(p),   OR
+        (ii)  q ∈ ND(p)  AND  N4(p) ∩ N4(q) = ∅.
+
+  Translation: a diagonal step is allowed ONLY when the two orthogonal
+  pixels between p and q are NOT both already in V. If they are, the
+  diagonal step would create a redundant path that 4-adjacency already
+  provides — so m-adjacency forbids it, forcing the unambiguous route.
+
+  Geometric picture for a diagonal step from p to q:
+        p   a
+          q           a = (x, y+1), b = (x+1, y).
+        b
+     The diagonal p → q is m-legal  ⟺  at least one of {a, b} ∉ V.
+     If BOTH a and b are in V, the "cleaner" path p → a → q or p → b → q
+     already exists; the diagonal is redundant.
+
+Worked rule of thumb
+  With V = {1} and a solid 3×3 block of 1s, m-adjacency behaves like
+  4-adjacency for path-length purposes: diagonals inside the block are
+  forbidden because their two edge-neighbours are also 1s. On the boundary
+  of the block the diagonal is usually allowed because one edge-neighbour
+  is background.
+
+--------------------------------------------------------------------------------
+
+2.6b  L1's "WHY THIS IS IMPORTANT" MOTIVATION
+--------------------------------------------------------------------------------
+[NEW — L1 slide 28, verbatim]
+  "Why is this important?
+   How many objects are there in this image?"
+
+  The slide shows a thin diagonal stroke. Under 4-connectivity it is two
+  objects (broken at every diagonal step); under 8-connectivity it is one
+  object. Different adjacency rule → different object count → different
+  feature vectors (L13) → different classifier output (L14). Every chain
+  forward in the course depends on the adjacency rule being stated.
+
+--------------------------------------------------------------------------------
+
+2.7  PATHS  (formal definition + length)
+--------------------------------------------------------------------------------
+Definition
+  A digital path (or curve) from p with coordinates (x, y) to q with (s, t)
+  is a sequence of DISTINCT pixels:
+
+        (x0, y0), (x1, y1), …, (xn, yn)
+
+  such that:
+      (x0, y0) = p,   (xn, yn) = q,
+      and consecutive pairs (x_i, y_i), (x_{i-1}, y_{i-1}) are adjacent
+      under the chosen adjacency rule (4, 8, or m).
+
+Length
+  n = number of steps. (Not number of pixels — number of transitions.)
+  A path with k pixels has length k − 1.
+
+Closed path
+  If (x0, y0) = (xn, yn), the path is closed (a loop).
+
+Distinctness clause
+  "Distinct pixels" is what makes paths finite; without it you could cycle
+  forever. It also means paths in adjacency questions are the SHORTEST
+  simple path.
+
+4-, 8-, m-path
+  A path whose steps obey 4-, 8-, or m-adjacency respectively.
+  Property (exam-relevant): length_4 ≥ length_m ≥ length_8.
+  Equality holds when no diagonal shortcut is available or, for m, when
+  all diagonal shortcuts are blocked by both edge-neighbours being in V.
+
+--------------------------------------------------------------------------------
+
+2.8  CONNECTIVITY, COMPONENTS, REGIONS, BOUNDARIES
+--------------------------------------------------------------------------------
+Adjacency vs connectivity
+  ADJACENCY   : local, pairwise relation. p and q are adjacent if their
+                pixels satisfy the (V, rule) test directly.
+  CONNECTIVITY: transitive closure of adjacency. p and q are connected if
+                there EXISTS a path of adjacent pixels between them.
+
+Formal
+  p ~ q  iff  there exists a path (per chosen adjacency) from p to q.
+  "~" is an equivalence relation. Its equivalence classes are the connected
+  components.
+
+Connected component
+  A maximal set of pixels that are all mutually connected under the chosen
+  adjacency. Using 8-adjacency merges more diagonal-touching clusters than
+  4-adjacency does. This directly changes:
+     - number of components (bwlabel 4 vs 8)
+     - Euler number = (# components) − (# holes) in L13 regionprops
+     - boundary pixel counts in bwperim 4 vs 8 (L10)
+
+Region vs boundary
+  REGION  = a connected component inside the image, usually interpreted as
+            "one object".
+  BOUNDARY= outer pixels of a region. Internal boundary pixels touch
+            background inside the region (holes); external touch background
+            outside. L10 defines "morphological gradient" as (dilate − erode)
+            — union of internal and external boundaries.
+
+Why this matters downstream (one line each)
+  L10 morphology: dilation/erosion defined via N4/N8 stencils; bwlabel
+       counts depend on adjacency choice.
+  L12 segmentation: region growing stops when neighbours fail predicate;
+       the "neighbour" set is N4 or N8.
+  L13 features: Euler number and perimeter are connectivity-dependent.
+  Sample-exam Q6: directly tests 4-, 8-, m-path lengths.
+
+--------------------------------------------------------------------------------
+
+2.9  L1 SUMMARY SLIDE (master checklist)
+--------------------------------------------------------------------------------
+[NEW — L1 slide 61, verbatim topic list]
+• Applications
+• Binary, grayscale, color images
+• Image formats
+• Pixel relationships
+• Metadata
+• Color models
+• Spectral range
+• Human perception
+• Bitplanes
+• Sampling
+• Quantisation
+• Aliasing
+
+If a topic is not on this list, it is NOT in L1 and does not need revisiting
+from L1. Use this as the master checklist when verifying coverage.
+
+--------------------------------------------------------------------------------
+3. RELATED SUPPORTING CONCEPTS
+--------------------------------------------------------------------------------
+Depends on  (nothing — first lesson).
+
+Feeds into  (explicit dependency):
+  L5 geometric ops   : nearest-neighbour imresize is exactly under-sampling
+                       → aliasing. Nyquist underpins sample-exam Q5.
+  L7 neighborhood    : every 3×3 kernel operates on N8(p). Every stencil is
+                       a Moore neighborhood.
+  L10 morphology     : strel is literally a neighborhood shape; bwlabel /
+                       bwperim differ under 4- vs 8-connectivity.
+  L12 segmentation   : region growing uses connectivity. Otsu assumes
+                       bimodality, not connectivity, but watershed does.
+  L13 features       : Euler number E = C − H, aspect ratio from bounding
+                       box, perimeter via bwperim (4 vs 8).
+  L14 classification : feature vectors are built from L13 measurements; the
+                       R/G/B weights of brightness return in colour features.
+  File-size arithmetic (bit depth, dimensions) returns in every exam
+  question involving storing, transmitting, or resizing images.
+
+--------------------------------------------------------------------------------
+
+3b  L1 TO-DO (verbatim, L1 slide 62)
+--------------------------------------------------------------------------------
+[NEW — L1 slide 62: TO DO quote]
+  TO DO…
+  • Visit OnderWijsOnline
+  • Install MATLAB
+  • Zhou et al. (2010): study § 1.1 - 1.11
+  • Questions from Syllabus: 2.1 – 2.end and 3.1 – 3.end
+
+  (Expanded answer text is in §9 of this file; this block exists only so the
+  quote appears in slide order.)
+
+--------------------------------------------------------------------------------
+
+4. SUMMARY (exam-ready, 10 bullets)
+--------------------------------------------------------------------------------
+1. Course pipeline: Acquisition → Preprocessing → Segmentation → Labeling →
+   Feature extraction → Classification. Data intensity → data abstraction.
+2. Image-acquisition classes: reflection, emission, absorption.
+3. Digital image = M×N grid f(m,n); bit depth b → 2^b levels → b/8 B/pixel.
+4. Digitization = sampling (spatial) + quantization (amplitude). Order:
+   sampling first, then quantization.
+5. File formats (L1 table): JPG, BMP, GIF, PCX, JPEG XR, PNG, TIFF, SUN-
+   Raster. Exif metadata via imfinfo.
+6. Colour: subtractive (CMY) vs additive (RGB); indexed saves memory;
+   perceptual spaces HSI/HSV/HSL; device-independent L*a*b.
+   Brightness Y = 0.2989·R + 0.5870·G + 0.1140·B.
+7. Human eye: f = 14–17 mm, cones 6–7 M (S/M/L), rods 75–150 M, fovea
+   1.5×1.5 mm², 150 000 elem/mm². Checker-shadow illusion → perception ≠
+   intensity. Weber: ΔI/I ≈ 1–2 %, I in cd/m².
+8. Nyquist: f_s > 2·f_max. Aliasing → jagged / moiré / wagon-wheel (frame
+   time 1/30 s). Anti-alias = pre-filter at f_s/2. "Sample often or sample
+   wisely."
+9. N4 / ND / N8 neighbourhoods; city-block, Euclidean, chessboard metrics.
+10. 4-, 8-, m-adjacency; m eliminates redundant diagonal shortcuts
+    (N4(p) ∩ N4(q) ≠ ∅ ⇒ diagonal forbidden). Path length = #steps.
+    Adjacency (local) vs connectivity (path).
+
+--------------------------------------------------------------------------------
+
+5. FORMULA / DEFINITION BOX
+--------------------------------------------------------------------------------
+Digitization:        image  =  sampling  +  quantization
+Bit depth:           b bits → 2^b levels → b/8 bytes/pixel
+File size:           bytes = M·N·(b/8) + header
+Brightness (L1):     Y = 0.2989·R + 0.5870·G + 0.1140·B
+Saturation (HSI):    S = 1 − min(R,G,B)/max(R,G,B)
+Weber's law:         ΔI / I ≈ 1 – 2 %,  I in cd/m²
+Nyquist:             f_s > 2·f_max
+Aliased frequency:   f_obs = | f_signal − k·f_s |,  k = round(f_signal/f_s)
+N4(p):               {(x−1,y),(x+1,y),(x,y−1),(x,y+1)}
+ND(p):               {(x−1,y−1),(x−1,y+1),(x+1,y−1),(x+1,y+1)}
+N8(p):               N4(p) ∪ ND(p)
+4-adjacency:         q ∈ N4(p)   ∧ p,q ∈ V
+8-adjacency:         q ∈ N8(p)   ∧ p,q ∈ V
+m-adjacency:         q ∈ N4(p) ∨ ( q ∈ ND(p) ∧ N4(p) ∩ N4(q) = ∅ )
+Euclidean:           D = sqrt(Δx² + Δy²)
+City-block:          D = |Δx| + |Δy|
+Chessboard:          D = max(|Δx|, |Δy|)
+Path length:         n = #steps = #pixels − 1
+Connectivity:        p ~ q  iff  ∃ path (V, rule) from p to q
+Euler number:        E = (# components) − (# holes)
+
+--------------------------------------------------------------------------------
+
+6. HAND-CALC WORKED EXAMPLES
+--------------------------------------------------------------------------------
+
+EXAMPLE A — Euclidean distance  (syllabus Q2-6)
+--------------------------------------------------------------------------------
+Grid (rows 1..4, cols 1..4). p at (1,1), q at (4,3):
+         p  .  .  .
+         .  .  .  .
+         .  .  .  .
+         .  .  q  .
+
+  Δrow = 4−1 = 3,   Δcol = 3−1 = 2
+  D    = sqrt(3² + 2²) = sqrt(9 + 4) = sqrt(13) ≈ 3.606
+
+  Also: city-block = 3+2 = 5, chessboard = max(3,2) = 3.
+  The exam wants the Euclidean answer unless specified.
+
+EXAMPLE B — 4-, 8-, m-path lengths with V = {1}
+--------------------------------------------------------------------------------
+Grid:
+        1  1  0
+    p→  1  1  0
+        1  1  q    q at (3,3); p at (2,1)
+
+  4-PATH from p
+    p(2,1) → (2,2) → (3,2) → (3,3)=q        length 3.
+    Alternative: p → (3,1) → (3,2) → q      length 3.
+    Result: length 3.
+
+  8-PATH from p
+    p(2,1) → (3,2) [diagonal] → q(3,3)      length 2.
+    Result: length 2.
+
+  m-PATH from p
+    Check the diagonal step (2,1) → (3,2):
+      N4(p) = {(1,1),(3,1),(2,2)}
+      N4((3,2)) = {(2,2),(3,1),(3,3)=q}
+      Intersection = {(2,2),(3,1)} ≠ ∅  →  diagonal FORBIDDEN by m-rule.
+    Fall back to 4-style step:
+      p → (2,2) → (3,2) → q                length 3.
+    Result: length 3.
+
+  Answer: 4-path = 3, 8-path = 2, m-path = 3.
+  Sample-exam Q6 uses this exact pattern — sometimes m equals 4, sometimes
+  m is a mixed value between 4 and 8 depending on the layout.
+
+EXAMPLE B' — L1's own worked path example  (L1 slides 29–32, V = {1,2})
+--------------------------------------------------------------------------------
+[NEW — L1 slides 29–32: path example]
+Grid from L1 slide 30 (4×4, row 1 at top):
+
+    Row1:  3  1  2  1
+    Row2:  2  2  0  2
+    Row3:  1  2  1  1
+    Row4:  0  1  2  2
+
+  p = (2,1) [value 2]
+  q = (4,3) [value 2]
+  V = {1, 2}   (1s and 2s legit; 0s and 3s blocked)
+
+4-PATH from p to q
+  From p = (2,1): allowed neighbours in V are (1,1)=3 ∉ V ✗,
+                   (3,1)=1 ✓, (2,2)=2 ✓.
+  Only 4-routes to q are blocked by the 0s at (2,3) and (4,1).
+  → 4-PATH DOES NOT EXIST.  Length = ∞.
+
+8-PATH from p to q
+  One route: (2,1) → (3,2) [diag] → (3,3) [right] → (4,4) [diag] →
+             (4,3) [left], length 4.
+  L1 slide answer (verbatim): shortest 8-path = 4.
+
+m-PATH from p to q
+  L1 slide answer (verbatim): shortest m-path = 5.
+  Route as drawn on the slide (dashed):
+      (2,1) → (2,2) → (3,2) → (3,3) → (4,4) → (4,3).
+
+[note] The numbers "4" and "5" are printed on the L1 slides. Look up slides
+31–32 (the three dashed-path diagrams) before citing them in writing.
+
+EXAMPLE C — file size
+--------------------------------------------------------------------------------
+(a) 1024 × 1024, 8-bit grayscale, 32-byte header.
+    bytes = 1024 · 1024 · 1 + 32 = 1,048,576 + 32 = 1,048,608.
+
+(b) Same image, 12-bit-per-pixel, 32-byte header.
+    bytes = 1024 · 1024 · 1.5 + 32 = 1,572,864 + 32 = 1,572,896.
+    (12 bit = 1.5 bytes/pixel; typical exam rounds to 2 bytes/pixel if the
+     question specifies "uint16 storage".)
+
+(c) Sub-sampled by 2 in each direction, 8-bit, 32-byte header.
+    bytes = 512 · 512 · 1 + 32 = 262,144 + 32 = 262,176.
+
+EXAMPLE D — Nyquist
+--------------------------------------------------------------------------------
+A scene contains a periodic pattern with 5 line-pairs per mm. Minimum required
+sampling density (in samples/mm)?
+
+    Line-pair = 1 bright + 1 dark stripe = one full period.
+    f_max (spatial) = 5 line-pairs/mm.
+    Nyquist: f_s > 2 · f_max → f_s > 10 samples/mm.
+    In samples per line-pair: 2 samples per line-pair minimum.
+
+  This is sample-exam Q1 logic: convert sensor elements per mm to line-pairs
+  per mm by dividing by 2.
+
+EXAMPLE E — L1 slide 41 quantization demonstration
+--------------------------------------------------------------------------------
+[NEW — L1 slide 41]
+  Original image: 8-bit grayscale, file size 906 390 bytes.
+  Requantised:    3-bit grayscale, file size 214 727 bytes.
+  Ratio ≈ 4.22 (not 8/3 = 2.67) because of fixed header + per-row padding.
+  Lesson: lower bit depth saves bytes but not proportionally when the header
+  is fixed. For file-size exam questions always use b/8 formula + header.
+
+--------------------------------------------------------------------------------
+
+7. SAMPLE-EXAM TAG
+--------------------------------------------------------------------------------
+Q6  (4/8/m-path, V = {0,1})       →  matches EXAMPLE B / B'.  Numeric path
+                                      lengths + "explain why 4-path doesn't
+                                      exist". Full mark needs m-rule
+                                      justification.
+Q1  (CCD resolution, line-pairs)  →  match EXAMPLE D. Compute (arithmetic).
+Q5  (imresize + nearest + alias)  →  match §2.4 anti-aliasing. Predict
+                                      (yes/no + explanation).
+Q7a (checkerboard histograms)     →  match §2.4 spatial aliasing idea.
+                                      Calculate.
+
+Question word type by Q:
+  Q6 : compute + justify.
+  Q1 : compute.
+  Q5 : predict.
+  Q7a: compute.
+
+--------------------------------------------------------------------------------
+
+8. ASSESSMENT  (10 quiz questions + to-do + figures)
+--------------------------------------------------------------------------------
+Q1  State Nyquist criterion (one line) and name ONE artefact when violated.
+    §2.4
+Q2  A 2048 × 1536, 12-bit-per-pixel grayscale image, 64-byte header, no
+    compression. Total file size in bytes? Show arithmetic. §2.1/§2.2
+Q3  Write the coordinate sets of N4(p) and ND(p) for p = (x, y). Give the
+    Euclidean distance from p to each member. §2.5
+Q4  With V = {2}, is a diagonal step from p=(2,2) to q=(3,3) m-legal if
+    N4(p) = {(1,2),(3,2),(2,1),(2,3)} and N4(q) = {(2,3),(4,3),(3,2),(3,4)}?
+    Show the intersection and conclude. §2.6
+Q5  In one sentence: why does 8-adjacency produce ambiguous path lengths and
+    how does m-adjacency resolve it? §2.6
+Q6  Shorten this expression using the aliased-frequency formula:
+    a sine wave at 90 Hz, sampled at 100 Hz. What observed frequency will it
+    appear as? §2.4
+Q7  State the definition of "connected component" and explain how it differs
+    from "region". §2.8
+Q8  (NEW) Pipeline order and image classes by acquisition (reflection /
+    emission / absorption). §2.0b
+Q9  (NEW) Brightness formula and its physiological justification. §2.1c,
+    §2.3b
+Q10 (NEW) Weber's law: two equal ΔI steps on I=10 and I=200. Which is more
+    visible, and why does this justify log transforms? §2.3b
+
+TO-DO: L1 .txt "TO DO" block (visit OnderWijsOnline, install MATLAB, Zhou
+§1.1–1.11, syllabus Q2.1–2.end and 3.1–3.end). Every Q2.* and Q3.* answer
+is verified verbatim in §9.
+
+Figures to look up by name:
+  "Checker-shadow illusion — E.H. Adelson"                            (L1 s21)
+  "Aliasing and the formation of Moire patterns"                       (L1 s32)
+  "Pixel arrangement 8-adjacent to the centre pixel"                   (L1 s26)
+  "Pixel arrangement mixed-adjacent to the centre pixel"               (L1 s27)
+  "Machine vision basic steps" — the 6-block pipeline                  (L1 s8)
+  "Four different types of illumination systems with cameras"          (L2 s?)
+  L1 slide 30: the 4×4 grid used in EXAMPLE B' (path example)
+  L1 slide 31–32: three dashed-path diagrams (4-, 8-, m-paths)
+  L1 slide 33: "1585 × 1333 / 32 × 27" side-by-side
+  L1 slide 41: "8-bit, resolution 256 / 3-bit, resolution 8" side-by-side
+
+--------------------------------------------------------------------------------
+
+9. TO DO  (from end of result-EVD2_–_Lesson_1_2526.txt, quoted + answered)
+--------------------------------------------------------------------------------
+L1 .txt "TO DO…" block, quoted verbatim:
+
+    TO DO…
+    • Visit OnderWijsOnline
+    • Install MATLAB
+    • Zhou et al. (2010): study § 1.1 - 1.11
+    • Questions from Syllabus: 2.1 – 2.end and 3.1 – 3.end
+
+Every question below is answered VERBATIM from the uploaded Answer PDFs:
+    - Answers to Questions 2.1-2.end.txt
+    - Answers to Questions 3.1-3.end.txt
+Where the PDF is terse, the PDF's answer is preserved as-is (no embellishment);
+a "[note]" line flags a source-vs-first-principles difference.
+
+--------------------------------------------------------------------------------
+9.A  SYLLABUS CHAPTER 2 — BASIC CONCEPTS  (Q 2.1 – 2.end)
+--------------------------------------------------------------------------------
+
+Q2-1  What is digital image processing?
+  "Digital image processing is the technology of applying a number of
+   computer algorithms to process digital images. The outcomes of this
+   process can be either images or a set of representative characteristics
+   or properties of the original images."
+
+Q2-2  Why do we need digital image processing?
+  "We need image processing to generate meaningful information for digital
+   images."
+
+Q2-3  Summarize the application of digital image processing in society.
+  "The main applications of digital image processing are in remote sensing,
+   medical imaging, forensics, transportation, robotics, military
+   applications and consumer electronics."
+
+Q2-4  What is the difference between image sampling and quantisation?
+  "Sampling refers to digitization of the coordinates, and quantization is
+   the digitization of the amplitude values."
+
+Q2-5  What is the difference between adjacency and connectivity?
+  "Adjacency is related to the neighborhood of one particular pixel.
+   Connectivity is related to a path linking two pixels."
+
+Q2-6  How to compute the Euclidean distance between two pixels?
+  "The Euclidean distance between two 2-D points I(x1,y1) and J(x2,y2) is
+   defined as
+
+        x1 = 1, y1 = 1, x2 = 3, y2 = 4,
+        Euclidean distance = sqrt[(1−3)^2 + (1 − 4)^2] = 3.6"
+
+  [note] PDF uses (x = column, y = row); Δx = 2, Δy = 3,
+  D = sqrt(4 + 9) = sqrt(13) ≈ 3.6. PDF is authoritative for exam answers.
+
+Q2-7  Who do you think would perform better at the following tasks: man or
+      computers. Please explain why.
+      (a) Determining which line is the shortest in Figure 1a.
+      (b) Determining which circle is the smallest in Figure 1b.
+      (c) Segmenting the image containing the letter "F" from the background
+          in Figure 2a.
+      (d) Segmenting the white triangle (Kanizsa's triangle) in Figure 2b.
+  (a) "Computers. They can easily detect and compare lengths, since it's
+       absolute values."
+  (b) "Computers. They can easily detect and compare sizes (be it as area
+       or circumference), since it's absolute values."
+  (c) "Men. Human brains are made for pattern recognition. Though computers
+       are learning how to do it as well, they have a much harder time
+       with it."
+  (d) "Men. The triangle is an optical illusion, caused by the (rather
+       unique) processing done by our brains."
+
+--------------------------------------------------------------------------------
+9.B  SYLLABUS CHAPTER 3 — IMAGE DIGITIZATION  (Q 3.1 – 3.end)
+--------------------------------------------------------------------------------
+Preamble: "Assuming a monochrome image with 1024 pixels and 256 gray
+levels." The official answers treat "1024 pixels" as 1024 TOTAL pixels
+(i.e. a 32 × 32 image). This differs from a 1024 × 1024 reading and is the
+authoritative interpretation for exam marking.
+
+Q3-1  File size, header 32 bytes, no compression.
+  "256 gray levels can be stored in 8 bits (2^8 = 256)
+   8 bits is 1 byte
+   1024 x 1 = 1024 byte
+   1024 + 32 = 1056 byte"
+  [note] Result = 1,056 bytes. Under a 1024×1024 reading this would be
+  1,048,608 B — but the PDF's 1,056 B is what the exam expects.
+
+Q3-2  Subsampled by factor 2 in both dimensions, header unchanged.
+  "1024 = 32 x 32
+   32/2 x 32/2 = 256
+   256 x 1 = 256 byte
+   256 + 32 = 288 byte"
+  [note] Result = 288 bytes. Confirms 32 × 32 interpretation (16 × 16 = 256).
+
+Q3-3  Requantised to 2 pixels per byte, header unchanged.
+  "1024 (pixels) / 2 (pixels per byte) = 512 byte
+   512 + 32 = 544 byte"
+  [note] Result = 544 bytes. Bit depth halves 8 → 4 bits/pixel.
+
+Q3-4  How many gray levels will the requantised image have?
+  "2 pixels per byte is possible in indexed images if using 16 colours
+   (2^4 = 16)"
+  [note] Result = 16 gray levels.
+
+Q3-5  Difference + timings via tic/toc.
+  "Figure 1. Effect of interpolation methods
+   t1 = 0.0541 sec
+   t2 = 0.0204 sec
+   t3 = 0.0107 sec"
+  [note] PDF does not map t1/t2/t3 to specific methods; only the three
+  measured times are reported.
+
+Q3-6  Describe aliasing and its relation to the Nyquist frequency.
+  [Verbatim summary; full text spans two PDF pages:]
+
+  "The Nyquist Theorem, also known as the sampling theorem, is a principle
+   that engineers follow in the digitization of analog signals. For
+   analog-to-digital conversion to result in a faithful reproduction of the
+   signal, slices, called samples, of the analog waveform must be taken
+   frequently. The number of samples per second is called the sampling rate
+   or sampling frequency.
+
+   Any analog signal consists of components at various frequencies. The
+   simplest case is the sine wave, in which all the signal energy is
+   concentrated at one frequency. In practice, analog signals usually have
+   complex waveforms, with components at many frequencies. The highest
+   frequency component in an analog signal determines the bandwidth of that
+   signal. The higher the frequency, the greater the bandwidth, if all other
+   factors are held constant.
+
+   Suppose the highest frequency component, in hertz, for a given analog
+   signal is fmax. According to the Nyquist Theorem, the sampling rate must
+   be at least 2 × fmax, or twice the highest analog frequency component.
+   The sampling in an analog-to-digital converter is actuated by a pulse
+   generator (clock). If the sampling rate is less than 2 × fmax, some of
+   the highest frequency components in the analog input signal will not be
+   correctly represented in the digitized output. When such a digital
+   signal is converted back to analog form by a digital-to-analog converter,
+   false frequency components appear that were not in the original analog
+   signal. This undesirable condition is a form of distortion called
+   aliasing.
+
+   A first result of aliasing is the formation of Jaggies. 'Jaggies' is the
+   informal name for artifacts in raster images, most frequently from
+   aliasing. Jaggies are stairlike lines that appear where there should be
+   smooth straight lines or curves.
+
+   A special case of aliasing, due to undersampling a fine regular pattern,
+   is the formation of Moire patterns (Figure 2)."
+  [note] PDF Figure 2 is "Aliasing and the formation of Moire patterns."
+
+--------------------------------------------------------------------------------
+9.C  TO DO CHECKLIST  (ticked = verified against official Answer PDF)
+--------------------------------------------------------------------------------
+[ ] 8.1  Visit OnderWijsOnline — calendar + Answer PDFs.
+[ ] 8.2  Install MATLAB (Phase 0).
+[ ] 8.3  Study Zhou et al. §1.1 – 1.11.
+[ ] 8.4  Q2-1 vs PDF 2.1-2.end.  ✓
+[ ] 8.5  Q2-2 vs PDF.            ✓
+[ ] 8.6  Q2-3 vs PDF.            ✓
+[ ] 8.7  Q2-4 vs PDF.            ✓
+[ ] 8.8  Q2-5 vs PDF.            ✓
+[ ] 8.9  Q2-6 vs PDF.            ✓ (√13 ≈ 3.6)
+[ ] 8.10 Q2-7 vs PDF.            ✓ (four sub-answers)
+[ ] 8.11 Q3-1 vs PDF.            ✓ (1,056 B)
+[ ] 8.12 Q3-2 vs PDF.            ✓ (288 B)
+[ ] 8.13 Q3-3 vs PDF.            ✓ (544 B)
+[ ] 8.14 Q3-4 vs PDF.            ✓ (16 levels)
+[ ] 8.15 Q3-5 vs PDF.            ✓ (t1, t2, t3 values)
+[ ] 8.16 Q3-6 vs PDF.            ✓ (Nyquist long-form)
+
+================================================================================
+REVISION LOG
+================================================================================
+rev.2  Initial (missed L1 slides: 2–7, 11–14, 15–23, 25, 28, 30–33, 36–39,
+       41, 61, 62)
+rev.3  Inserted missing-page blocks, each tagged [NEW — L1 slide NN: ...].
+       Sections added: 2.0, 2.0b, 2.1b, 2.1c, 2.1d, 2.1e, 2.1f, 2.2b, 2.3b,
+       2.4b, 2.5b, 2.6b, 2.9, 3b; expanded §6 (new EXAMPLE B', E); expanded
+       §8 (Q8–Q10); added figure list; added this revision log.
+================================================================================
+END CHECKPOINT 1.1 — rev.3, page-complete
+================================================================================

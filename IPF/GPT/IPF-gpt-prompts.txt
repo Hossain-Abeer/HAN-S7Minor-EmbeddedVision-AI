@@ -1,0 +1,102 @@
+DEPTH CONTRACT — apply to every note you write
+==============================================
+
+STRUCTURE (non-negotiable, in this order, every checkpoint)
+  1. Essence — 1–3 lines
+  2. Content & Explanation — subdivided per concept
+  3. Related Supporting Concepts — "depends on" / "feeds into", with the
+     specific later-lesson dependency named
+  4. Summary — 6–8 compressed exam-ready bullets
+  5. Formula / Definition Box — every formula/definition, copy-verbatim-able
+  6. Hand-Calc Worked Examples — 3–4, arithmetic shown line by line
+  7. Sample-Exam Tag — which Q, and whether calc / explain / identify
+  8. Assessment — 5–7 quiz Qs + one to-do + figures to look up by name
+
+DEPTH RUBRIC (per concept — hit ALL that apply)
+  - Formal definition + informal one-liner ("translation:")
+  - Coordinates / ranges / units explicitly written out
+  - Multiple metrics or equivalent forms (e.g. N4 = Euclidean 1, city-block 1)
+  - Mechanism ("WHY"), not just result — the fold-back formula, the
+    empty-intersection reason, the anti-alias pre-filter rationale
+  - Named terminology (Moore, Chebyshev, city-block, Nyquist frequency)
+  - Numeric anchor: at least one concrete number per concept
+  - Where the concept fails / where it is chosen over an alternative
+    (e.g. nearest vs bilinear, 4- vs 8-adjacency trade-off)
+
+FORMATTING
+  - Plain .txt, ASCII, 80-col, `--------------------------------------------------------------------------------`
+    separators between subsections.
+  - Inline math in plain ASCII (sqrt(x), f_s, 2^b). No LaTeX.
+  - Tables where the data is tabular (comparisons, metrics, bit depths).
+
+WHAT TO OMIT (per prior decision)
+  - No "common traps" sections.
+  - No "you might think X but actually Y" framing.
+  - No hedging language ("roughly", "typically") unless the source says so.
+
+IF SOURCE IS THIN
+  - Expand from the standard textbook of the topic (Gonzalez & Woods for
+    image processing; Bishop for ML). Flag the expansion source in a
+    one-line footnote under the concept, not inline.
+
+IF SOURCE AND EXPANSION CONFLICT
+  - Follow the source. Add expansion only as a clearly marked addendum.
+
+
+
+
+
+
+
+
+ok, roadmap-1.0 saved. Here's the approach, we go through it one subsec at a time. you will teach me the lessons - 
+1. essence 
+2. content & explanation of content 
+3. related supporting conepts
+4. summary with bullet-point notes
+5. Self-assessment (quizz, things to do, figures/images to identify from web, whatever). 
+6. To Do. quote the question, then solve/answer it - for each of the questions. answers are uploaded as files to you
+
+
+
+
+
+
+
+
+
+
+wait, you need to mention in roadmap how to use it for this particular module. for instance, as I understand it, it has pdfs (which were converted to .txt files & uploaded to you for being token-efficient) to learn from, exams will have questions whose answers are based in those lesson pdfs. are there anything else or something that I missed for assessment? reference needed. so before iterating on the roadmap-1.0, first address this concern to me. I validate, then tell you to iterate
+
+
+
+
+
+
+
+
+it appears to be week 14. but the entire minor module is divided in two periods? check & if I am correct, then point to the weeks covered during the 1st period. give reference for cross-check. If I find it valid, then it'll be roadmap-1.0; roadmap-2.0 will be different - file, syllabus, percentage etc.
+
+
+
+
+
+
+
+
+reconsider making the roadmap. implement the filenames along with the weeks/chapters. those files will be assossiated so that I could manually look into them to learn, cross-reference to what you extracted out from one to teach me.
+
+
+
+
+
+
+ok, I will need a roadmap of you. Structured as chapters/weeks (whichever is the most suitable), sections & subsections. you'll walk me through each of the subsections. but before you start, first list out all the subsections. for example - 
+Chapter/Week 1, 
+[x.y]
+[x.y.z]
+use a box like [ ] for each subsection, such that once it's complete, i will tick it with 'x' then proceed to the next. 
+
+also, give a % or progress bar depicting the workflow state. make sure to count in the weight/significance of a task also, not just a count of the number of tasks
+
+It needs to be a .txt file, attached is an example of such a file (which was for a different module of this particular minor program) 

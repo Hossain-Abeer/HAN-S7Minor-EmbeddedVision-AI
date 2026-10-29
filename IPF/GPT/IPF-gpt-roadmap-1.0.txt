@@ -1,0 +1,165 @@
+EVD2 / IPF ROADMAP 1.0 - PERIOD 1 (7-DAY SPRINT)
+=================================================
+
+ASSUMPTIONS
+- Exam = assignment = one written assessment. No separate deliverable.
+- ~7 days to exam. Cover L1-L7 first, sample exam last.
+- Skip MATLAB practice unless required to answer a syllabus question.
+  Focus: read code, predict output, hand-calculate — not run code.
+- Priority order per lesson: slide-text -> syllabus questions -> sample-exam question for that topic.
+
+TOTAL: 7 days, 25 checkpoints.
+PROGRESS: [----------] 0%
+
+================================================================================
+HOW TO APPROACH EACH SUBSECTION  (added 2026-10-28)
+================================================================================
+Each checkpoint (1.1, 1.2, ... 7.3) is taught in 8 blocks, in this order:
+
+  1. Essence                — 1-3 lines: what this subsection is really about.
+  2. Content & explanation  — the actual teaching. Definitions, mechanisms, why.
+  3. Related supporting     — concepts from earlier lessons this depends on, and
+     concepts                 concepts this will be needed for later.
+  4. Summary                — 3-6 bullet points, compressed, exam-ready.
+  5. Formula / definition   — a small box (3-5 lines) that can be copied verbatim
+     box                      onto the Day 6 cheat sheet.
+  6. Hand-calc worked       — one exam-style numeric or logical example, solved
+     example                  step by step, no MATLAB.
+  7. Sample-exam tag        — which sample-exam question this subsection maps to,
+                              and whether it is asked as calc / explain / identify.
+  8. Assessment             — 3-5 quiz questions + 1 "to do" + figures to look up
+                              online and identify by name.
+  9. Lesson-file TO DO      — every lesson .txt ends with a "TO DO…" block that
+                              lists (a) external reading (Zhou chapters) and
+                              (b) a SPECIFIC RANGE of Syllabus questions
+                              (e.g. "2.1 – 2.end and 3.1 – 3.end"). These
+                              ranges are mandatory and periodic — they are the
+                              official self-test. Answer the FULL range listed,
+                              not a hand-picked subset. Cross-check against the
+                              official Answer PDF for that chapter (upload that
+                              week's Answer PDF when the checkpoint opens).
+                              Do NOT tick a checkpoint complete until its
+                              lesson-file TO DO ranges are answered.
+
+
+Block 9 maps to roadmap checkpoints like this:
+  L1 .txt TO DO  →  Q 2.1–2.end, 3.1–3.end  →  checkpoint 1.4
+  L2 .txt TO DO  →  Q 4.1–4.end            →  checkpoint 2.x (Day 1 tail)
+  L3 .txt TO DO  →  Q 5.1–5.end, 6.1–6.end, 7.1–7.end
+  L4 .txt TO DO  →  Q 8.1–8.end, 9.1–9.end
+  L5 .txt TO DO  →  Q 10.1–10.end
+  L6 .txt TO DO  →  Q 11.1–11.end, 12.1–12.end
+  L7 .txt TO DO  →  Q 13.1–13.end
+
+Common traps are intentionally omitted (per decision). Focus stays on positive
+knowledge transfer + exam-pattern recognition.
+
+Progress is logged by ticking the matching [ ] row in the day block below,
+not by the 8 teaching blocks. Teaching blocks are conversational — they live in
+the chat, not in this file.
+
+================================================================================
+DAY 1 - L1 + L2 (Intro + Hardware)                      [4 checkpoints]
+================================================================================
+Files:
+  - result-EVD2_–_Lesson_1_2526.txt
+  - result-EVD2_–_Lesson_2_2526.txt
+  - Syllabus §2, §3, §4
+  - 2020-11-EIA-Checklist-...txt (skim once)
+  - SampleExam Q1, Q2, Q3, Q6
+--------------------------------------------------------------------------------
+[ ] 1.1 Read L1 slides; note: sampling, quantization, aliasing, Nyquist, 4/8/m-path, adjacency.
+[ ] 1.2 Read L2 slides; note: CCD vs CMOS, lens formula, illumination types (diffuse/dome/direct/back/dark field).
+[ ] 1.3 Hand-calc: sample exam Q1 (CCD resolution -> line pairs/mm) and Q6 (4/8/m-path).
+[ ] 1.4 Answer FULL lesson-file TO DO ranges: Q 2.1–2.end, Q 3.1–3.end (L1); Q 4.1–4.end (L2). Cross-check against Answer PDFs 2.1-2.end, 3.1-3.end, 4.1-4.end (upload per-week).
+
+--------------------------------------------------------------------------------
+DAY 2 - L3 + L4 (MATLAB basics + Math/Logic)            [4 checkpoints]
+Files:
+  - result-EVD2__Lesson_3_2021.txt
+  - result-EVD2__Lesson_4_2021.txt
+  - Syllabus §5-§9
+  - SampleExam Q4
+--------------------------------------------------------------------------------
+[ ] 2.1 Skim L3 slides for: data classes, imread/imshow conventions. No need to run scripts.
+[ ] 2.2 Read L4 slides; note: convolution vs correlation, bitwise AND/OR/XOR, overflow handling.
+[ ] 2.3 Hand-calc: sample exam Q4 (bitwise AND/OR/XOR on 3x3). Explain AND darkens, OR brightens, XOR shows difference.
+[ ] 2.4 Skim Syllabus §8-§9. Answer Q9-2, Q9-4, Q9-14, Q9-15 only.
+
+--------------------------------------------------------------------------------
+DAY 3 - L5 + L6 (Geometric + Intensity/Histogram)       [4 checkpoints]
+Files:
+  - result-EVD2__Lesson_5_2021.txt
+  - result-EVD2__Lesson_6_2021.txt
+  - Syllabus §10-§12
+  - SampleExam Q5, Q7a
+--------------------------------------------------------------------------------
+[ ] 3.1 Read L5 slides; note: interpolation (nearest/bilinear/bicubic), affine (scale/rotate/shear/translate).
+[ ] 3.2 Read L6 slides; note: negative, log, gamma, histogram equalization, matching.
+[ ] 3.3 Hand-calc: sample exam Q5 (imresize + nearest + no antialias -> aliasing; link to Nyquist). Q7a (draw histograms of 2x2 and 10x10 checkerboards).
+[ ] 3.4 Skim Syllabus §10-§12. Answer Q10-2, Q10-3, Q12-2, Q12-6 only.
+
+--------------------------------------------------------------------------------
+DAY 4 - L7 (Neighborhood / Convolution)                 [4 checkpoints]
+Files:
+  - result-EVD2__Lesson_7_2021.txt
+  - Syllabus §13
+  - SampleExam Q7b, Q7c, Q7d
+--------------------------------------------------------------------------------
+[ ] 4.1 Read L7 slides; note: convolution vs correlation, edge handling (zero-pad / mirror / ignore), mean vs Gaussian vs median.
+[ ] 4.2 Write from memory: 5x5 mean kernel (1/25 each). Sample Q7b.
+[ ] 4.3 Hand-calc: sample Q7c (edge pixel with zero-padding, sum product / 25). Q7d (repeated-pattern frequency counting).
+[ ] 4.4 Skim Syllabus §13. Answer Q13-1, Q13-3, Q13-5, Q13-7 only.
+
+--------------------------------------------------------------------------------
+DAY 5 - SAMPLE EXAM ATTEMPT (timed)                     [3 checkpoints]
+Files:
+  - SampleExam EVD2_2025_2026_blok_1_including_answers_eng.txt
+--------------------------------------------------------------------------------
+[ ] 5.1 Attempt Q1-Q7 in 90 min, closed book, no MATLAB.
+[ ] 5.2 Mark against answers. Log every wrong answer by topic.
+[ ] 5.3 Identify top 3 weak topics -> feed into Days 6-7.
+
+--------------------------------------------------------------------------------
+DAY 6 - WEAK-AREA DRILL                                [3 checkpoints]
+Files: lesson + syllabus chapter for each weak topic
+--------------------------------------------------------------------------------
+[ ] 6.1 Re-read the slide-text of each weak topic (only the weak sections).
+[ ] 6.2 Redo the matching sample-exam question(s) + 2 syllabus Qs per weak topic.
+[ ] 6.3 Rewrite a one-page cheat sheet: all formulas + key definitions from L1-L7.
+
+--------------------------------------------------------------------------------
+DAY 7 - FINAL PASS                                     [3 checkpoints]
+Files: cheat sheet from Day 6 + sample exam + lesson summaries
+--------------------------------------------------------------------------------
+[ ] 7.1 Read cheat sheet twice. Re-do any hand-calc still shaky.
+[ ] 7.2 Re-attempt only the questions you got wrong on Day 5. No answers visible.
+[ ] 7.3 Confirm exam logistics: date, room, permitted calculator.
+
+--------------------------------------------------------------------------------
+IF YOU HAVE < 7 DAYS
+--------------------------------------------------------------------------------
+4 days: skip Days 2 and 6, compress.
+3 days: Day 1 (L1-L2), Day 2 (L4-L5-L6), Day 3 (L7 + sample exam).
+2 days: skim all slides Day 1; sample exam + weak-topic drill Day 2.
+1 day: read cheat sheet targets below.
+
+MINIMUM CHEAT SHEET CONTENT (by lesson)
+  L1: adjacency, connectivity, m-path, aliasing, Nyquist
+  L2: CCD vs CMOS, lens formula f = (mag * WD)/(1+mag), illumination types
+  L3: uint8 [0,255], double [0,1], imread/imshow
+  L4: convolution vs correlation, AND/OR/XOR practical meaning
+  L5: nearest/bilinear/bicubic trade-off, affine matrix forms
+  L6: gamma <1 vs >1, histeq, histmatching
+  L7: mean/Gaussian/median behaviour, zero-pad edge handling, kernel sums to 1
+
+--------------------------------------------------------------------------------
+KEY REMINDERS
+--------------------------------------------------------------------------------
+- Files: one slide-text per lesson + one syllabus chapter. Do NOT re-read whole
+  syllabus chapter; answer only the sample-exam-matched questions.
+- Do NOT run MATLAB. Read code, hand-calc results.
+- Sample exam is the best proxy. Attempt it timed by Day 5 at the latest.
+- No separate assignment track assumed. If MyX later says otherwise, extend Week 7.
+- Teaching format (8 blocks) is defined in "HOW TO APPROACH EACH SUBSECTION"
+  at the top. Blocks live in the chat; ticks live in this file.

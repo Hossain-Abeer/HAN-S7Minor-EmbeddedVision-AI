@@ -1,0 +1,48 @@
+**Subject:** EVD2 — assessment clarification
+
+Dear Mr. Jansen,
+
+Quick questions about EVD2 assessment:
+
+1. Is the written exam per period the only graded component, or are there also assignments/projects?
+2. Syllabus Table 2 lists "1st Assignment" (L7) and "2nd Assignment" (L14) — what are these?
+3. If graded separately: where are the briefs, deadlines, weights, and submission point?
+
+Thank you.
+
+Kind regards,
+[Name] — [Student number] — [Group]
+
+
+
+
+
+
+
+
+**Subject:** EVD2 — assessment clarification
+
+Dear Mr. Jansen,
+
+A few quick questions about EVD2 assessment:
+
+1. What are the graded components — is it only the written exam per period, or are there also assignments/projects?
+2. Syllabus Table 2 lists "1st Assignment" / "Project present." (L7) and "2nd Assignment" (L14). Are these separate graded deliverables, or do they refer to the period exams?
+3. If separate — where are the briefs, deadlines, and submission point?
+4. How does MATLAB feature in assessment — only as a learning/practice tool (with the written exam testing code understanding, as in sample exam Q5), or is there a graded practical component?
+5. What are the component weights, and the permitted resources for the written exam?
+
+Thanks for your time.
+
+Kind regards,
+[Name] — [Student number] — [Group]
+
+
+
+
+
+i doubt that exam & assignment are two different things. 
+Tasks:
+1. check whether anywhere it talks of 'uploading' or 'handing in' of reports or matlab files. 
+2. any 'to do' list. 
+if either is found, exam & assignment are two different forms of assessment for this module. if not found, they might be the same thing - terms used interchangeable. also try to search for stuff that could point towards this.

@@ -1,0 +1,1411 @@
+================================================================
+MODULE WRITEUP — IPF (EVD2)
+Embedded Systems & Vision with Deep & Machine Learning
+Minor, Semester 7, B.Eng Electrical & Electronics Engineering
+================================================================
+
+CONTENTS
+  1. What the module is
+  2. Learning outcomes (official)
+  3. Study load and scheduling
+  4. Lesson-by-lesson content
+  5. The Syllabus (supporting material) and its question chapters
+  6. The Answer documents
+  7. The Scripts
+  8. The Webpage (logistics and resources)
+  9. The Vision Application Checklist
+ 10. The Sample Exam
+ 11. Assessment logic and what is actually examinable
+ 12. Tools and technical environment
+ 13. How everything fits together
+ 14. My reading of the module's character and what matters
+
+================================================================
+1. WHAT THE MODULE IS
+================================================================
+
+The module is an image processing / machine vision course built around
+the classical digital image processing pipeline and ending in pattern
+recognition. The course code in all documentation is EVD2; the module
+in the minor is referred to as IPF.
+
+Despite the minor title mentioning deep learning and machine learning,
+the actual taught content is overwhelmingly CLASSICAL image processing
+plus two classical classifiers (kNN and a single-layer perceptron).
+Deep learning only appears as an OPTIONAL self-paced MATLAB Academy
+course linked from the webpage (Deep Learning Onramp, Explore CNNs,
+Tune Deep Learning Options). So there is a gap between the minor's
+marketing title and the module's core examinable content. The exam is
+about classical IP.
+
+The single lecturer for everything is Roel Jansen (roel.jansen@han.nl),
+who authored the Syllabus, the lesson decks, the answers, the scripts,
+and the demos. The material is very much one person's course: consistent
+style, consistent use of MATLAB, consistent image set.
+
+The course is organized as: lectures (decks) -> Syllabus chapters with
+numbered questions -> MATLAB exercises -> answer PDFs -> scripts ->
+sample exam. Everything is aligned to Gonzalez & Woods, 4th edition
+(2018) as the reference text, with Zhou et al. (2010) Part I/II as
+secondary free reading. Note the 2026/2027 syllabus revision explicitly
+REMOVED compulsory literature because the Zhou bookboon books are no
+longer available — so the Syllabus itself plus the decks are now the
+primary source.
+
+================================================================
+2. LEARNING OUTCOMES (OFFICIAL)
+================================================================
+
+Ten stated intended learning outcomes:
+
+ 1. Know what digital image processing is; know frequency bands and the
+    fundamental DIP steps.
+ 2. Know DIP fundamentals: human eye, light, EM spectrum; sensors for
+    image acquisition; simple image formation model.
+ 3. Know physical properties of optical instruments and light, and how
+    to apply them.
+ 4. Apply sampling and quantization; know basic pixel relations; apply
+    the mathematical tools important to DIP.
+ 5. Know and apply intensity transformations (negative, log, gamma,
+    piecewise linear).
+ 6. Know and apply histogram processing (equalization, matching/
+    specification, local histogram processing, histogram statistics).
+ 7. Know and apply spatial filtering (smoothing and sharpening).
+ 8. Know and apply morphological operators (erosion, dilation,
+    opening, closing).
+ 9. Know and apply segmentation operators (point, line, edge detection)
+    and thresholding methods (global basic, Otsu optimum global).
+10. Describe shape and boundaries of a segment using statistical
+    moments.
+
+Read carefully: outcomes 1-10 map almost one-to-one onto lessons 1-13.
+Outcome 9 covers edge detection and thresholding. Pattern recognition
+(lesson 14) is NOT in the numbered outcomes, yet it IS on the sample
+exam indirectly (confusion matrix/precision-recall concepts are
+referenced in the exam answer explanations). The morphological and
+segmentation outcomes are the highest-numbered, i.e. the "later"
+material that the exam weights.
+
+================================================================
+3. STUDY LOAD AND SCHEDULING
+================================================================
+
+  Contact hours: 3 x 16 = 48
+  Self-study:    3 x 16 = 48
+  Total:         96 hours (3 EC)
+
+  Software: MATLAB with Image Processing Toolbox, Computer Vision
+  System Toolbox, Statistics and Machine Learning Toolbox.
+
+Schedule (14 lessons + 2 holidays), each lesson with two topic blocks,
+a book reference, and a question range:
+
+  L1  Introduction: fields using IP, image sensing, image formats,
+      elements of visual perception, colour spaces | image digitization,
+      sampling, quantization, aliasing
+      Book 1.1-1.11 ; Questions 2.1-2.end, 3.1-3.end
+
+  L2  Hardware: camera, lens, filter, illumination | software examples
+      (LabVIEW, HALCON, OpenCV, ImageJ), MATLAB install
+      Book 4 ; Questions 4.1-4.end
+
+  L3  MATLAB basics: data types, M-files, conditionals, IPT, apps,
+      Computer Vision System Toolbox
+      Book 5,6,7 ; Questions 5.1-5.end, 6.1-6.end, 7.1-7.end
+
+  L4  Mathematical tools: matrix vs elementwise, set and logical
+      operations, statistics | arithmetic and logic ops: add, subtract,
+      multiply, AND, OR, XOR
+      Book 8,9 ; Questions 8.1-8.end, 9.1-9.end
+
+  L5  Geometric operations: affine transforms, nonlinear transforms,
+      camera calibration
+      Book 4.6 ; Questions 10.1-10.end
+
+  L6  Gray level transformations: gamma, power law, log |
+      Histogram processing: equalization, matching, stretch, shrink
+      Book 2.1,2.2,2.3 ; Questions 11.1-11.end, 12.1-12.end
+      [then HOLIDAY]
+
+  L7  Neighborhood processing: convolution, correlation, spatial
+      filters (low pass, high pass), nonlinear/median
+      Book 2.4,2.5,2.6 ; Questions 13.1-13.end
+      *** 1st ASSIGNMENT / project presentation ***
+
+  L8  Frequency domain filtering: low pass, high pass
+      Book 3.1-3.11 ; Questions 14.1-14.end
+
+  L9  Image restoration: mean filtering, order statistic filtering
+      Book 4.1-4.6 ; Questions 15.1-15.end
+
+  L10 Morphological image processing: dilation, erosion, opening,
+      closing, hit-or-miss
+      Book 2*, 3.5-3.8* ; Questions 16.1-16.end
+
+  L11 Edge detection: Prewitt, Sobel, Roberts, Hough transform
+      Book 3.1*, 3.2*, 3.4* ; Questions 17.1-17.end
+
+  L12 Image segmentation: global and adaptive thresholding
+      Book 3.3* ; Questions 18.1-18.end
+
+  L13 Feature extraction: invariance/robustness, Euler number,
+      eccentricity
+      Book 19 ; Questions 19.1-19.end
+      [then HOLIDAY, HOLIDAY]
+
+  L14 Pattern recognition: k nearest neighbor, confusion matrix,
+      neural network
+      Book 20 ; Questions 20.1-20.end
+      *** 2nd ASSIGNMENT ***
+
+So: 14 lessons, 19 numbered question chapters (2 through 20), two
+assignments, two holiday gaps, exam at the end. The lectures run in
+the same order as the Syllabus chapters — the Syllabus IS the lab
+manual and the lecture is the theory companion.
+
+================================================================
+4. LESSON-BY-LESSON CONTENT
+================================================================
+
+--- LESSON 1: INTRODUCTION ---
+Defines the field. Applications: medical (ultrasound, X-ray, MRI, CT),
+forensic, military, transportation, internet, industrial/robotics,
+consumer electronics, research.
+Machine vision basic steps: Image Acquisition -> Preprocessing ->
+Segmentation -> Labeling -> Feature extraction -> Classification.
+Note the "data intensity -> data abstraction" axis: each stage reduces
+data and increases abstraction.
+Image formats: binary, grayscale, indexed, RGB, HSI/HSV/HSL, L*a*b.
+Human vision: cones (6-7 million, colour), rods (75-150 million, low
+light), fovea 1.5x1.5 mm with ~150k elements/mm2, focal length 14-17 mm.
+Optical illusions (Adelson checker shadow), Weber's law (~1-2%).
+Metadata/Exif, bitplane slicing, 8-bit = 256 levels.
+Digitization = sampling + quantization. Spatial resolution (dpi),
+pixelation, jaggedness, moire. Aliasing and Nyquist: sample at >= 2x
+highest frequency; undersampling -> aliasing, jaggies, moire;
+wagon-wheel effect as temporal aliasing.
+Pixel relationships: 4-, 8-, mixed(m)-adjacency; paths; connectivity;
+components; regions; boundaries.
+
+--- LESSON 2: HARDWARE AND SOFTWARE ---
+The four hardware pillars: illumination, optical system (lens), camera
+(sensor), computer.
+Key distances: depth of field (focus range), working distance,
+resolution (minimum feature size), field of view.
+Camera internals: image sensor, sensor driver, communication hardware
+interface (analog, USB, Ethernet, Camera Link, FireWire), external
+interface.
+Sensors: CCD vs CMOS.
+  - CCD: charge transported across chip and read at one corner; high
+    fill factor; high SNR; low noise; high power; expensive; blooming;
+    full-frame CCD has smearing (needs shutter/strobe); frame-transfer
+    CCD reduces smearing via <500 us transfer but is costly.
+  - CMOS: per-pixel transistors, charge converted to bits locally;
+    random pixel access (ROI, windowing); lower fill factor hence
+    lower SNR; low power; cheap; high speed; higher dynamic range;
+    rolling shutter typical (motion artefacts) though global shutter
+    exists; microlenses used to raise fill factor.
+  - Modern verdict: CMOS has largely caught up and surpassed CCD except
+    for extreme low light (<4 photons/pixel) and some IR/UV cases.
+Shutters: mechanical vs electronic; global (simultaneous sample/reset)
+vs rolling (sequential, interleaved readout, better sensitivity).
+Noise: photon/shot (Poisson), thermal, background (temporal — reduce
+by averaging over time); sensitivity variation, dark signal variation
+(spatial — manufacturing/pattern noise).
+Readout modes: interlaced (odd/even fields, less flicker, moving
+artefact) vs progressive (sequential rows).
+Acquisition modes: synchronous free-running (process < half frame),
+asynchronous free-running (interleaved, <= frame rate), triggered
+asynchronous from async-reset camera (snapshot).
+High-speed cameras: 25,000 fps at 1 MP; 1,000,000 fps at reduced res.
+3D imaging: stereo vision, laser triangulation, projected light/sheet
+of light, depth from focus, time of flight, LiDAR (d = c*t/(2n)).
+Camera specs: pixel size, pixel depth (8/10/12 bit = 256/1024/4096),
+gain and offset, spectral sensitivity, Bayer filter (mosaic + interp).
+Frame grabber interfaces with bandwidth and max cable length table:
+USB2 5m/400MB/s, USB3 5m/4800, FireWire A/B 4.5m/400-800,
+CameraLink 10m/6120, GigE 100m/1000, 10GigE 100m/10000,
+CoaxPress 100m/10000.
+GenICam standard: GenApi, SFNC, GenTL; vendor list (Basler, Allied
+Vision, Dalsa, JAI, Matrox, MVTec, NI, Pleora, Stemmer, Point Grey...).
+Lens: pinhole model h'/s' = h/s = 2tan(alpha); Gaussian optics
+1/s' + 1/s = 1/f'; magnification beta = h'/h = s'/s; refraction law
+n1 sin(theta2) = n2 sin(theta1); depth of field; telecentric lenses.
+Filters: coloured glass (cheap, wide cut-on, angle-independent) vs
+coated interference (sharp cut-on/off, high transmission; longpass,
+shortpass, bandpass, notch); colour filter example: green glass filter
+raised green/red capsule contrast from 8.7% to 86.5%; polarizing
+filter (polarizer on light + analyzer on lens) for specular surfaces.
+Illumination: sources — fluorescent, quartz halogen/fibre, LED, metal
+halide/mercury, xenon, high-pressure sodium. Selection trade-offs
+(brightness, spectrum, stability, life, cost). Four cornerstones of
+vision lighting: geometry, pattern/structure, wavelength, filters.
+Acceptance criteria: maximize contrast on features of interest,
+minimize elsewhere, be robust.
+Techniques: back lighting (silhouette; holes/gaps/presence/measurement),
+diffuse/full bright field (dome, on-axis; curved specular surfaces,
+flat textured surfaces; non-directional, minimal shadow), partial
+bright field / directional (most common, sunlight-like, good for
+topography, hotspot on specular), dark field (low-angle; surface
+flatness/texture/reflectivity; scratches). Application field map:
+surface flatness/texture vs surface reflectivity (matte/mirror/mixed).
+Software: LabVIEW, HALCON, Matrox, OpenCV, ImageJ, MATLAB.
+
+--- LESSON 3: MATLAB BASICS ---
+Why MATLAB: quick to learn, integrated, hardware interface, platform
+independent, scientific standard, rapid development. Toolboxes relevant:
+Image Acquisition, Computer Vision System, Image Processing, Vision HDL,
+Statistics, Machine Learning.
+Environment: current directory, workspace, command window, editor,
+preview. Scripts vs functions vs anonymous functions.
+Data classes: double, single, uint8/16/32, int8/16/32 — with ranges.
+The critical rule: uint8 saturates/truncates, double preserves negatives
+and precision. This rule recurs in Laplacian filtering, arithmetic,
+division.
+Matrix ops vs elementwise ops: ', inv, det, flipud, fliplr, rot90,
+reshape, trace. Standard arrays: zeros, ones, true, false, eye, magic,
+rand, randn.
+Relational/logical operators and functions: < <= > >= == ~= & | ~ xor
+all any.
+Built-in constants: ans, eps, realmin, realmax, flintmax, NaN, Inf, pi,
+i/j, clock, date.
+Arithmetic operators table including .*, ./, .\, .^ and the function
+equivalents (plus, times, rdivide, mpower...).
+Script structure: definition line, H1 line, help text, body.
+Control statements: for, while, if, elseif, switch-case. Timing: tic/
+toc, profile on/viewer, vectorization.
+IPT essentials: class conversions (im2double, im2uint8, im2uint16,
+im2single, im2int16, ind2gray, gray2ind, rgb2gray, rgb2ind, ind2rgb);
+display (image, imagesc, imshow, imtool); arithmetic (imadd,
+imsubtract, immultiply, imdivide, imabsdiff, imcomplement, imlincomb).
+Apps: Camera Calibrator, Color Thresholder, Image Acquisition, Image
+Batch Processor, Image Region Analyzer, Image Segmenter, Image Viewer,
+Stereo Image Calibrator, Training Image Labeler, OCR Trainer.
+Style guidelines: naming, statements, layout/comments, files.
+Demonstrations: pendulum, HDL pixel streaming, FPGA implementation via
+Vision HDL Toolbox. Forward look: image category classification, OCR,
+optical flow/tracking, 3D vision/Kinect, point cloud registration,
+C code generation, HDL generation.
+Key message: MATLAB is the vehicle; you must be fluent before the
+image content lands.
+
+--- LESSON 4: MATHEMATICAL TOOLS / ARITHMETIC AND LOGIC ---
+Array (outer) product vs matrix (inner/dot) product — the distinction
+that recurs throughout. Matrix product used for rotation/affine mapping.
+Convolution and correlation:
+  1D: (A*B)(x) = sum_j A(j) B(x-j)
+  2D: g(x,y) = sum_k sum_j h(j,k) f(x-j, y-k) over half-widths m2, n2.
+  Worked example A={0,1,2,3,2,1,0}, B={1,3,-1} mirrored -> 1,5,8,...
+  Correlation = convolution without the 180-degree flip of the mask.
+  For symmetric masks the difference is irrelevant.
+Properties: commutative, associative, distributive.
+Separable kernels: s = [1;2;1] * [-1 0 1] — compute cost drops from
+PQ to P+Q per pixel; 9x9 kernel -> 4.5x theoretical speed-up.
+Gaussian blur: h(x,y) = exp(-(x^2+y^2)/(2 sigma^2)); separable;
+Fourier transform of Gaussian is Gaussian; convolution of two
+Gaussians is a Gaussian; rotationally symmetric so no directional bias.
+Linear filtering requirements: superposition R(f+g)=R(f)+R(g) and
+scaling R(kf)=kR(f).
+Arithmetic ops: addition (blend, offset, noise), with overflow handling
+by truncation or normalization (the imadd example with uint8 vs uint16
+intermediate and rescaling to [0,255]); subtraction (angiography, flat
+field correction for sensor dust/uneven illumination); multiplication/
+division (brighten/darken, dynamic scaling, background division for
+gradient-illuminated text).
+Functions: imadd, imsubtract, imabsdiff, imcomplement, immultiply,
+imdivide.
+Logic ops: bitand, bitor, bitxor, bitcmp (unsigned ints only) vs
+imcomplement (binary/gray/RGB). Examples: masking, difference finding,
+ROI processing with roipoly + uint8 conversion + bitand/bitor/bitcmp.
+Applications: simultaneous visible + NIR capture; NDVI =
+(nir - red)/(nir + red).
+
+--- LESSON 5: GEOMETRIC OPERATIONS ---
+Modify geometry: reposition pixels in a constrained way; used for
+distortion correction, special effects, image registration.
+Two components: mapping function (spatial transformation equations)
+and interpolation method.
+Affine mapping: [x'; y'; 1] = [a0 a1 a2; b0 b1 b2; 0 0 1][x; y; 1].
+Table of coefficients: identity, scaling [sx,sy], counterclockwise
+rotation by theta [cos sin 0; -sin cos 0], shear [shx], shear [shy],
+translation [1 0 tx; 0 1 ty].
+Interpolation: nearest neighbour (fastest, blocky), bilinear (2x2
+weighted average, smoother), bicubic (4x4, sharpest, best compromise),
+adaptive vs non-adaptive.
+MATLAB: imresize, imrotate, imcrop, flipud, fliplr, maketform/
+imtransform, affine2d + imwarp.
+Aliasing: downsampling without prefiltering causes aliasing; prefilter
+with a low pass (Gaussian) before downsampling.
+Image registration: cpselect, cpcorr to refine, cp2tform (e.g.
+nonreflective similarity), imwarp, overlay with AlphaData.
+Calibration: correct lens distortion, measure in world units, locate
+camera in 3D scene. World coordinates -> camera rigid coordinates
+(extrinsic) -> pixel projective coordinates (intrinsic). Intrinsic:
+focal length, lens distortion, sensor format, principal point.
+Extrinsic: position and orientation.
+
+--- LESSON 6: INTENSITY TRANSFORMATIONS AND HISTOGRAMS ---
+Enhancement goals: subjective quality for humans; suitability for
+further analysis. Goal-specific, interactive, subjective. Feedback is
+application-specific.
+Point transform: g(x,y) = T[f(x,y)].
+Linear: s = c*r + b. Identity. Negative (imcomplement).
+Auto-contrast: s = (L-1)(r - rmin)/(rmax - rmin) — the "scale to []"
+operation.
+Power law / gamma: s = c * r^gamma. gamma < 1 brightens shadows,
+gamma > 1 darkens. Gamma correction.
+Log: s = c*log(1+r). Compresses dynamic range, reveals hidden detail
+(radio image example: range 224 -> 249 after log).
+Piecewise linear: gray level slicing (enhance a band, suppress rest).
+LUTs: for uint8, a 1x256 vector; intlut(A, LUT). Performance: LUT vs
+direct computation (0.1655 s vs 0.0334 s in the syllabus example) —
+roughly 5x.
+Interactive: glsdemo, imcontrast.
+Histogram: h(k) = n_k = card{(x,y) | f(x,y)=k}; normalized
+p(rk) = n_k / n. Carries min/mean/max, dark/bright dominance; says
+NOTHING about spatial distribution; cannot alone judge noise.
+Equalization: histeq; flattens histogram; transformation function is
+the normalized CDF; good for low contrast, BAD for bimodal images
+(the "eight" coins-like example loses quality because two clusters are
+widely spaced).
+Matching/specification: histeq(I, hgram) — supply desired histogram
+shape; interactive via ihmdemo.
+Stretching: s = (L-1)(r-rmin)/(rmax-rmin).
+Shrinking: maps to a narrower range [smin, smax].
+Local equalization: adapthisteq, CLAHE, ClipLimit (default 0.01,
+higher = more contrast), tiles (default 8x8 tiles, not a tile size).
+
+--- LESSON 7: NEIGHBORHOOD PROCESSING ---
+Reference point + neighborhood operation + write to output + repeat.
+Linear filters = sum of products with mask coefficients; nonlinear =
+ranking/sorting then select (median, min, max, midpoint, alpha-trimmed).
+Mask/kernel/window terminology.
+Edge handling: ignore, pad with zeros, mirror.
+Low pass filters: attenuate high frequencies, blur and denoise.
+Mean/box filter (1/9 uniform); mask size controls blur amount
+(3x3 vs 9x9 shown); variations: weighted, directional, selective,
+outlier removal.
+Gaussian blur: non-uniform kernel sampled from 2D Gaussian.
+Median filter: rank filter; excellent for salt & pepper, poor for
+Gaussian (no extreme values to reject).
+High pass: emphasize fine detail, points, lines, edges. Laplacian
+(second derivative, isotropic, rotation invariant); produces double
+edges and is noise sensitive; take absolute value or keep positives;
+composite Laplacian mask (center 5) does subtract-in-one-step.
+Directional difference filters / emboss masks.
+Unsharp masking: original minus blurred -> sharpening image; three
+implementations (blur + histogram shrink + subtract; subtract + add
+back; single convolution mask via fspecial('unsharp')). High-boost
+filtering: mask with A+4 centre; A=1 equals composite Laplacian; as A
+grows the result approaches image * constant (A~2.7 in the answers).
+Combining methods: no universal recipe; trial and error; sequence
+matters.
+
+--- LESSON 8: FREQUENCY DOMAIN FILTERING ---
+Fourier transform: DC term = average brightness; sine patterns map to
+single frequency points; multiple patterns combine; vertical/horizontal/
+diagonal orientations map to oriented frequency pairs.
+Pipeline: f(x,y) -> FT F(u,v) -> multiply by H(u,v) -> G(u,v) ->
+inverse FT -> g(x,y). Convolution theorem: convolution in space =
+multiplication in frequency.
+Two ways to build filters: freqz2 from a spatial mask, or generate
+directly in frequency domain with meshgrid + distance matrix.
+Distance matrix: dist = sqrt(U.^2 + V.^2) with signed frequency
+coordinates; fftshift for display; 3D mesh shows the cone/bowl shape.
+Ideal LPF: H=1 if D<=D0 else 0; sharp cutoff -> ringing; smaller
+radius = more blur, more ringing visible.
+Gaussian LPF: H = exp(-D^2/(2 sigma^2)); smooth, no ringing, most
+natural-looking.
+Butterworth LPF: H = 1/(1 + (D/D0)^(2n)); n controls transition
+sharpness; as n grows it approaches the ideal; advantage = tunable
+trade-off between the two extremes.
+High pass: ideal (1 outside, 0 inside), Gaussian (1 - exp(...)),
+Butterworth (1/(1 + (D0/D)^(2n))). High-frequency emphasis filtering
+HFE: Hd = a + b*H so you don't lose the DC/brightness.
+Effects: increasing cutoff -> darker image until almost black (only
+edges remain).
+FT properties: separability (two 1D passes), rotation (rotate image ->
+rotate spectrum).
+
+--- LESSON 9: IMAGE RESTORATION ---
+Degradation/restoration model. Noise models: Gaussian (amplifier
+noise), impulse/salt-and-pepper (faulty switches), uniform, Rayleigh
+(range imaging, MRI), gamma/Erlang (radar/LiDAR), exponential (laser
+imaging).
+Central limit theorem background, variance derivations, discrete
+uniform distribution (mean (b+a)/2, variance ((b-a+1)^2-1)/12).
+Noise effects on image and histogram: Gaussian broadens; salt & pepper
+creates two spikes at 0 and 255; uniform flattens; Rayleigh, gamma,
+exponential have characteristic skewed shapes.
+Noise estimation.
+Spatial noise reduction:
+  - Arithmetic mean: best for Gaussian/uniform/Erlang, blurs
+  - Geometric mean: retains detail better, Gaussian
+  - Harmonic mean: good for Gaussian and salt, FAILS on pepper
+    (1/0 -> Inf -> result 0)
+  - Contraharmonic: Q negative for salt, positive for pepper; wrong
+    sign amplifies the noise; cannot handle both simultaneously
+  - Median: best all-round rank filter for salt & pepper
+  - Min (removes salt), Max (removes pepper), Midpoint (Gaussian +
+    uniform), Alpha-trimmed mean (mixed noise; D=0 -> arithmetic mean,
+    D=(mn-1)/2 -> median)
+Frequency domain: periodic noise from electrical/electromechanical
+interference; bandreject, bandpass, notch (ideal, Butterworth,
+Gaussian); notch pass = 1 - notch reject.
+Deblurring: inverse filtering 1/H(u,v) — division-by-zero,
+0/0 indeterminacy, noise amplification; fixes: Butterworth lowpass on
+the division, or constrained division with threshold T.
+Wiener filter: minimum mean-square error, H*(u,v) / (|H|^2 + K);
+trade-off between restoration and noise suppression.
+MATLAB: deconvwnr, deconvreg, deconvlucy, deconvblind.
+
+--- LESSON 10: MORPHOLOGICAL IMAGE PROCESSING ---
+Set theory refresher: Z, N, R; complement, intersection, union,
+difference A-B = A intersect Bc, translation Ax, reflection B-hat.
+Logical equivalents: intersection ~ AND, complement ~ NOT,
+union ~ OR, difference ~ A AND (NOT B).
+Definition: extract geometric/topological information from an unknown
+set using a well-defined structuring element (SE). Jean Serra, 1980s.
+SE design (shape and size) is crucial. strel shapes: arbitrary,
+diamond, disk, line, octagon, pair, periodicline, rectangle, square;
+flat vs nonflat (offsetstrel).
+Fit vs hit.
+Dilation: A(+)B = {z | (B-hat)_z intersect A != 0}; grows/thickens;
+output = max in neighborhood; direction/size controlled by SE.
+Erosion: A(-)B; shrinks/thins; output = min in neighborhood; SE must
+fit.
+Duality: (A - B)^c = A^c (+) B-hat ; A (+) B = (A^c - B-hat)^c.
+Decomposition of large SEs into smaller ones.
+Opening = erosion then dilation: removes small objects, breaks thin
+connections, preserves size of remaining objects. imopen.
+Closing = dilation then erosion: fills small holes, fuses breaks,
+closes gaps, without changing object size as dilation would. imclose.
+Hit-or-miss: two SEs (B1 hit, B2 miss), no shared elements; interval
+encoding with 1/-1/0; bwhitmiss.
+Boundary extraction: internal A - (A - B); external (A (+) B) - A;
+morphological gradient combines both; bwperim with 4- or 8-connectivity.
+Region filling: imfill; interactive with imfill(I).
+Connected components: iterative Xk = (X(k-1) (+) B) intersect A;
+bwlabel, bwselect, label2rgb. Each gray shade = one object.
+Thinning (bwmorph 'thin'), thickening ('thicken' — stops at thickness
+1), skeletonization ('skel', Inf — comparable to infinite thinning),
+spur, bridge, clean, diag, endpoints, branchpoints, majority, shrink,
+remove, fill, tophat, bothat, hbreak.
+Grayscale morphology: dilation = max(f(x+s,y+t) [+bN]), erosion = min
+(...); opening and closing as above; top-hat = f - (f o b); bottom-hat
+= (f . b) - f; used for uneven illumination correction (the
+color-plane -> erosion -> dilation -> threshold -> B-D pipeline).
+
+--- LESSON 11: POINT, LINE, EDGE DETECTION ---
+Point detection: Laplacian-like mask [-1 -1 -1; -1 8 -1; -1 -1 -1];
+threshold the absolute response.
+Line detection: directional masks.
+Edge definition: boundary between regions with distinct characteristics.
+Ideal step vs ramp model; gray level profile.
+First derivative -> magnitude detects edge presence; second derivative
+-> sign tells dark/bright side, zero crossing locates thick edge centre.
+Noise sensitivity demonstrated with sigma 0.001 vs 0.05.
+Pipeline: noise reduction -> convolution in two perpendicular
+directions -> magnitude sqrt(d1^2+d2^2) -> direction arctan(d2/d1).
+Operators:
+  Roberts: 2x2 diagonal, poor on noise
+  Prewitt: 3x3, [-1 0 1] rows and transpose
+  Sobel: 3x3 with weights 1,2,1 — better on noiseless, similar on noisy
+  Sharr: weighted 3,10,3
+  Kirsch: 8 compass masks, max over all 8
+  Robinson: 8 compass masks, similar
+  Laplacian: second derivative; double edges; very noise sensitive;
+    zero-cross option in edge
+  LoG: Gaussian smoothing then Laplacian; "Mexican hat"; sigma controls
+    scale; larger sigma -> fewer edges
+  Canny: (1) Gaussian smoothing, (2) gradient magnitude+direction,
+    (3) non-maximal suppression, (4) hysteresis thresholding with
+    Tlow/Thigh, (5) edge linking of weak 8-connected to strong
+Threshold t returned by edge(); higher threshold -> only strong edges
+remain -> lower sensitivity.
+Edge linking: edges are fragmented; Hough transform maps (x,y) to
+(rho, theta) accumulator; peaks -> lines; houghpeaks, houghlines.
+Circle detection: imfindcircles.
+MATLAB: edge(I,'sobel'|'prewitt'|'roberts'|'log'|'canny'|'zerocross').
+
+--- LESSON 12: IMAGE SEGMENTATION ---
+Segmentation: partition image into non-overlapping regions whose union
+is the whole image; regions should correspond to objects and background.
+Based on discontinuity, similarity, or both. Still an open problem.
+Easy vs hard images: occlusion, uneven illumination, shadows.
+Three-category taxonomy used in the course:
+  Intensity-based (non-contextual): pixel distributions/histograms,
+    e.g. thresholding
+  Region-based (contextual): adjacency and connectivity, e.g. region
+    growing and split-and-merge
+  Other: texture, edges, motion
+Thresholding: g(x,y) = 1 if f(x,y) > T else 0; converts many gray
+levels into two.
+Global thresholding: one T for the whole image.
+Otsu (1979): maximize between-class variance; graythresh; example gave
+T = 0.4941.
+Illumination and noise break global thresholding: even easy images get
+hard. imnoise with Gaussian mean 0, variance 0.01/0.02.
+Local/adaptive thresholding: block processing; block too small = costly,
+too large = no better than global. Algorithms: Niblack, Sauvola
+(normalized windowed std dev), modified Sauvola (windowed mean
+deviation, cheaper). MATLAB: imbinarize(I,'adaptive',T), adaptthresh,
+blockproc.
+Region-based: pixel value alone insufficient; add connectivity.
+Conditions on Ri: union = image, disjoint, connected, each satisfies
+predicate Q.
+Region growing algorithm:
+  (a) find connected components of seeds S, erode each to one pixel
+  (b) form fQ (1 where predicate Q holds)
+  (c) append to each seed all 1-valued 8-connected pixels
+  (d) label each connected component as a distinct region
+Predicates/homogeneity criteria: pure uniformity; local mean vs global
+mean; local std dev vs global mean; variance (percentage within 2 sigma);
+texture (four quadrants comparable).
+Key factors: similarity criterion, seed selection (interactive or
+cluster-based), stopping rule.
+Predicate form: TRUE if |f(x,y) - mu_PR_i| <= Delta.
+Limitations: unstable between 4- and 8-connectivity; sensitive to the
+predicate; insufficient seeds leave pixels unassigned; redundant seeds
+force artificial splits.
+Split and merge: start with whole image, split into quadrants until
+each region homogeneous (quadtree, each node 4 children, leaves =
+regions), then merge adjacent regions satisfying the union predicate.
+Algorithm: define P, compute P(Ri), split quadrants where false, repeat,
+merge adjacent where P(Rj union Rk) true, repeat.
+Watershed: regions = catchment basins, boundaries = ridge lines;
+watershed() function; build from distance transform.
+Distance transform: distance from every pixel to nearest nonzero pixel.
+City-block (Manhattan) distance D = sum |xki - xkj|. bwdist(a,'cityblock').
+Active contours (snakes) mentioned.
+Colour-based segmentation: rgb2ind(I, n); partition colour space with
+thresholds.
+MATLAB: imopen/imclose, watershed, graythresh, im2bw, imbinarize.
+
+--- LESSON 13: FEATURE EXTRACTION ---
+Feature extraction: detection and representation of features of
+interest for further processing; transition from pictorial to
+non-pictorial (alphanumeric/quantitative) data. Assumes segmentation
+has already happened. Goal: convert segmented objects into
+representations that describe their main features/attributes.
+Feature vector: n x 1 array, symbolic and/or numerical; compact
+representation; feature space = n-dimensional hyperspace; visualization
+only for n < 4; distance in feature space relates to similarity.
+Invariance and robustness: RST (rotation, scaling, translation)
+invariance; application dependent.
+Binary object features (binary object = connected region):
+  Area Ai = sum sum Oi(x,y)
+  Centroid xbar = (1/Ai) sum sum x Oi ; ybar similarly
+  Moments m_pq = sum sum x^p y^q f(x,y)
+  Central moments mu_pq = sum sum (x-xbar)^p (y-ybar)^q f(x,y)
+    — translation invariant
+  Normalized central moments n_pq = mu_pq / mu00^gamma,
+    gamma = (p+q)/2 + 1 for p+q > 1 — scale invariant
+  Axis of least second moment: tan 2 theta = 2*mu11/(mu20 - mu02)
+  Projections h(x), v(y)
+  Euler number E = C - H (components minus holes)
+  Perimeter (count boundary pixels; bwperim)
+  Thinness ratio T = 4*pi*Area / Perimeter^2 — roundness; approaches 1
+    for a circle; inverse = irregularity/compactness ratio
+  Eccentricity = ratio of major to minor axis (A/B)
+  Aspect ratio = (xmax-xmin+1)/(ymax-ymin+1)
+  Elongatedness a/b
+  Hu's seven rotation/scale/translation invariant moments (1962)
+MATLAB regionprops: Area, BoundingBox, Centroid, ConvexHull,
+Eccentricity, EquivDiameter, EulerNumber, Extent, FilledArea,
+FilledImage, MajorAxisLength, MinorAxisLength, Orientation, Perimeter,
+PixelIdxList, PixelList, Solidity.
+Boundary descriptors (contour-based): bug tracing / Moore boundary
+following; bwtraceboundary(BW,[r c],'W',8,Inf,'counterclockwise');
+bwboundaries.
+Chain code: directions right 0, down 1, left 2, up 3 (crack code);
+Freeman code: 8 directions.
+Signatures: 1D boundary representation, distance r vs angle theta from
+centroid; rotation and translation invariant, NOT scale invariant;
+cart2pol in the example.
+Fourier descriptors: treat (xk, yk) as complex xk + j yk; DFT of the
+list is the descriptor; inverse DFT restores; few coefficients suffice
+(100%, 50%, 25%, 2.5%, 1% reconstruction demonstration).
+Histogram-based features: mean, standard deviation, skew, energy,
+entropy — RST invariant.
+Texture: no universal definition; smoothness/roughness, coarseness,
+regularity. Roughness R = 1 - 1/(1+sigma^2).
+GLCM (gray-level co-occurrence matrix): counts pixel pairs with
+intensities zi, zj at displacement d = (dx,dy); normalize by total;
+features: max probability, correlation, contrast, uniformity (energy),
+homogeneity, entropy.
+Summary: feature vector, invariance, binary features, translation
+invariant moments, boundary descriptors, chain/Freeman code,
+histogram features, texture features.
+
+--- LESSON 14: PATTERN RECOGNITION ---
+Goal: assign a class to each image/object based on a numerical
+representation suitable for the problem.
+Statistical vs structural/syntactic classifiers.
+Unsupervised (no labels, find clusters) vs supervised (labels known).
+Recap features: thinness ratio T = 4 pi Ai / Pi^2 (roundness), and
+eccentricity = major/minor axis ratio.
+Design and implementation steps:
+  1. Define problem and number of classes
+  2. Extract suitable features
+  3. Select classification method
+  4. Select dataset
+  5. Select training subset and train
+  6. Test
+  7. Refine and improve
+Pattern = arrangement of descriptors/features encoded as feature
+vectors, strings, or trees. Class = set of patterns sharing common
+properties. Ideal class: high intra-class similarity, high inter-class
+difference (intracluster distances minimized, intercluster maximized).
+Data preprocessing: noise/outlier removal; normalization (unit vector,
+standard normal density (f-mu)/sigma, min-max, softmax); missing data.
+Training vs test sets: training typically <= 20%, representative;
+separate test set to avoid bias in reported success rates.
+Worked example: X-ray detection of longhorn-beetle infested trees
+(Jansen & Hemming 2011).
+Classification measures:
+  TP = correctly identified
+  FP = incorrectly identified
+  TN = correctly rejected
+  FN = incorrectly rejected
+  Sensitivity (recall) = TP / (TP + FN)
+  Accuracy = (TP + TN) / (TP + FP + TN + FN)
+  Precision = TP / (TP + FP)
+Worked numbers: TP 5, TN 625, FP 300, FN 1, total 929.
+Human+machine combination example: 100 artificial drilled holes;
+machine vision alone 61% accuracy, MV+observer1 82%, MV+observer2 83%;
+sensitivity 56/50/50%.
+ROC curve: hit rate (TP rate) vs false alarm rate (FP rate); ideal
+knee at top-left.
+Confusion matrix: K x K; row i column j = number of times true class i
+was labelled j; diagonal = successes; perfect classifier has all
+off-diagonal zero. Example 4x4:
+  w1: 97 0 2 1
+  w2: 0 89 10 1
+  w3: 0 0 100 0
+  w4: 0 3 5 92
+  Overall error = (3+11+0+8)/(4*100) = 5.5% -> success 94.5%.
+Precision = TP/(TP+FP) (exactness); recall = TP/(TP+FN) (completeness);
+P-R graph; F1 = 2 * (precision * recall)/(precision + recall).
+Distance and similarity measures: Euclidean, vector inner product,
+Tanimoto metric.
+Statistical classification: project feature vectors into feature space;
+same-class objects cluster; classifier finds a discrimination curve or
+hyper-surface.
+Three techniques listed: minimum distance classifier, kNN, Bayesian
+(next year).
+Minimum distance classifier: d_j(x) = |x - m_j|, m_j = class mean
+vector; problems — multimodal classes (samples in disjoint clusters)
+and irregular shapes.
+k-Nearest Neighbours:
+  Classify by majority of k closest examples.
+  "Tell me who your neighbors are and I will tell you who you are."
+  k=3 example: 2 apples 1 banana -> apple.
+  Multiple classes easy (k=5, 3 bananas 1 apple 1 cucumber -> banana).
+  Choosing k: theoretically larger k better with infinite samples, but
+    all k must be close; rule of thumb k ~ sqrt(n); k=1 often used for
+    efficiency but noise sensitive; too large k destroys locality;
+    cross-validation to choose k.
+  Distance: Euclidean treats all features equally; discriminative
+    features can be swamped (extreme example: feature 1 gives class
+    1 or 2, feature 2 is noise 100-150; [1 100] misclassified as
+    class 2) — the denser the samples the less the problem, but samples
+    are rarely dense enough.
+  Feature normalization: linear scale to [0,1]
+    fnew = (fold - fmin)/(fmax - fmin); or zero mean unit variance
+    fnew = (fold - mu)/sigma; MATLAB matrix form with repmat/mean/std.
+  MATLAB: fitcknn, knn.NumNeighbors, knn.Distance, knn.predict;
+    confusionmat for evaluation; gscatter for feature plots.
+  Advantages: any distribution, non-linear boundaries, simple,
+    intuitive, good with enough samples.
+  Disadvantages: choosing k, expensive test stage (no training stage —
+    all work at test time, opposite of what is usually wanted), needs
+    many samples.
+Neural network classification: single-layer perceptron; inputs x1..xn,
+weights w1..wn, bias, output; sigmoid 1/(1+exp(-y)) mapping to [0,1];
+delta rule weight update w = w + coeff*input*delta; 100 iterations;
+comparison plot of predictions; results similar to kNN.
+Worked apple/banana dataset: 13 training samples, features thinness
+ratio and eccentricity, test samples classified, confusion matrix with
+5/1 and 0/4.
+
+================================================================
+5. THE SYLLABUS (SUPPORTING MATERIAL)
+================================================================
+
+Document: EVD2_Syllabus_2026_2027_v20260826. 123 pages. Author Roel
+Jansen. Revision history shows yearly updates; the 2026/2027 revision
+removed compulsory literature (bookboon no longer available). So the
+Syllabus + decks are now the primary source, with Gonzalez & Woods as
+reference only.
+
+Structure:
+  Ch 1 Course info (summary table, 10 outcomes, schedule table)
+  Ch 2 Basic concepts (Q 2.1-2.7)
+  Ch 3 Image digitization (Q 3.1-3.6)
+  Ch 4 Hardware (camera, lens, filters, illumination) (Q 4.1-4.5)
+  Ch 5 MATLAB basics (Q 5.1-5.24)
+  Ch 6 Programming in MATLAB (Q 6.1-6.9)
+  Ch 7 The image processing toolbox (Q 7.1-7.11)
+  Ch 8 Mathematical tools (Q 8.1-8.6)
+  Ch 9 Arithmetic and logic operations (Q 9.1-9.17)
+  Ch 10 Geometric operations (Q 10.1-10.12)
+  Ch 11 Gray level transformations (Q 11.1-11.7)
+  Ch 12 Histogram processing (Q 12.1-12.15)
+  Ch 13 Neighborhood processing (Q 13.1-13.22)
+  Ch 14 Frequency-domain filtering (Q 14.1-14.27)
+  Ch 15 Image restoration (Q 15.1-15.10)
+  Ch 16 Morphological image processing (Q 16.1-16.24)
+  Ch 17 Edge detection (Q 17.1-17.20)
+  Ch 18 Image segmentation (Q 18.1-18.5)
+  Ch 19 Feature extraction (Q 19.1-19.6)
+  Ch 20 Pattern recognition (Q 20.1-20.2)
+  Appendices: A MATLAB install for Mac (Bob Toebes notes),
+  B images used, C scripts used, D literature and conferences.
+
+Note the syllabus question counts: chapter 2-4 are theory-heavy short
+answers; chapters 5-9 are MATLAB mechanics; chapters 10-19 are the
+image-processing core (heaviest weight in 13, 14, 16, 17); chapter 20
+is only two questions, so pattern recognition is light in the syllabus
+even though it is lesson 14.
+
+The Syllabus is written as a guided lab: prose explanation, then
+MATLAB snippet, then numbered question. You are meant to type the code
+and answer the questions. The decks are the theory; the Syllabus is
+the doing.
+
+Appendix B lists the image set used throughout — this is effectively
+the vocabulary of the course: football.jpg, text.png, coins.png,
+trees.tif, tire.tif, rice.png, cameraman.tif, pout.tif, blobs.png,
+TPTest1.png, barbara.tif, moon.tif, circuit.tif, eight.tif,
+eight_salt.tif, lenna.tif, mandrill.tif, gradient_with_text.tif,
+klcc_a.png, klcc_b.png, Test3.png, shapes23.png, apple(1-7).jpg,
+banana(1-8).jpg, test_sample(01-10).jpg.
+
+Appendix C lists the scripts: script3_1.m, script3_2.m,
+raise_to_power.m, c_harmonic.m, distmatrix.m, fddemo.m, glsdemo.m,
+ihmdemo.m.
+
+================================================================
+6. THE ANSWER DOCUMENTS
+================================================================
+
+There are answer PDFs for chapters 2 through 19 (ch 20 has no answer
+file in the upload). They are the lecturer's model answers and they
+double as a de facto study guide and possibly exam-relevant phrasing.
+
+What the answers reveal about the course's expectations:
+ - They are short, direct, sometimes in imperfect English (a few
+   Dutch remnants remain, e.g. "Zodat over de volledige range...").
+ - They frequently reference figures that are not in the text file.
+ - They accept "not working; work in progress" for some demo questions
+   (12.11, 12.12), meaning the demos are not perfectly maintained and
+   the course tolerates that.
+ - They contain concrete numbers you should be able to reproduce
+   (focal lengths, file sizes, histogram bin values, filter kernel
+   values).
+
+Key concrete results embedded in the answers:
+ - Q3: 1024 px, 256 levels, 32-byte header -> 1056 bytes; subsample x2
+   -> 288 bytes; 2 pixels/byte -> 544 bytes, 16 gray levels.
+ - Q4: 5 cm object, 8.8x6.6 mm sensor, 0.5 m -> magnification 0.132,
+   focal length 58.3 mm -> choose 50 or 75 mm. Mako G-125B/C 1/3"
+   (4.8 mm), FOV 50 mm, WD 200 mm -> 17.52 mm -> choose 18 mm or
+   25 mm + extension ring.
+ - Q4 illumination: A directed bright-field front light, B directed
+   dark-field front light (LED ring), C diffuse bright-field back
+   light, D telecentric bright-field back light.
+ - Q8/Q9: max 255 min 0 original; adjusted max 255 min 75; 301 pixels
+   at 255 -> 2614; multiply by 0.5 equals divide by 2; dark regions do
+   not brighten because small numbers times a factor stay small;
+   background division only works if a background image is available.
+ - Q10: bilinear/bicubic preserve smooth contours; row/column deletion
+   discards 75% of data and gives mosaic/jagged results; rotation
+   enlarges the canvas because images are rectangular; -35 degrees for
+   clockwise; 'crop' restores original size; affine vs imrotate give
+   slightly different sizes (511 vs 512, 246 vs 255 range).
+ - Q11: I+1 needed because pixel indices are 1-based while values are
+   0-based; log increases dynamic range (224 -> 249) so hidden detail
+   appears; nth root/power shape depends on n; gray-level slicing
+   enhances a chosen band.
+ - Q12: fewer bins -> larger bin size -> more pixels per bin; numel =
+   number of elements; sum(c_norm) = 1; bar width via set(bar_1,
+   'barWidth', 2); 256 in histeq so equalization spans the full range;
+   equalization improves low contrast; tire image is dark originally
+   and becomes brighter; "eight" loses quality because two widely
+   separated dominant gray groups; cumsum = cumulative sum; ClipLimit
+   default 0.01; default 8x8 tiles.
+ - Q13: 'full' output size = input + filter length/2 floor; 'same'
+   keeps input size; correlation centre 339, convolution centre -339;
+   alpha-trimmed mean smoother than arithmetic mean for mixed noise;
+   fspecial('average') is 1/9 uniform; fspecial supports average,
+   disk, gaussian, laplacian, log, motion, prewitt, sobel, unsharp;
+   larger sigma = more blur; Laplacian second parameter alpha in
+   [0,1], default 0.2; minimum filtered value -0.6588; fspecial
+   Laplacian does NOT generate the simplified [0 -1 0; -1 4 -1; 0 -1 0]
+   mask (corners are used); high-boost stops resembling the image
+   around A = 2.7.
+ - Q14: min/max FT coefficients 2.6040 / 30513; abs needed for
+   magnitude; [] does the remap; log remap enhances low intensities;
+   3D distance plot max = sqrt((M/2)^2+(N/2)^2) = 181 for 256x256;
+   unshifted distance matrix is inverted (0 in the corner); radius
+   sets 1s inside; real() because we filter magnitude not phase;
+   smaller radius = more blur; ideal has sharp cutoff, Butterworth
+   smooth transition, higher order approaches ideal; Gaussian most
+   natural; high-pass with large cutoff -> nearly black; decreasing
+   sigma shrinks the filter profile; large order -> ideal shape.
+ - Q15: arithmetic mean blurs; larger kernel = more blur; wrong sign
+   on contraharmonic amplifies noise; harmonic fails on pepper because
+   1/0 = Inf -> result 0; geometric mean performs comparably to
+   arithmetic on Gaussian; median works on salt & pepper because it is
+   a rank filter rejecting extremes, and fails on Gaussian because
+   Gaussian has no extremes; min fails on pepper (min = 0 = pepper);
+   median via ordfilt2(I, 5, ones(3,3)); alpha-trimmed smoother than
+   arithmetic for mixed noise.
+ - Q16: 3x3 dilation thickens lines; 1x7 thickens vertical only; 7x1
+   thickens horizontal only; strel shapes list; erosion thins/removes
+   lines (1x7 removes horizontal); size controls amount, shape
+   controls orientation; opening removes small objects; opening =
+   erosion then dilation (differs from plain erosion); closing fills
+   holes/gaps without the size change of dilation; HoM shows top-right
+   pixels for the given SEs; alternative SEs for bottom-left corners
+   given explicitly; HoM cannot work with shared elements because
+   order is not specified; bwperim(...,8) equals boundary by
+   subtraction; 4-connectivity gives only horizontal/vertical links;
+   imfill(BW,locations) flood fill; imOut = bwselect(I); gray shades
+   = objects; label2rgb for colour; more iterations = thinner (thin)
+   or thicker (thicken); thicken stops at thickness 1; skeletonization
+   equals thinning with Inf iterations.
+ - Q17: t1 = sensitivity threshold; Prewitt handles noise reasonably;
+   MATLAB chose different thresholds for noisy image (0.0678/0.1310);
+   higher threshold keeps only strong edges; Sobel better than Prewitt
+   on clean images, similar on noisy; absolute value needed because
+   range is -1..1; Roberts poor on noise, thresholding does not fix
+   it; suggested fix = Gaussian or mean low-pass first; increasing
+   LoG sigma -> fewer edges; increasing Canny sigma -> not better;
+   increasing Canny threshold -> lower sensitivity; num2str for mask
+   titles; max(...,[],3) = maximum along the third dimension;
+   scaling needed because values fall outside 0..255; after mapping to
+   uint8 no further scaling needed; Kirsch robust to noise; Robinson
+   more sensitive than Kirsch.
+ - Q18: left histogram peak = background, right peak = coins;
+   im2bw converts to binary at a threshold; divide by 255 because the
+   level is in [0,1] relative to the class range; median filter
+   removes noise pixels; heuristic threshold (85) gave better
+   segmentation than Otsu for that image.
+ - Q19: N = number of objects (4, which makes sense); features table
+   with Area 1024/3209/797/1024, centroids, orientation 0, Euler 1,
+   eccentricity 0, aspect ratio 1, perimeters, thinness ratios
+   ~0.877 for squares and ~1.008/1.024 for circles, bounding boxes;
+   thinness ratio is the best discriminator; orientation, Euler,
+   eccentricity, aspect ratio are the worst (constant or uninformative);
+   thinness ratio is the ST-invariant one; use it if only one feature.
+
+================================================================
+7. THE SCRIPTS
+================================================================
+
+c_harmonic.m — contraharmonic mean: y = sum(x.^(r+1))/sum(x.^r).
+Used with nlfilter and an r parameter (negative for salt, positive for
+pepper). This is the "filter without a convolution mask" pattern.
+
+distmatrix.m — generates M-by-N matrix of distances to the centre.
+Wraps u and v so frequencies above M/2 and N/2 become negative
+(i.e. builds signed frequency coordinates), then meshgrid, then
+sqrt(U.^2 + V.^2). This is the backbone of every frequency-domain
+filter in the course: build dist, then write H as a function of dist.
+
+raise_to_power.m — minimal function example used to teach function
+structure (definition line, H1 line, help text, body).
+
+script3_3_1.m — script vs function, comment line, comment before code
+on the same line.
+
+script3_3_2.m — cell mode demo: %% cells, gamma, imadjust(I,
+stretchlim(I), [], gamma), four-panel original/adjusted image +
+histogram. Used to teach "increment and run" on the gamma value.
+
+fddemo.m — large GUI demo. Loads eight.tif by default (or a user
+image), converts colour to monochrome. Displays original image,
+original DFT (log(1+abs(fftshift))), filter profile, filtered image,
+filtered DFT. Six filters: ideal/gaussian/butterworth low and high
+pass. Ideal and Butterworth use a draggable magenta circle for cutoff;
+Gaussian uses a standard deviation text box; Butterworth also has an
+order text box; high-pass filters have a high-frequency emphasis
+checkbox (a=1, b=1). Default cutoffs 40, default std 30, default order
+2. The generate_filter subfunction is effectively the reference
+implementation of every frequency filter equation in the course. The
+Update subfunction does new_dft = dft .* filter; new_img =
+real(ifft2(new_dft)). This is the single most useful script to read
+before the exam.
+
+glsdemo.m — interactive gray-level slicing. Loads circuit.tif by
+default. Plot of transformation function 0..255 vs 0..255; click to
+add a point, drag to move, click on a point to delete. Points are
+linearly interpolated with interp1; result clamped to [0,255];
+new_img = uint8(yi(img+1)) — note the +1 index offset that appears as
+question 11.1. Has a "Continuous Update" checkbox.
+
+ihmdemo.m — interactive histogram matching. Loads pout.tif by default.
+You draw the desired histogram shape in normalized [0,1] space; the
+interpolation method is selectable (spline/linear/nearest); the update
+subfunction calls histeq(img, yi) and re-plots the matched histogram.
+The x-axis is 0..1 not 0..255, which is why the answers about
+"continuous update" and "interpolation method" were marked as
+work-in-progress.
+
+Reading the scripts together gives you the course's implementation
+idiom: build a matrix or a vector, apply it, display with imshow(...,
+[]) when values fall outside [0,255] or [0,1], and use fftshift when
+displaying anything centred.
+
+================================================================
+8. THE WEBPAGE
+================================================================
+
+The webpage (EVD2 ... IPF in MyX) is the logistics hub. Revision table
+shows updates on 27/08/2023, 02/09/2024, 25/8/2025, 6/10/2025,
+6/1/2026, 31/8/2026 — this is a course in active yearly maintenance,
+so check it for changes.
+
+What it provides:
+ - Microsoft Teams environment, joinable via team code without
+   permission.
+ - Latest Syllabus link.
+ - TIP: the Stemmer Imaging / European Imaging Academy checklist
+   (the vision application checklist file).
+ - Serial Vision Assistant, LabVIEW and Multisim pointers via HAN Insite.
+ - MATLAB 2025a or later with relevant toolboxes; or MATLAB Online
+   (Chrome recommended); create a MATLAB Drive and put the course
+   images there if using Online.
+ - MATLAB Style Guidelines 2.0 link.
+ - Seven self-paced online courses, in escalating order:
+     (1) MATLAB Onramp (2 h)
+     (2) Image Processing Onramp (2 h)
+     (3) Image Processing with MATLAB (MATLAB Academy)
+     (4) Computer Vision Onramp
+     (5) Deep Learning Onramp (including transfer learning for images)
+     (6) Explore Convolutional Neural Networks
+     (7) Tune Deep Learning Options
+   This is the only place deep learning genuinely appears in the module.
+ - Images_Syllabus_1.zip and Syllabus_scripts_1.zip.
+ - Lesson 1 through Lesson 14 presentation PDFs (matching the decks I
+   was given).
+ - MATLAB installation instructions for students.
+ - Sample exams: period 1 with and without answers (English), period 1
+   with and without answers (Dutch); period 2 with and without answers
+   (English) — note the webpage has the "with answers"/"without
+   answers" labels swapped for period 2, a typo; plus Dutch period 2
+   versions.
+ - Answers to Questions 2.1 through 19.end as individual PDFs.
+ - Twelve .m script files corresponding to chapters 9 through 20
+   (Question_CH9_Arithmic_and_Logic.m etc.), i.e. the lecturer's own
+   worked solutions. These are NOT in my upload except the five shared
+   helper/demo scripts, so there is a gap: the chapter solution
+   scripts exist on the webpage but I only have the answer text.
+
+Reading of the logistics: the course assumes you install MATLAB
+locally; MATLAB Online is acceptable except for the parts marked green
+in the syllabus (webcam support package, some toolbox features). There
+is a lot of self-study infrastructure, which fits the 48 h self-study
+load.
+
+================================================================
+9. THE VISION APPLICATION CHECKLIST
+================================================================
+
+Document: 2020-11-EIA-Checklist-vision-application-interactive-en 003,
+from Stemmer Imaging / European Imaging Academy. Version 1.0, 11/2020.
+
+This is a professional requirements-gathering instrument, not exam
+material. It is a TIP link on the webpage. It teaches you to think
+like a vision systems engineer before touching hardware.
+
+Its structure:
+ General/strategic: application description (inspection, positioning,
+   recording, measurement); current situation (not inspected, manual,
+   random checks, other camera system); desired situation; purpose,
+   impact, urgency; economic alternative; economic value for customer,
+   who else benefits/suffers; reusability of software knowledge;
+   steady vs changing requirements; whether it goes into a commercial
+   product (patent risk with free software vs commercial software).
+ Application: product description and pictures; variations (type,
+   colour, dimensions min/max, smallest detail, desired accuracy);
+   object separation (distance, overlap, sticking, continuous flow);
+   background (colour, structure, reflections, cleanliness, dirt/dust/
+   oil/damp); mounting freedom (free choice vs limited space); mounting
+   environment (outside/inside, dust, rain, direct sun, night, oil in
+   air, moving obstacles); available space (object to back of camera
+   including cables); good vs bad product definition.
+ Motion: moving or stationary; speed (fixed m/s, min-max m/s, pieces
+   per minute); man-made or natural product; recording needed;
+   number of simultaneous cameras; time synchronisation and tolerance;
+   triggering (free running, manual, trigger on defined pixel movement
+   area); smart features (people counting, face recognition);
+   compression (RAW, JPEG, H264, other); day vs night view.
+ Vision: field of view; working distance (object to lens); lens angle;
+   smallest detail to analyse; how many pixels the software needs for
+   that detail; resolution; contrast improvement options (colour/
+   bandpass filter, darkfield, dome, coaxial, light, wavelength
+   families X-ray/VIS/NIR/MWIR/SWIR/LWIR/UV); number of cameras;
+   camera interface with bandwidth and max cable length table (GigE
+   1 Gbps/100 m, USB3 5 Gbps/3-7 m, CameraLink Base 2/6.8 Gbps/6-10 m,
+   CXP-6 1x6.2 or 2x12.5/40 m, CXP-12 1x12.5 or 4x50/30 m,
+   10GigE 10 Gbps/100 m); machine interfacing after inspection
+   (digital I/O OK/NOT OK, classification, send dimension/position to
+   PLC, export data); human machine interface requirements.
+ Software approach: software libraries (most powerful/flexible, needs
+   Visual Studio knowledge), PC-based graphical MV software (ease of
+   use, no advanced software skills), grabber-based toolbox, 3D sensor,
+   smart camera.
+ Project: responsibility for turnkey project; communication
+   expectations; feasibility study needed; timing; deliverables;
+   documentation; pricing principle (calculate afterwards vs fixed);
+   future potential/repetition; number of applications; vertical
+   market; training demands; intellectual property ownership (system
+   integrator, final customer, licence structure); available resources
+   and funds; milestones and payments; payment conditions; what is NOT
+   included in delivery.
+ Assumptions; images; meetings and actions.
+
+Why it matters for me: the sample exam question 2 and 3 are pure
+illumination-classification questions, and question 1 is a lens/
+resolution calculation. The checklist is the "real world" version of
+exactly those skill areas: FOV, working distance, smallest detail,
+resolution, contrast, illumination geometry. If the exam asks a
+"which illumination for this situation" question, the checklist's
+vocabulary is the vocabulary to answer with.
+
+================================================================
+10. THE SAMPLE EXAM
+================================================================
+
+Document: SampleExam EVD2_2025_2026_blok_1_including_answers_eng.
+90 minutes. Open questions and multiple choice. Graphical calculator
+permitted. Written or digital (choice). Academy AEA, period P1.
+Revision note: 6/10/2025 revision table added; cover replaced;
+"Question 4, bitwise operations explicitly mentioned" — meaning they
+went out of their way to make the bitwise AND/OR/XOR requirement
+explicit, so expect it.
+
+Structure and content of the seven questions:
+
+Q1 (calculation). CCD chip 4 x 9 mm, 512 x 1024 elements, image
+distance 40 mm, focused on a flat area 70 cm away. Resolution in line
+pairs/mm?
+  Worked: 4/40 = h/700 -> h = 70 mm; 512 elements per line over 70 mm
+  = 7.3 elements/mm; divide by 2 for line pairs = 3.7 lp/mm.
+  Teaching point: this fuses the lens formula (h'/s' = h/s) with
+  sampling (elements per unit object length) and the line-pair
+  definition. This is the single most likely exam calculation type.
+
+Q2 (MCQ). Illumination technique most suitable for diffuse
+illumination of a relatively large area. Options: LED, fluorescence
+(fluorescent tube), xenon, bulb. Correct: fluorescence. Teaching
+point: fluorescent is the simplest and most common way to get diffuse
+illumination over large areas; LEDs are not yet as cost-effective for
+large areas.
+
+Q3 (MCQ). Identify the illumination type in a figure. Options:
+diffuse, direct, dome, telecentric. This tests recognition of
+illumination geometry from a drawing — exactly the lesson 2 /
+syllabus Q4-5 skill (the four-option A/B/C/D figure exercise).
+
+Q4 (calculation). Two 3x3 images given; compute X AND Y, X OR Y,
+X XOR Y using bitwise operations. The answer given shows all three
+results equal for the specific operands (because the bit patterns
+happen to give that), with the explanation that bitwise AND darkens
+(lower values have fewer 1 bits), OR brightens, XOR highlights
+differences. Teaching point: you must be able to do bitwise arithmetic
+on uint8 values by hand, and explain the practical interpretation.
+
+Q5 (conceptual + code reading). Sample MATLAB:
+  A = eye(80,80); A(26:2:54,:)=1; B = imcomplement(A);
+  C = imresize(B,0.5,'nearest','Antialiasing',false);
+Question: is the objective (nearest-neighbour downsampling to 40x40)
+attained? Answer: no — the sampling frequency is too low; it should be
+at least 2x the highest frequency to recover (Nyquist). The montage
+figure shows aliasing artefacts. Teaching point: connecting code to
+the aliasing/Nyquist theory from lesson 1 and syllabus Q3.
+
+Q6 (calculation). 4x4 image, V = {0,1}, compute shortest 4-, 8-, and
+m-paths between p and q; explain if a path does not exist. Answer:
+4-path does not exist; shortest 8-path length 4; shortest m-path
+length 5. Teaching point: pure lesson 1 pixel-relationship material,
+tested as a small hand computation. Note: this exact question also
+appears in the lesson 1 deck as a worked example, so it is a very
+likely repeat.
+
+Q7 (multi-part, the big one). Histograms and filtering.
+  a) Draw the histogram of the left and right figure (2x2
+     checkerboard vs 10x10 checkerboard), with axis values.
+  b) Give the 5x5 averaging/mean mask: all entries 1/25 = 0.0400.
+  c) Draw the histogram after filtering the LEFT image with the mean
+     mask, zero-padded edges; provide x and y values. The answer
+     works through the overlaps: first overlap 200*5 + 20*20 = 1400,
+     /25 = 56; second 2300/25 = 92; third 3200/25 = 128; fourth
+     4100/25 = 164; frequency = (350*4) - (2*4) = 1392 pixels.
+  d) Same for the RIGHT image: centres 78, 99, 106, 114, 121, 142
+     with frequencies 162, 324, 162, 162, 324, 162; frequency total
+     12600 - 648 = 11952 pixels. (The answer text has some internal
+     inconsistency in the exact overlap arithmetic, which is itself a
+     study warning: know the METHOD, not the exact number.)
+  Teaching point: this is the hardest question type — you must be able
+  to (i) construct a normalized averaging mask, (ii) reason about how
+  convolution with zero padding changes boundary pixel values,
+  (iii) count how many output pixels take each value, and (iv) draw
+  the resulting histogram. It combines lesson 4 (convolution), lesson
+  6 (histograms) and lesson 7 (mean filter).
+
+Overall exam reading:
+ - 90 minutes, 7 questions, mix of calculation, MCQ, code reading,
+   and one heavy histogram/convolution question.
+ - Heavily weighted to lessons 1, 2, 4, 6, 7. Notably light on
+   morphology, edge detection, segmentation, features, pattern
+   recognition in this particular sample — BUT the webpage lists
+   separate sample exams for period 1 and period 2, so this sample is
+   period 1 and likely covers the earlier material. Period 2 sample
+   exams (which I do not have the content of) probably cover lessons
+   8-14: frequency filtering, restoration, morphology, edges,
+   segmentation, features, pattern recognition.
+ - Therefore: do not infer from this one sample that morphology etc.
+   is unimportant. Infer that period 1 is early-material-heavy.
+
+================================================================
+11. ASSESSMENT LOGIC AND WHAT IS ACTUALLY EXAMINABLE
+================================================================
+
+From the schedule:
+ - 1st assignment / project presentation after lesson 7 (mid-course,
+   after the spatial-filtering block).
+ - 2nd assignment after lesson 14 (end of course, on pattern
+   recognition).
+ - Written/digital exam, 90 minutes, open + MCQ, calculator allowed.
+
+From the documents:
+ - The answer PDFs and the syllabus questions are the closest thing to
+   an item bank. Every syllabus question has a model answer. If a
+   concept appears in a question AND in a sample exam question, it is
+   near-certain exam material (e.g. the 4-/8-/m-path question appears
+   in both).
+ - The lecturer's own solution scripts (chapter 9-20 .m files, linked
+   on the webpage) are effectively worked answers in code; I do not
+   have them but I know they exist, which tells me the intended study
+   loop is: read theory -> answer syllabus question -> compare with
+   answer PDF -> run the .m script.
+ - The demos (fddemo, glsdemo, ihmdemo) are teaching tools and the
+   answers openly say some demo questions are "work in progress", so
+   demo specifics are unlikely to be examined; the underlying
+   equations (from generate_filter in fddemo) absolutely are.
+ - Deep learning: only via optional online courses; not in the
+   syllabus chapters, not in the sample exam, not in the outcomes.
+   Treat it as enrichment, not assessment.
+
+Skills the exam assumes you can do on paper, without MATLAB:
+ - Lens/focal length/magnification calculations (Q1 style).
+ - Resolution and line-pair conversion.
+ - Illumination classification from a diagram or description.
+ - Bitwise AND/OR/XOR on small integer matrices.
+ - Path/adjacency/connectivity reasoning on a small pixel grid.
+ - Convolution/correlation by hand on a 3x3 window.
+ - Constructing normalized masks (1/9, 1/16, 1/25).
+ - Predicting the effect of a filter on a histogram.
+ - Reading a small MATLAB snippet and spotting a conceptual error
+   (aliasing, uint8 truncation, wrong index offset).
+
+================================================================
+12. TOOLS AND TECHNICAL ENVIRONMENT
+================================================================
+
+MATLAB is mandatory. Required toolboxes:
+ - Image Processing Toolbox (the bulk of the course)
+ - Computer Vision System Toolbox (registration, imfindcircles,
+   matchFeatures-style functions)
+ - Statistics and Machine Learning Toolbox (fitcknn, harmmean,
+   geomean, trimmean)
+Optional: Vision HDL Toolbox (the FPGA demo), Deep Learning Toolbox
+(only via the online courses).
+
+MATLAB version 2025a or later, or MATLAB Online. If Online, keep the
+course images in a MATLAB Drive folder.
+
+Function inventory the course actually uses (this is worth memorising
+as a map of the toolbox):
+ Read/write/display: imread, imwrite, imshow, imshowpair, imtool,
+   image, imagesc, subimage, impixelinfo, impixel, improfile,
+   subplot, figure, montage.
+ Type/class: im2double, im2uint8, im2uint16, im2single, im2int16,
+   ind2gray, gray2ind, rgb2gray, rgb2ind, ind2rgb, im2bw, imbinarize,
+   uint8, double, logical.
+ Arithmetic/logic: imadd, imsubtract, imabsdiff, immultiply, imdivide,
+   imcomplement, imlincomb, bitand, bitor, bitxor, bitcmp, intlut.
+ Geometry: imresize, imrotate, imcrop, flipud, fliplr, imwarp,
+   affine2d, cpselect, cpcorr, cp2tform, fitgeotrans-era functions.
+ Point/histogram: imadjust, stretchlim, histeq, adapthisteq, imhist,
+   graythresh, glsdemo, ihmdemo.
+ Spatial filtering: imfilter, fspecial, filter2, nlfilter, ordfilt2,
+   medfilt2, colfilt, trimmean, harmmean, geomean.
+ Frequency: fft2, ifft2, fftshift, freqz2, meshgrid, fddemo.
+ Restoration: imnoise, deconvwnr, deconvreg, deconvlucy, deconvblind.
+ Morphology: strel, imdilate, imerode, imopen, imclose, bwhitmiss,
+   bwmorph, bwperim, imfill, bwlabel, bwselect, label2rgb, bwdist.
+ Edges/segments: edge (prewitt, sobel, roberts, log, canny, zerocross),
+   hough, houghpeaks, houghlines, imfindcircles, viscircles,
+   watershed, bwtraceboundary, bwboundaries, roipoly, blockproc.
+ Features/classification: regionprops, fitcknn, confusionmat,
+   gscatter, scatter, knn.predict.
+ Utility: size, numel, prod, sum, cumsum, diag, trace, max, min,
+   abs, real, meshgrid, interp1, linspace, colon, tic, toc, profile.
+
+The recurring MATLAB traps the course deliberately teaches:
+ 1-based vs 0-based indexing (I+1 for LUT/transformation functions).
+ uint8 saturation and truncation of negatives (Laplacian, subtraction).
+ Class mismatch in arithmetic (convert to double first).
+ imshow needs [] when data is outside [0,1] or [0,255].
+ fftshift before displaying any spectrum or distance matrix.
+ real() after ifft2.
+ Elementwise (.*, .^, ./) vs matrix (*, ^, /).
+ .^ vs ^ in vectorized loops.
+ Preallocation and vectorization for speed.
+ Semicolon suppresses output; %{ %} for block comments; %% for cells.
+
+================================================================
+13. HOW EVERYTHING FITS TOGETHER
+================================================================
+
+The module has four parallel layers that all describe the same thing:
+
+ LAYER A — Theory: the 14 lesson decks. Concept-driven, with
+   retrospect slides, "what will we learn" framing, and summary
+   slides. These are the lecture spine.
+
+ LAYER B — Practice: the Syllabus, 19 chapters of numbered questions
+   with MATLAB snippets. This is where you actually learn by doing.
+   Each chapter maps to a lesson.
+
+ LAYER C — Verification: the answer PDFs. Model answers, including
+   the concrete numbers and the "why". Plus the lecturer's solution
+   .m scripts (referenced on the webpage, not in my upload).
+
+ LAYER D — Assessment: the sample exam (period 1 shown), the two
+   assignments, and the exam format rules.
+
+The mapping is tight:
+  Lesson 1  <-> Syllabus ch 2, 3
+  Lesson 2  <-> Syllabus ch 4
+  Lesson 3  <-> Syllabus ch 5, 6, 7
+  Lesson 4  <-> Syllabus ch 8, 9
+  Lesson 5  <-> Syllabus ch 10
+  Lesson 6  <-> Syllabus ch 11, 12
+  Lesson 7  <-> Syllabus ch 13
+  Lesson 8  <-> Syllabus ch 14
+  Lesson 9  <-> Syllabus ch 15
+  Lesson 10 <-> Syllabus ch 16
+  Lesson 11 <-> Syllabus ch 17
+  Lesson 12 <-> Syllabus ch 18
+  Lesson 13 <-> Syllabus ch 19
+  Lesson 14 <-> Syllabus ch 20
+
+The logical flow of the content itself is a pipeline, and it is worth
+holding in mind because exam questions often ask "where in the
+pipeline does X sit":
+  Acquire (hardware, lens, illumination, sensor)
+  -> Digitize (sampling, quantization, aliasing)
+  -> Represent (data classes, colour spaces, pixel relationships)
+  -> Preprocess (arithmetic, logic, geometric, intensity, histogram)
+  -> Enhance/Filter (spatial convolution, frequency domain,
+     restoration)
+  -> Segment (thresholding, region growing, split-merge, watershed,
+     morphology, edge detection)
+  -> Label (connected components)
+  -> Extract features (regionprops, boundary descriptors, texture)
+  -> Classify (minimum distance, kNN, perceptron)
+  -> Evaluate (confusion matrix, accuracy, sensitivity, precision,
+     recall, F1, ROC)
+This is literally the "machine vision basic steps" slide from lesson
+1, expanded.
+
+================================================================
+14. MY READING OF THE MODULE'S CHARACTER AND WHAT MATTERS
+================================================================
+
+1. It is a CLASSICAL image processing course, not a deep learning
+   course. The minor's title oversells the ML/DL content. The
+   examinable ML is kNN plus a toy perceptron. If I want the DL part
+   of the minor, it comes from the optional MATLAB Academy courses,
+   not from this module's assessment.
+
+2. It is heavily MATLAB-practical. Almost every concept arrives with
+   a function and a snippet. The exam, however, tests understanding
+   WITHOUT the IDE: hand calculations, hand convolution, hand
+   bitwise ops, hand path finding, code reading. So I need to be able
+   to do by hand what MATLAB does for me.
+
+3. The lecturer reuses a small, fixed image set. Learning what
+   coins.png, eight.tif, cameraman.tif, moon.tif, blobs.png, pout.tif,
+   mandrill.tif and the apples/bananas set look like and behave like
+   makes the answer PDFs far easier to follow, because the answers
+   constantly refer to "the peak on the left", "the brightened image",
+   "the coin edges" etc.
+
+4. The answer PDFs are the highest-value study artifact after the
+   decks. They contain the exact phrasing, the exact numbers, and
+   the exact reasoning the lecturer expects. Where a deck is vague,
+   the answer PDF pins it down.
+
+5. The frequency-domain material (lesson 8, ch 14) and fddemo.m are
+   the best-worked example of "theory -> code" in the whole module:
+   distmatrix builds the distance matrix, generate_filter writes each
+   H, Update does multiply-inverse-transform. If I understand that
+   one script, I understand every filter equation in the course.
+
+6. The histogram/convolution question (sample exam Q7) is the highest
+   difficulty-per-mark item I have seen. It requires combining
+   masking, zero-padded convolution, value counting and histogram
+   construction. This is where I should invest the most practice.
+
+7. The hardware/illumination material (lesson 2, ch 4) looks soft but
+   is directly examined (sample exam Q2, Q3) as MCQ and classification
+   from diagrams. The four-cornerstone framework (geometry, pattern,
+   wavelength, filters) and the four techniques (back, diffuse,
+   partial bright field/directional, dark field) are the answer
+   vocabulary. The checklist reinforces exactly this.
+
+8. The lens calculation (sample exam Q1) is a reliable mark: learn
+   magnification = sensor size / FOV, focal length = m*WD/(1+m), and
+   h'/s' = h/s, plus the line-pairs conversion (elements/mm divided
+   by 2). Also learn the "sensor size nomenclature is legacy, no
+   direct relation to dimensions" fact, since it explains why a 2/3"
+   sensor is 8.8 x 6.6 mm and a 1/3" sensor is 4.8 x 3.6 mm.
+
+9. There is a period 1 / period 2 split in the sample exams on the
+   webpage. The one I have is period 1 and it is early-material
+   heavy (lessons 1-7). I should expect a period 2 sample to be
+   heavy on lessons 8-14: frequency filtering, restoration,
+   morphology, edge detection, segmentation, feature extraction,
+   pattern recognition. Do not under-study those because the period 1
+   sample ignores them.
+
+10. The assignments (after lesson 7 and after lesson 14) are project/
+    presentation based. The webpage's "Training Image Labeler",
+    "Image Region Analyzer", "Image Segmenter", "Color Thresholder"
+    apps and the apple/banana classification pipeline in ch 20 are
+    almost certainly the template for those assignments. The ch 20
+    pipeline (read images -> grayscale -> average filter -> threshold
+    -> complement -> fill holes -> bwlabel -> regionprops -> thinness
+    ratio + eccentricity -> fitcknn -> confusionmat) is the module's
+    end-to-end demonstration and probably the assignment's shape.
+
+11. Deep learning hooks exist in the webpage but nothing in the exam
+    or syllabus. If the minor requires DL output, it will come from
+    the online courses or a separate module, not from IPF's written
+    exam.
+
+12. The module rewards precision and punishes hand-waving. The answer
+    PDFs are blunt and numeric: "1/9", "0.4941", "-0.6588", "2.7",
+    "1392 pixels", "3.7 line pairs/mm". The exam will likely want
+    the same bluntness.
+
+================================================================
+END OF WRITEUP
+================================================================

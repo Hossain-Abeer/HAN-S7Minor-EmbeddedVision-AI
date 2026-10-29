@@ -1,0 +1,43 @@
+DEPTH CONTRACT — apply to every note you write
+==============================================
+
+STRUCTURE (non-negotiable, in this order, every checkpoint)
+  1. Essence — 1–3 lines
+  2. Content & Explanation — subdivided per concept
+  3. Related Supporting Concepts — "depends on" / "feeds into", with the
+     specific later-lesson dependency named
+  4. Summary — 6–8 compressed exam-ready bullets
+  5. Formula / Definition Box — every formula/definition, copy-verbatim-able
+  6. Hand-Calc Worked Examples — 3–4, arithmetic shown line by line
+  7. Sample-Exam Tag — which Q, and whether calc / explain / identify
+  8. Assessment — 5–7 quiz Qs + one to-do + figures to look up by name
+
+DEPTH RUBRIC (per concept — hit ALL that apply)
+  - Formal definition + informal one-liner ("translation:")
+  - Coordinates / ranges / units explicitly written out
+  - Multiple metrics or equivalent forms (e.g. N4 = Euclidean 1, city-block 1)
+  - Mechanism ("WHY"), not just result — the fold-back formula, the
+    empty-intersection reason, the anti-alias pre-filter rationale
+  - Named terminology (Moore, Chebyshev, city-block, Nyquist frequency)
+  - Numeric anchor: at least one concrete number per concept
+  - Where the concept fails / where it is chosen over an alternative
+    (e.g. nearest vs bilinear, 4- vs 8-adjacency trade-off)
+
+FORMATTING
+  - Plain .txt, ASCII, 80-col, `--------------------------------------------------------------------------------`
+    separators between subsections.
+  - Inline math in plain ASCII (sqrt(x), f_s, 2^b). No LaTeX.
+  - Tables where the data is tabular (comparisons, metrics, bit depths).
+
+WHAT TO OMIT (per prior decision)
+  - No "common traps" sections.
+  - No "you might think X but actually Y" framing.
+  - No hedging language ("roughly", "typically") unless the source says so.
+
+IF SOURCE IS THIN
+  - Expand from the standard textbook of the topic (Gonzalez & Woods for
+    image processing; Bishop for ML). Flag the expansion source in a
+    one-line footnote under the concept, not inline.
+
+IF SOURCE AND EXPANSION CONFLICT
+  - Follow the source. Add expansion only as a clearly marked addendum.
