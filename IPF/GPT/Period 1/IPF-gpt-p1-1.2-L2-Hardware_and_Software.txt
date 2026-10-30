@@ -1300,3 +1300,202 @@ rev.1  First L2 writeup. Covers every slide of
 ================================================================================
 END CHECKPOINT 1.2 — rev.1, page-complete
 ================================================================================
+
+
+
+
+
+================================================================================
+L2 §4.3 ADDENDUM — SENSOR-SIZE CONVENTION AND THE Q4-2 / Q4-3 DIMENSION CHOICE
+================================================================================
+Applies to: §2.3b of Checkpoint 1.2 (Lens selection), Q4-2, Q4-3.
+Read after: §2.1b (image sensor categories) and §2.3b (lens selection).
+================================================================================
+
+PART 1 — HOW "1/3 INCH" MAPS TO 4.8 × 3.6 mm
+--------------------------------------------------------------------------------
+The nominal "1/3 inch" does NOT describe any linear dimension of the active
+sensor area. It is a legacy label inherited from Vidicon vacuum-tube camera
+tubes: the number was the OUTER DIAMETER of the glass envelope, not the
+photoconductive target inside it. Solid-state sensors kept the same labels
+so that existing lens mounts and optical calculations remained compatible.
+
+The rule that connects label → active area:
+
+    active diagonal  ≈  (2/3) · nominal_tube_diameter
+    active area preserves the legacy 4:3 aspect ratio (horizontal : vertical)
+
+Worked for 1/3":
+    nominal tube diameter  =  25.4 mm / 3   =  8.467 mm
+    active diagonal        ≈  (2/3) · 8.467  =  5.645 mm   (approx)
+    actual standard value  =  6 mm  diagonal
+    with 4:3 ratio:     h² + v² = 6²      h/v = 4/3
+                        (4k)² + (3k)² = 36     k² = 36/25     k = 1.2
+                        h = 4·1.2 = 4.8 mm    v = 3·1.2 = 3.6 mm
+    → active area   =  4.8 × 3.6 mm
+
+Worked for 2/3":
+    nominal tube diameter  =  25.4 · 2/3    =  16.933 mm
+    actual standard value  =  11 mm  diagonal
+    with 4:3 ratio:     k = 11/5 = 2.2
+                        h = 8.8 mm          v = 6.6 mm
+    → active area   =  8.8 × 6.6 mm
+
+Standard table (industry convention — commit to memory):
+
+    Nominal format   Active W × H (mm)   Diagonal (mm)
+    ---------------  -----------------   -------------
+    1 inch           12.8 × 9.6          16.0
+    2/3 inch          8.8 × 6.6          11.0
+    1/2 inch          6.4 × 4.8           8.0
+    1/3 inch          4.8 × 3.6           6.0
+    1/4 inch          3.2 × 2.4           4.0
+
+Rule of thumb for the exam: active diagonal ≈ 0.65–0.7 × nominal tube
+diameter; horizontal = 4/5 of diagonal; vertical = 3/5 of diagonal.
+Or simply: 1/3" → 4.8 × 3.6 mm; 2/3" → 8.8 × 6.6 mm. Use the table.
+
+--------------------------------------------------------------------------------
+PART 2 — WHY Q4-2 USED THE VERTICAL (6.6 mm) AND Q4-3 THE HORIZONTAL (4.8 mm)
+--------------------------------------------------------------------------------
+This is a question of WHICH SENSOR DIMENSION to match against the stated FOV.
+There is one governing convention and one governing ambiguity.
+
+The convention (used in Syllabus §4.2 example and Q4-3):
+
+    "FOV" defaults to the SMALLER of the two sensor dimensions divided by
+    magnification, because that is the tighter of the two angular constraints.
+    When the question explicitly says "(Horizontal)", match the horizontal
+    sensor dimension instead.
+
+    FOV_usable  =  min(sensor_h, sensor_v) / M
+    FOV_h       =  sensor_h / M
+    FOV_v       =  sensor_v / M
+    Constraint to fit an object of extent d in the tighter direction:
+        min(sensor_h, sensor_v) / M  ≥  d     →    M  ≤  min(dim) / d
+
+The ambiguity in the answer PDF:
+
+    Q4-2 wording  "image 5 cm wide object, sensor 8.8 × 6.6 mm, WD 0.5 m"
+    Q4-3 wording  "FOV of 50 mm (Horizontal), sensor 1/3", WD 200 mm"
+
+    Q4-2 ("5 cm wide") is read conservatively by the answer PDF: it treats
+    50 mm as the tightest dimension that must fit, so the smaller sensor
+    dimension (6.6 mm) is matched. Result:
+        M = 6.6 / 50 = 0.132
+        f = (0.132 · 500) / (1 + 0.132) = 58.30 mm
+        → 50 mm or 75 mm from the standard series.
+
+    Q4-3 ("FOV of 50 mm (Horizontal)") is read literally: the horizontal
+    sensor dimension (4.8 mm) is matched against the horizontal FOV. Result:
+        M = 4.8 / 50 = 0.096
+        f = (0.096 · 200) / (1 + 0.096) = 17.52 mm
+        → 18 mm from the standard series.
+
+What if Q4-2 had used the horizontal dimension (8.8 mm)?
+    M = 8.8 / 50 = 0.176
+    f = (0.176 · 500) / (1 + 0.176) = 88 / 1.176 = 74.83 mm
+    → essentially the 75 mm standard lens.
+
+Which is "correct"? Depends on interpretation:
+
+    (a) Conservative interpretation (answer PDF's choice for Q4-2).
+        "5 cm wide object" without a stated axis → assume the object might
+        extend 50 mm in either direction, so the smaller sensor dimension
+        must accommodate 50 mm. This guarantees the object fits regardless
+        of orientation. 6.6 mm is matched.
+
+    (b) Literal interpretation ("wide" = horizontal).
+        "Wide" means horizontal extent = 50 mm. Match the horizontal sensor
+        dimension (8.8 mm). If the object were square 50 × 50 mm, the
+        vertical FOV would be 37.5 mm — too small; the object would be
+        cropped vertically. So this only works if the object is genuinely
+        wider than tall.
+
+    (c) Syllabus §4.2 example convention.
+        The Adimec Opal-2000 example (§4.2) with 2/3" sensor, 50 mm
+        FOV, WD 200 mm, produces M = 0.176 and f = 29.93 mm — using the
+        horizontal 8.8 mm because the FOV is explicitly horizontal.
+
+Reconciling all three:
+    Q4-3 (explicit "Horizontal")   → horizontal 4.8 mm.
+    Syllabus §4.2 example (explicit "Horizontal") → horizontal 8.8 mm.
+    Q4-2 (no axis stated)          → conservative 6.6 mm.
+    The rule is not "always horizontal" or "always vertical" — it is "match
+    the dimension that corresponds to how the FOV is stated; if the FOV is
+    not axis-stated, default to the smaller sensor dimension."
+
+Exam strategy if you meet this wording again:
+
+    Step 1  Identify the stated FOV direction.
+            - "horizontal FOV"          → use sensor_h
+            - "vertical FOV"            → use sensor_v
+            - "FOV" (no axis)           → use min(sensor_h, sensor_v)
+            - "wide object"             → read as horizontal (justifies
+                                          sensor_h), UNLESS the object is
+                                          known to be square/unknown, in
+                                          which case use min(sensor_h,
+                                          sensor_v) conservatively
+
+    Step 2  M = sensor_dim_used / FOV_stated
+
+    Step 3  f = (M · WD) / (1 + M)
+
+    Step 4  Round to the nearest standard focal length from
+            {3.5, 4.5, 5, 6, 8, 12, 16, 17, 25, 28, 35, 50, 75, 100} mm
+
+    If you have time on an exam, write both M values and both f values, and
+    state which one you commit to and why. The answer key for Q4-2 has
+    chosen (a); if you write (b) with the reasoning "wide = horizontal",
+    you are correct in principle even if the key shows the other number.
+
+--------------------------------------------------------------------------------
+PART 3 — WHY THE CHOICE MATTERS NUMERICALLY
+--------------------------------------------------------------------------------
+Same Q4-2 setup, three possible readings of "5 cm wide object":
+
+    Reading                         Dim used   M       f (mm)   Nearest
+    ------------------------------  ---------  ------  -------  ---------
+    Conservative (smaller dim)       6.6 mm    0.132   58.30    50 or 75
+    Literal horizontal               8.8 mm    0.176   74.83    75
+    Diagonal                        ~11.0 mm    0.220   ~90.2    100
+                                              (illegal — must use h or v)
+
+  The 16.5 mm gap between 58.30 and 74.83 is the difference between picking
+  a 50 mm lens (wider FOV, less resolution per feature) and a 75 mm lens
+  (narrower FOV, more resolution per feature). For a "50 cm working distance
+  imaging a 5 cm object," a 75 mm lens with 74.83 mm computed f is an almost
+  exact fit — which is why the syllabus example (with the same 2/3" sensor
+  but a 200 mm WD) lands cleanly on 29.93 mm and picks the 25 mm or 35 mm
+  standard options. Q4-2's 58.30 mm answer is the only one that lands
+  awkwardly between two standards, precisely because the conservative choice
+  shifts f downward.
+
+--------------------------------------------------------------------------------
+PART 4 — GENERAL FORMULA ADDENDUM FOR Q4-2 AND Q4-3
+--------------------------------------------------------------------------------
+Add these to the General Formula lines in Checkpoint 1.2 §8:
+
+    Sensor active area from nominal format F (e.g. 1/3"):
+        diagonal ≈ 0.65 · (25.4 / (1/F))       [F = 3 for "1/3"]
+        or take from the standard table directly:
+            1/3"   → 4.8 × 3.6 mm
+            2/3"   → 8.8 × 6.6 mm
+            1/2"   → 6.4 × 4.8 mm
+        with 4:3 aspect ratio always preserved:
+            h  =  4/5 · diagonal
+            v  =  3/5 · diagonal
+
+    FOV / sensor matching:
+        FOV direction stated in the question
+            = horizontal  →  use  sensor_h
+            = vertical    →  use  sensor_v
+            = no axis     →  use  min(sensor_h, sensor_v)   [conservative]
+        M  =  sensor_dim_used / FOV_stated
+        f  =  (M · WD) / (1 + M)
+        round to nearest of {3.5, 4.5, 5, 6, 8, 12, 16, 17, 25, 28, 35,
+                             50, 75, 100} mm
+
+================================================================================
+END ADDENDUM
+================================================================================
