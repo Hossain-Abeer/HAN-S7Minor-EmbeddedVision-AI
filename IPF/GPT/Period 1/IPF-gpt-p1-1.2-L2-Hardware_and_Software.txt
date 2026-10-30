@@ -1,0 +1,1302 @@
+================================================================================
+CHECKPOINT 1.2 — L2: HARDWARE AND SOFTWARE   (rev.1, page-complete)
+================================================================================
+Files: result-EVD2_–_Lesson_2_2526.txt
+       EVD2_Syllabus_2026_2027_v20260826.txt  §4
+       (optionally result-EVD2__Lesson_2_2223.txt — the older deck; same
+        content, so this writeup uses the 25/26 file as the primary source
+        and cross-references it where the older file has extra detail)
+Sample-exam match: Q1 (CCD resolution via lens formula). Q2 (diffuse lighting
+MCQ). Q3 (illumination-type identification).
+Progress tick: [ ] 1.2
+
+REVISION NOTE — rev.1
+  First writeup for L2. Every block below carries an inline pointer of the
+  form:
+     [L2 slide NN: <short caption>]
+  so you can verify each against the source .txt. Missing-page risk in L2
+  is lower than L1 (many slides are images only); where the source is an
+  image-only slide, this writeup names the figure by its caption so you can
+  look it up. Additions from the syllabus (§4) or from the older L2 deck
+  (22/23) are flagged [SYLLABUS] or [22/23 deck].
+================================================================================
+
+1. ESSENCE
+--------------------------------------------------------------------------------
+L2 answers the question "what physical chain turns a scene into pixel values,
+and what knobs does each link expose?" Five links: illumination, optical
+system (lens + filters), camera (sensor + shutter + ADC + interface), frame
+grabber / communication bus, and computer + software. Every image-processing
+algorithm in L3–L14 silently assumes this chain has already delivered a
+sampled, quantized, correctly focused, evenly illuminated image. L2 tells you
+how each of those assumptions can fail — and what numeric parameters
+(pixel pitch, fill factor, dynamic range, focal length, working distance,
+FOV, MTF/Nyquist) quantify the failure.
+================================================================================
+
+2. CONTENT & EXPLANATION  (depth pass, page-complete)
+--------------------------------------------------------------------------------
+
+2.0  COURSE-LEVEL SCOPE OF L2
+--------------------------------------------------------------------------------
+[L2 slide 2: "What will we learn?"]
+  Basic terminology
+  Hardware:
+    - main parts of a machine vision system
+    - available sensor types
+    - how a lens system works
+    - role of filtering
+    - illumination types
+  Software:
+    - what types are available
+
+Interpretation: L2 is a taxonomy + parameter lecture. There is no single
+grand theory here; the exam tests whether you can (a) name the parts, (b)
+name the trade-off each part embodies, (c) plug numbers into the lens
+formula and the resolution formula.
+
+--------------------------------------------------------------------------------
+
+2.1  BASIC TERMINOLOGY — the five-link chain and its four defining distances
+--------------------------------------------------------------------------------
+[L2 slide 3: "Hardware" block diagram]
+  Illumination  →  Optical system (lens)  →  Camera  →  Sensor  →
+  Computer
+  These are the five physical subsystems. Sensor is drawn outside the
+  camera box in the slide because it lives inside the camera but is the
+  element that decides most of the performance.
+
+[L2 slide 4: "Hardware" — four distances]
+  Four geometric parameters define every machine-vision setup:
+
+    Depth of field (focus range)
+        Distance between the NEAREST and FARTHEST object planes that
+        appear acceptably sharp. Also called focus range.
+
+    Working distance (WD)
+        Distance from the FRONT of the LENS to the object under inspection.
+        Some lenses (objectives) have a FIXED working distance; most
+        machine-vision lenses give a working-distance RANGE.
+
+    Resolution
+        The MINIMUM FEATURE SIZE of the object that the system can resolve.
+        Drives camera + lens selection because it constrains accuracy and
+        repeatability of every downstream measurement.
+        Units: mm, µm — or (equivalently) line-pairs / mm of the *image*.
+
+    Field of view (FOV)
+        The VIEWABLE AREA of the object. Portion of the object that fills
+        the camera sensor.
+
+  Figure to look up: [L2 slide 4 / syllabus Figure 4]
+    "Overview of most relevant distances in a camera setup"
+    (source: http://machine-vision-mag.com/industry/machine-vision-
+     fundamentals/). This diagram is the canonical picture of DoF, WD,
+    resolution, and FOV in one figure.
+
+--------------------------------------------------------------------------------
+
+2.2  WHAT IS INSIDE A CAMERA
+--------------------------------------------------------------------------------
+[L2 slide 5: "What is inside a camera" block diagram]
+  Subsystems inside the camera:
+    • Lens
+    • Image sensor
+    • Sensor driver hardware interface
+    • Communication interface
+    • External interface
+
+  Communication-interface options shown on the slide:
+    Analog, USB, Ethernet, Camera Link, FireWire
+
+  Why this matters: the interface limits both the CABLE LENGTH and the
+  BANDWIDTH (see §2.16). A high-speed sensor is useless if the link cannot
+  carry its frames.
+
+--------------------------------------------------------------------------------
+
+2.3  IMAGE SENSORS — CCD
+--------------------------------------------------------------------------------
+[L2 slides 6–7: "Image sensors"]
+  Two dominant sensor families:
+    CCD  = Charge-Coupled Device
+    CMOS = Complementary Metal-Oxide Semiconductor
+  Plus special-purpose sensing:
+    Infrared, X-ray, Radar, MRI (Magnetic Resonance Imaging), Stereo vision
+
+[L2 slide 8: "Spectral sensitivity"]
+  The slide superimposes three curves:
+    --- Human eye
+    - - CMOS
+    - - - - CCD
+  Purpose: show that all three respond to visible light but with different
+  roll-offs into IR and UV. That is why "which sensor for which band"
+  (§2.5) is a real design question, not a preference.
+
+[L2 slide 9: "Image sensors — CCD" (structure)]
+  Longitudinal cross-section of a single CCD cell:
+    Metal gate
+    Insulator (silicon oxide)
+    Φ1  Φ2  Φ3   (three clock phases above the silicon)
+    P+ silicon
+    A depleted photo-sensitive area with free charges under the gate
+    (charge accumulates here in response to incoming photons)
+
+  Mechanism (WHY): CCD stores photocharge under a gate, then SHIFTS it
+  along the row by pulsing Φ1, Φ2, Φ3 in a bucket-brigade pattern until it
+  reaches the output amplifier. That is the "charge-coupled" in the name.
+
+[L2 slide 10: "Full frame CCD"]
+  - Pixels are exposed DURING readout → smearing.
+  - A mechanical shutter or a strobe light can solve smearing.
+  - Close to 100% fill factor → high SNR.
+
+  "Full frame" means the sensor has no shielded storage area; the entire
+  array is photosensitive. That is why smearing occurs: while charge is
+  being shifted out, photons are still landing on the very cells being
+  read.
+
+[L2 slide 11: "CCD — limited charge"]
+  - Elements have a limited charge capacity.
+  - If exposed too long, charge overflows to neighbouring pixels → BLOOMING.
+
+  Blooming is the CCD-specific failure that CMOS largely avoids because
+  each CMOS pixel has its own amplifier and reset before overflow.
+
+[L2 slide 12: "Frame transfer CCD"]
+  - Reduces smearing by a very quick (<500 µs) transfer of collected
+    charges into a SHIELDED area.
+  - Close to 100% fill factor.
+  - High cost, because the shielded area is large silicon real estate.
+
+  Trade-off (memorise): full-frame is cheap but smears; frame-transfer is
+  smear-free but roughly doubles sensor area and price. Interline transfer
+  (not on the slide but standard) sacrifices fill factor to put a shielded
+  column next to every photosensitive column — the opposite trade.
+
+[L2 slide 13: "CCD — blooming diagram"]
+  Image-only slide. Caption: charge spills from a saturated well into
+  neighbours. Look up by the caption "Image sensors — CCD" on slide 13.
+
+--------------------------------------------------------------------------------
+
+2.4  IMAGE SENSORS — CMOS
+--------------------------------------------------------------------------------
+[L2 slide 14: "Image sensors — CMOS" (architecture)]
+  Vertical column- and row-addressing similar to RAM.
+    Sequencer → Row addressing → Vertical column bus →
+    Column amplifier → Analog multiplexer → ADC → Horizontal addressing
+
+  Consequences shown on the same slide:
+    • Low fill factor → low SNR (architectural overhead: transistors
+      occupy silicon that would otherwise be photosensitive).
+    • Readout logic can be implemented ON THE SAME CHIP (this is why CMOS
+      is cheap and easy to integrate).
+    • Random access of pixels enables:
+        - region of interest (ROI) readout — window the sensor;
+        - balancing temporal vs spatial resolution (more fps at fewer rows).
+
+  Mechanism (WHY): each CMOS pixel contains its own photodiode PLUS a
+  source-follower amplifier AND a reset transistor. That is several
+  transistors per pixel, taking up area. In return, the signal is converted
+  to a voltage immediately (and often to bits right there), and every pixel
+  can be addressed independently.
+
+--------------------------------------------------------------------------------
+
+2.5  OTHER SENSOR TYPES (beyond visible CCD/CMOS)
+--------------------------------------------------------------------------------
+[L2 slide 7: "Sensor" list]
+  • CCD
+  • CMOS
+  • Infrared  (IR — thermal or NIR)
+  • X-ray
+  • Radar
+  • MRI
+  • Stereo vision (a 2-camera configuration, not a single sensor)
+
+  Note: "Stereo vision" is in the sensor list because, from the system's
+  point of view, it is a sensing modality (§2.14 covers how it produces
+  depth).
+
+--------------------------------------------------------------------------------
+
+2.6  BAYER FILTER (single-chip colour)
+--------------------------------------------------------------------------------
+[L2 slide 7: "Bayer filter" — 4-step diagram]
+  Four-stage picture:
+    1. Original scene (colour)
+    2. Output sensor with Bayer filter — each pixel sees only R, G, or B
+    3. Output colour-coded with Bayer filter colours — 2×2 repeating R/G/G/B
+    4. Reconstructed image after interpolating — the missing two channels
+       of each pixel are synthesised from neighbours
+
+  Mechanism (WHY): a monochrome silicon sensor cannot detect colour. The
+  Bayer filter puts a coloured microlens above every pixel so each pixel
+  sees one channel. Demosaicing then interpolates the two missing channels
+  per pixel. Two thirds of the raw data is an interpolation — that is why
+  single-chip colour cameras have lower effective spatial resolution than
+  the pixel count suggests.
+
+  Anti-aliasing consequence (links to L1 §2.4): the Bayer colour grid is a
+  spatial sampler at 2×2 pixel period; fine high-frequency scene patterns
+  can produce COLOUR MOIRÉ (false colour) even if the intensity Nyquist
+  limit is met.
+
+--------------------------------------------------------------------------------
+
+2.7  SHUTTERS — global vs rolling
+--------------------------------------------------------------------------------
+[L2 slides 15–16: "Image sensors — Shutters"]
+  Purpose: control the START and STOP of exposure.
+  Types: mechanical OR electronic.
+  Electronic control uses two signals: SAMPLE and RESET.
+
+  GLOBAL SHUTTER
+    - Sample and reset applied to ALL pixels at the SAME time.
+    - The frame represents one instant in time.
+    - NO motion artefacts from moving subjects.
+
+  ROLLING SHUTTER
+    - Sequential control of exposure with interleaved readout (row by row).
+    - Advantage: the sensor continues to gather photons while rows are
+      being read out → effectively higher sensitivity.
+    - Found on most CMOS cameras.
+    - Disadvantage: motion artefacts — a fast-moving object appears
+      sheared / bent / tilted because different rows were exposed at
+      different times.
+
+  CCD cameras typically use GLOBAL shutters (they take a snapshot of a
+  single instant in time) and therefore do not suffer rolling-shutter
+  artefacts.
+
+  Numeric anchor: full-frame video frame time = 1/30 s. A car crossing the
+  frame at 30 m/s during that frame advances ~1 m; under a rolling shutter
+  the top row and bottom row record positions ~1 m apart → visible skew.
+
+--------------------------------------------------------------------------------
+
+2.8  IMAGE SENSOR NOISE
+--------------------------------------------------------------------------------
+[L2 slides 17–18: "Noise" — three-level taxonomy]
+  Two families, each with sub-causes:
+
+  TEMPORAL NOISE  (varies frame to frame)
+    Photon noise
+      Shot noise — Poisson statistical noise in photon arrival.
+      Background noise — photons not from the object.
+    Thermal noise
+      Dark current and amplifier noise.
+    Mitigation: averaging over time reduces temporal noise by 1/sqrt(N)
+    for N frames.
+
+  SPATIAL NOISE  (fixed pattern across the frame)
+    Sensitivity variations
+      Each pixel's gain differs slightly (photoresponsive nonuniformity).
+    Dark signal variations
+      Each pixel's dark current differs; typically grows with temperature.
+    Related to the MANUFACTURING process — called pattern noise.
+
+  Practical meaning:
+    Temporal noise → treated by mean filters or frame averaging (L9).
+    Spatial (pattern) noise → cannot be removed by averaging; needs flat-
+    field correction (divide by a uniform-field reference — L4).
+
+--------------------------------------------------------------------------------
+
+2.9  CCD vs CMOS PERFORMANCE
+--------------------------------------------------------------------------------
+[L2 slide 19: "Image sensors — Performance CCD vs CMOS" (SNR graph)]
+  Signal-to-Noise Ratio (SNR) plotted vs input light level.
+  Two curves: --- CCD, --- CMOS.
+  Crossover at very low light (~4 photons / pixel).
+  Caption (verbatim): "CCD is best choice for extremely low light
+  application (< 4 photons/pixel)".
+  Source: Bradly S. Carlson, "Evaluating image sensor sensitivity by
+  measuring camera signal-to-noise ratio".
+
+  Interpretation: at any useful illumination level, CMOS is competitive
+  or better. Only at the extreme photon-starved corner does CCD win. That
+  is why CCD survives only in astronomy, some scientific imaging, and
+  legacy industrial lines, while consumer and most machine vision has moved
+  to CMOS.
+
+--------------------------------------------------------------------------------
+
+2.10  FILL FACTOR AND MICROLENSES
+--------------------------------------------------------------------------------
+[L2 slide 20: "Fill factor" — microlenses]
+  Definition
+    Fill factor = (photosensitive area) / (total pixel area).
+    Range: 0–1, commonly 30–70% for frontside-illuminated CMOS,
+    approaching 100% for full-frame CCD or backside-illuminated CMOS.
+
+  Microlenses
+    - Small lenses above each pixel that focus incident light onto the
+      photosensitive region (which is smaller than the whole pixel).
+    - Increase effective fill factor without enlarging the photodiode.
+    - Used with interline-transfer CCDs and CMOS sensors.
+
+  Why it matters: low fill factor = low SNR (less light per pixel). The
+  L2 text on CMOS (§2.4) explicitly says "low fill factor → low SNR".
+
+  Numeric anchor: a CMOS pixel with 30% fill factor and pixel pitch 3 µm
+  has photodiode area ~2.7 µm². A CCD pixel at 95% fill factor and pitch
+  3 µm has photodiode area ~8.6 µm² — about 3× more light captured per
+  pixel per exposure.
+
+--------------------------------------------------------------------------------
+
+2.11  READ-OUT MODES
+--------------------------------------------------------------------------------
+[L2 slide 21: "Read out modes" + interlaced/progressive diagram]
+  Two ways to scan a sensor into frames:
+
+  INTERLACED
+    - A frame is read out as TWO fields: odd rows (odd field) then even
+      rows (even field).
+    - Field frequency = 2× frame frequency → less perceived flicker.
+    - Odd and even fields are exposed at slightly different times →
+      motion artefacts for moving objects.
+
+  PROGRESSIVE
+    - All rows scanned sequentially.
+    - One exposure per frame; single-instant snapshot.
+    - Preferred for machine vision and any motion-critical application.
+
+  Figure to look up: [L2 slide 21] "Interlaced / Progressive" pair of
+  diagrams showing the scan path in each mode.
+
+--------------------------------------------------------------------------------
+
+2.12  ACQUISITION MODES  (driver ↔ application timing)
+--------------------------------------------------------------------------------
+[L2 slides 22–24: "Acquisition modes"]
+  Three patterns, distinguished by WHEN the driver grabs the image and WHEN
+  the application processes it:
+
+  SYNCHRONOUS from a free-running camera
+    - Driver grab and application process are SEQUENTIAL.
+    - Speed limit: processing speed < HALF frame speed.
+    - Every other frame is effectively lost because grab and process
+      cannot overlap.
+
+  ASYNCHRONOUS from a free-running camera
+    - Grab and process are INTERLEAVED (double-buffering).
+    - Speed limit: processing speed ≤ FRAME speed.
+    - This is the normal pipelined mode in modern SDKs.
+
+  TRIGGERED ASYNCHRONOUS from an asynchronously-reset ("snap-shot") camera
+    - External trigger resets the sensor at the exact moment the object of
+      interest is in view.
+    - Grab and process are INTERLEAVED as in asynchronous mode.
+    - Speed limit: processing speed ≤ FRAME speed.
+    - Trigger source can be a photo-eye, a PLC signal, or software.
+
+  The three slides are summarised in the exam as "processing speed versus
+  frame speed" — remember the "< half" vs "≤ frame" distinction.
+
+--------------------------------------------------------------------------------
+
+2.13  HIGH-SPEED AND MICRO CAMERAS
+--------------------------------------------------------------------------------
+[L2 slide 25: "High speed camera"]
+  Ultrahigh-speed specs stated on the slide:
+    - Up to 25 000 fps at 1-megapixel resolution.
+    - Up to 1 000 000 fps at reduced resolution.
+
+  Mechanism (WHY): frame rate is limited by readout bandwidth and by
+  exposure time. At fixed bandwidth, higher fps forces smaller row count
+  (fewer pixels per frame). So "1 M fps at reduced resolution" means
+  roughly (bandwidth) / (1 M pixels/frame) rows, not one million full
+  frames.
+
+[L2 slide 26: "Micro camera"]
+  Image-only slide — a very small form-factor camera. Look up by the
+  caption "Micro camera". Its significance is only that the physical size
+  of the camera is a design constraint (L2 slide 3 slide "Mounting →
+  limited space" on the checklist file).
+
+--------------------------------------------------------------------------------
+
+2.14  3-D IMAGING
+--------------------------------------------------------------------------------
+[L2 slides 27–32: "3D imaging" — six techniques]
+  Each method uses a different physical cue for depth. Know the cue and
+  the failure mode.
+
+  LASER TRIANGULATION  (slide 27)
+    - A laser LINE is projected onto the object.
+    - A height profile is generated per slice by measuring the
+      displacement of the laser line in the camera image.
+    - The laser + camera SCAN across the object to build a 3-D volume.
+    - Fails when: specular reflections, occlusions, transparent objects.
+
+  STEREO VISION  (slide 28)
+    - Two cameras mounted with different perspectives of the SAME object.
+    - Calibration aligns pixel information between the two cameras.
+    - Depth = disparity between matched pixels (triangulation).
+    - Fails when: textureless surfaces (no correspondence), repetitive
+      textures (false matches).
+
+  PROJECTED LIGHT / SHEET OF LIGHT  (slide 29)
+    - A KNOWN light pattern (stripes, dots, structured light) is projected.
+    - Depth is calculated by how the pattern is DISTORTED by the object
+      surface.
+    - Fails when: strong ambient light or very dark surfaces.
+
+  DEPTH FROM FOCUS  (slide 30)
+    - Take multiple images at different focus settings; the focus setting
+      at which a given pixel is sharpest indicates its depth.
+    - Fails when: low-texture scenes, heavy computation.
+
+  TIME OF FLIGHT (ToF)  (slide 31)
+    - Light source synchronised with an image sensor.
+    - Distance = c·t/2 where t = time between emitted pulse and reflected
+      pulse arriving back.
+    - Covers medium range (0.1 – 10 m typical).
+    - Fails when: strong ambient IR, multi-path reflections.
+
+  LIDAR  (slide 32)
+    - Laser scanning of an area; measures reflections to build a 3-D
+      profile / map.
+    - Formula (verbatim on the slide):
+          d  =  c · t  /  (2 · n)
+      with c = 300 000 km/s, t = time, n = refractive index of medium
+      (n = 1 in air).
+    - Fails when: rain / snow / fog, reflective or absorptive targets at
+      range.
+
+  Numeric anchor (LIDAR): 1 ns round-trip time in air ⇒ d = 3·10^8 · 1·10^-9
+  / 2 ≈ 0.15 m. Practical LIDARs time pulses to ~100 ps to resolve ~1.5 cm.
+
+--------------------------------------------------------------------------------
+
+2.15  CAMERA SPECIFICATIONS (beyond the sensor)
+--------------------------------------------------------------------------------
+[L2 slide 33: "Camera — specifications"]
+  Pixel size           — physical pitch in µm.
+  Pixel depth          — dynamic range in bits:
+                          8 bits  =   256 values
+                         10 bits  =  1024 values
+                         12 bits  =  4096 values
+  Gain and offset      — amplifier and DAC settings that adjust the
+                         mapping from photocharge to stored value.
+
+[L2 slide 34: "Camera — specifications" — spectral sensitivity]
+  A second spectral-sensitivity slide (typically showing the QE curve of
+  a specific sensor model). Look up by the caption "Camera — specifications"
+  on slide 34.
+
+  Why pixel depth matters (links L1 §2.1): 12-bit gives 16× finer
+  intensity discrimination than 8-bit, but the file is 1.5× bigger (12/8)
+  and every downstream op must handle uint16. L3 shows the MATLAB side.
+
+--------------------------------------------------------------------------------
+
+2.16  FRAME GRABBER / INTERFACE
+--------------------------------------------------------------------------------
+[L2 slide 35: "Frame grabber"]
+  Interface table (verbatim):
+
+    Standard               Max length (m)    Max speed (MB/s)
+    ---------------------  ----------------  ----------------
+    USB 2.0                      5                  400
+    USB 3.0                      5                 4800
+    1394a (Firewire A)           4.5                400
+    1394b (Firewire B)           4.5                800
+    Future 1394c (Firewire C)    --                3200
+    CameraLink                  10                 6120
+    Gigabit Ethernet (GigE)    100                 1000
+    Gigabit Ethernet (10GigE)  100                10000
+    CoaxPress                  100                10000
+
+  Named concepts on the same slide:
+    Repeaters — hardware that restores signal integrity so a bus can be
+    chained beyond its single-segment length.
+    Overhead — the fraction of bus bandwidth consumed by protocol /
+    handshaking; effective throughput is lower than the "max speed"
+    column.
+
+  Numeric anchor (bandwidth sizing): a 4 MPixel 8-bit colour image at 30
+  fps carries 4·10^6 · 3 · 30 = 360 MB/s. That fits on USB 3.0 (4.8 GB/s)
+  but saturates USB 2.0 (400 MB/s); it fits comfortably on CameraLink
+  (6.1 GB/s) and GigE (1 GB/s); 10GigE is for 8K/high-fps cameras.
+
+  The syllabus Q4-1b ("hardware trends") wants this table read as: bandwidth
+  rising monotonically from USB 2.0 to CoaxPress/10GigE while cable length
+  is traded (CameraLink 10 m at 6 GB/s vs GigE 100 m at 1 GB/s).
+
+--------------------------------------------------------------------------------
+
+2.17  GenICam (camera-programming standard)
+--------------------------------------------------------------------------------
+[L2 slide 36: "GenICam" — vendor list]
+  Basler AG, Allied Vision Technologies, Dalsa, E2v semiconductors,
+  JAI Pulnix, Leutron VISION, MATRIX VISION, Matrox Imaging, MVTec
+  Software, National Instruments, Pleora, Stemmer Imaging,
+  Point Grey Research Inc.
+
+[L2 slide 37: "GenICam" — sub-standards]
+  GenApi — the API specification that lets an application talk to ANY
+           GenICam-compliant camera without knowing the vendor SDK.
+  SFNC   — Standard Feature Naming Convention — every vendor must name
+           its "exposure", "gain", "trigger" features the same way.
+  GenTL  — transport layer — how images get transferred from the camera
+           to the host, abstracted from the physical bus.
+
+  Basic functions (verbatim):
+    - Configuring the camera
+    - Grabbing images
+    - Graphical user interface
+    - Transmitting extra data
+    - Delivering events
+
+  Interpretation: GenICam is what lets L2's "software" list (§2.25) and
+  the frame-grabber list (§2.16) work together — one API, many buses, many
+  vendors.
+
+--------------------------------------------------------------------------------
+
+2.18  COMPUTER
+--------------------------------------------------------------------------------
+[L2 slide 38: "Computer"]
+  Vendor list on the slide:
+    IMAGO, MATRIX VISION, Photonfocus, SensoPart, Yokogawa
+  These are embedded / industrial PCs and vision-specific computers. For
+  this course the computer is generic — the syllabus uses MATLAB on a
+  standard PC. The slide exists so you recognise that in a real deployment
+  the "computer" is often an industrial box with a specific I/O card for
+  triggering and machine interfacing (see also the checklist file §"Machine
+  interfacing").
+
+--------------------------------------------------------------------------------
+
+2.19  LENS SYSTEMS — pinhole, Gaussian, refraction
+--------------------------------------------------------------------------------
+[L2 slide 39: "Lens"]
+  Image-only slide. Caption "Lens". Shows a real lens cross-section.
+
+[L2 slide 40: "Lens system — the pinhole camera"]
+  Variables:
+    h  = object size
+    h' = image size
+    s  = object distance
+    s' = image distance
+    c  = optical centre distance (from pinhole to image)
+    α  = half-angle subtended by the image
+
+  Relationships shown on the slide:
+    h' / c  =  2 · tan(α)
+    h' / s' =  h / s   (equal because the same α subtends both the object
+                        at distance s and the image at distance s')
+
+  Interpretation: this is pure geometry. No lens, only a tiny hole. The
+  pinhole model is used as the denominator of every distortion model in L5
+  camera calibration.
+
+[L2 slide 41: "Lens system" — c, h, h', s, s']
+  Same as slide 40 but with the optical centre c marked and the two
+  triangles (object-side, image-side) drawn explicitly. Look up by the
+  caption "Lens system".
+
+[L2 slide 42: "Lens system — Gaussian optics"]
+  Same variable set, but F and F' mark the FOCAL POINTS and f, f' the
+  focal distances. See next slide for the formulas.
+
+[L2 slide 43: "Gaussian optics" formulas]
+  Amplification (magnification):
+        β  =  h' / h  =  s' / s
+  Gaussian lens formula:
+        1/s'  +  1/s  =  1/f'
+  And the same tan α equality as the pinhole:
+        h'/s'  =  h/s  =  tan α
+
+  Interpretation: replace the pinhole by a lens and the geometry becomes
+  Gaussian; the focal length f' now determines where the image plane must
+  sit for a given object distance s. Every focal-length question on the
+  exam uses these three relationships in some combination.
+
+[L2 slide 44: "Lens — example" (Snell's law)]
+  Refractive indices:
+    Glass 1.5, Water 1.33, Air 1.
+  Law of refraction (as written on the slide):
+        n1 · sin θ2  =  n2 · sin θ1
+  [note] Standard form is n1 · sin θ1 = n2 · sin θ2. The slide's
+  labelling of θ1/θ2 is swapped; the numeric example below uses the
+  standard form.
+
+  Numeric example on the slide:
+    1.33 · sin(45°)  =  1.5 · sin(θ2)   ⇒   θ2  =  38.8°
+    1.5  · sin(38.8°) =  1   · sin(θ3)   ⇒   θ3  =  70.1°
+
+  Interpretation: light bends toward the normal when going from water
+  (n = 1.33) to glass (n = 1.5), and away from the normal going from glass
+  back to air (n = 1). This is why a simple glass ball can focus; a
+  multi-element lens corrects the spherical and chromatic aberrations that
+  the single Snell-law bend cannot.
+
+--------------------------------------------------------------------------------
+
+2.20  DEPTH OF FIELD
+--------------------------------------------------------------------------------
+[L2 slide 45: "Lens system — depth of field"]
+  Image-only slide. Caption "Depth of field". Diagram of near/far limits
+  around a "best focus" plane.
+
+  Definition (from §2.1): the depth of field is the band of object
+  distances over which a scene appears acceptably sharp. Depends on f-
+  number, focal length, and pixel pitch (smaller aperture = larger DoF,
+  longer focal length = shallower DoF).
+
+--------------------------------------------------------------------------------
+
+2.21  TELECENTRIC LENSES
+--------------------------------------------------------------------------------
+[L2 slide 46: "Telecentric lenses"]
+  Image-only slide, but the syllabus (§4.2) gives the definition:
+
+  Telecentric lenses are used when the field of view is SMALLER THAN OR
+  NEAR TO camera sensor size.
+    - Magnification 0.01× up to several hundred ×.
+    - Provide LOW DISTORTION and near-exact image reproduction.
+    - Never used for large FOV because the lens would have to be as large
+      as the object.
+    - Specified in MAGNIFICATION (image size / sensor size).
+    - Working distance is RIGIDLY FIXED by the lens maker.
+
+  Selection rule: compute the required magnification, then pick the
+  nearest standard magnification.
+
+  Two lens classes (from §4.2):
+    1. FOV ≫ sensor — fixed-focal or zoom lens, selection by focal
+       length formula.
+    2. FOV ≈ sensor — telecentric, selection by magnification.
+
+--------------------------------------------------------------------------------
+
+2.22  FILTERS
+--------------------------------------------------------------------------------
+[L2 slides 47–48: "Filters"]
+  Two image-only slides, captions "Filters". The syllabus (§4.3) has the
+  text:
+    Colored glass filters   — low cost, wide cut-on, no wavelength shift
+                              vs angle; broad curves.
+    Coated interference     — sharper cut-off, higher transmission, better
+                              blocking; dichroic, bandpass, longpass,
+                              shortpass, notch.
+    Colour filter example   — red vs green gel capsules: 8.7% contrast
+                              bare, 86.5% contrast with a green glass
+                              filter (nearly 10× improvement).
+    Polarising filter       — polariser on the light + analyser on the
+                              lens; removes specular highlights (barcode
+                              reading example).
+
+  Exam relevance: L2's slide labels "Filters" and the syllabus §4.3
+  example with 8.7% → 86.5% is the numeric anchor to cite if asked "what
+  can a filter improve?".
+
+--------------------------------------------------------------------------------
+
+2.23  ILLUMINATION — sources
+--------------------------------------------------------------------------------
+[L2 slides 49–55: "Illumination" sources]
+  Sources named on slides (and the syllabus's source list):
+
+    Sun                — natural daylight
+    Fluorescent        — cheap, large area, diffuse
+    Xenon              — extremely bright, high colour temperature
+    Halogen            — continuous spectrum, high IR
+    Mercury / metal-halide — discrete spectral peaks (good with filters)
+    LED                — narrow spectrum (e.g. red LED peak)
+    High Pressure Sodium — large-scale, very bright
+
+  Xenon advantages (verbatim on slide 52):
+    - extremely bright
+    - high colour temperature (5500–12000 K), very white
+    - flashable with flash duration 1–20 µs
+    - high flash rate: up to 200 flashes per second
+    - lifetime up to 10^8 flashes
+
+  LED spectral slide: [L2 slide 55: "LED — spectrum red LED"] shows the
+  narrow emission peak of a red LED — the reason LEDs give predictable
+  colour response when paired with a filter.
+
+  Numeric anchor (Xenon vs LED): Xenon strobing 200 flashes/s at 1–20 µs
+  per flash = 0.02%–0.4% duty cycle. That produces an effective exposure
+  equivalent to continuous light at ~30–800 W while consuming pulsed
+  energy only during the flash — which is why strobes are chosen for
+  high-speed capture (L2 slide 57 "High speed strobe light").
+
+--------------------------------------------------------------------------------
+
+2.24  ILLUMINATION — geometry
+--------------------------------------------------------------------------------
+[L2 slides 56–58: "Illumination" geometries]
+  Four canonical geometries:
+
+    BACK LIGHTNING  (slide 56)
+      - Silhouette against a bright background.
+      - Uses: detecting presence / absence of holes and gaps; measuring
+        objects; part placement / orientation.
+
+    DIFFUSE (FULL BRIGHT FIELD) LIGHTNING  (slide 57)
+      - Non-directional.
+      - Produces MINIMUM SHADOWS.
+      - For curved, specular surfaces: DOME diffuse light (surrounds the
+        part) or ON-AXIS diffuse light (for flat samples).
+      - Fluorescent is the simplest and most common diffuse source.
+      - Requires close proximity to the sample to be effective.
+
+    PARTIAL BRIGHT FIELD / DIRECTED LIGHTNING  (slide 58)
+      - Directional, typically from a point source.
+      - Good for contrast and topographic detail.
+      - Ineffective on-axis with specular surfaces (generates "hotspot"
+        reflection).
+
+    DARK FIELD LIGHTNING  (slide 58)
+      - Low-angle light.
+      - Only light scattered from EDGES and SURFACE IMPERFECTIONS enters
+        the camera; flat reflective regions send light away.
+      - Uses: surface flatness and texture, surface reflectivity.
+
+  Additional illumination slides:
+    [L2 slide 59: "Surface flatness and texture; surface reflectivity"]
+    [L2 slide 60: "High speed strobe light"] — 5000 strobes/s, 180 A DC.
+
+  Figure to look up by caption: "Lighting technique application field"
+  in the syllabus (§4.4, Figure 19) — surface flatness × surface
+  reflectivity matrix that maps each combination to a recommended
+  technique.
+
+--------------------------------------------------------------------------------
+
+2.25  SOFTWARE
+--------------------------------------------------------------------------------
+[L2 slides 61–63: "Software"]
+  Libraries listed on the slide (verbatim):
+    LabVIEW
+    HALCON
+    Matrox
+    OpenCV (Open Source Computer Vision)
+    ImageJ
+    MATLAB
+    …and more
+
+  NI Vision Assistant demonstration (slide 63). The demo is image-only;
+  the takeaway is: "point-and-click vision software for building vision
+  pipelines without writing code — but the underlying operations are the
+  ones MATLAB does numerically in L3–L14."
+
+  This course: MATLAB + Image Processing Toolbox (IPT) + Computer Vision
+  System Toolbox + Statistics and Machine Learning Toolbox (syllabus §1.1).
+
+--------------------------------------------------------------------------------
+
+2.26  L2 SUMMARY SLIDE
+--------------------------------------------------------------------------------
+[L2 slide 64: "Summary"]
+  Sensor / Computer / Lens systems / Illumination / Software
+  These five headings are the master checklist for L2 coverage. If a topic
+  is not under one of them, it is not in L2.
+
+--------------------------------------------------------------------------------
+3. RELATED SUPPORTING CONCEPTS
+--------------------------------------------------------------------------------
+Depends on
+  L1 §2.1–§2.4  — pixel, bit depth, sampling, quantization, aliasing.
+                  L2's Bayer filter, fill factor and rolling shutter only
+                  make sense once you know that the sensor is a spatial
+                  sampler.
+
+Feeds into
+  L3 MATLAB basics — imread, uint8/double, imshow all assume the L2 chain
+                      produced a valid image.
+  L4 arithmetic    — gain/offset, flat-field division, bitwise AND, Bayer
+                      colour channelling.
+  L5 geometric ops — camera calibration (intrinsic/extrinsic) builds
+                      directly on the pinhole and Gaussian optics of
+                      §2.19; the focal-length formula of §6 is reused
+                      verbatim in exam Q4-2/Q4-3.
+  L6–L8 enhancement — exposure/gamma correction works against the sensor's
+                      dynamic range and the eye's Weber behaviour.
+  L9 restoration   — sensor noise models (§2.8) become the impulse/
+                      Gaussian noise models of L9.
+  L14 classification — stereo vision and 3-D reconstruction are classi-
+                      fication features in real machine-vision pipelines.
+  L2 is the *only* lesson that covers lens focal-length arithmetic; it is
+  not revisited later — this is why Q1 of the sample exam lives here.
+================================================================================
+
+4. SUMMARY (exam-ready, 12 bullets)
+--------------------------------------------------------------------------------
+1. Machine vision = Illumination → Lens → Camera → Sensor → Computer.
+   Four distances define the setup: DoF, working distance, resolution, FOV.
+2. Camera internals: lens, image sensor, sensor driver, communication
+   interface (Analog/USB/Ethernet/Camera Link/FireWire).
+3. Sensor families: CCD (charge transported, high quality, power-hungry,
+   blooming risk) vs CMOS (per-pixel amplifier, cheap, low power, rolling
+   shutter typical, ROI windowing possible).
+4. CCD variants: full frame (smears, ~100% fill factor) vs frame transfer
+   (<500 µs shielded transfer, ~100% fill factor, expensive).
+5. CMOS architecture: RAM-style row/column addressing; low fill factor →
+   low SNR unless microlenses used.
+6. Bayer filter: 2×2 RGGB pattern, single-channel per pixel, demosaicing
+   reconstructs missing channels; colour moiré risk.
+7. Shutters: global (all pixels simultaneous, no motion artefact) vs
+   rolling (row-by-row, higher sensitivity, motion skew).
+8. Noise: temporal (photon shot + thermal → reduce by averaging 1/sqrt(N))
+   vs spatial (sensitivity + dark-signal variation → pattern noise, needs
+   flat-field).
+9. CCD wins only <4 photons/pixel (SNR graph crossover); CMOS wins
+   elsewhere — hardware trend line.
+10. Read-out modes: interlaced (odd/even fields, flicker, artefact) vs
+    progressive (sequential, motion-safe). Acquisition modes: synchronous
+    (< half frame speed), asynchronous (≤ frame speed), triggered
+    asynchronous (≤ frame speed).
+11. 3-D imaging: laser triangulation, stereo vision, projected/sheet of
+    light, depth from focus, time of flight, LIDAR
+    (d = c·t / (2·n)).
+12. Lens formula trio: β = h'/h = s'/s;  1/s' + 1/s = 1/f';
+    focal-length estimate f = (β · WD) / (1 + β) where β = sensor size /
+    FOV. Snell: n1·sinθ1 = n2·sinθ2.
+13. Illumination sources: sun, fluorescent, xenon (5500–12000 K, 1–20 µs
+    flash), halogen, mercury, LED, HPS. Four geometries: back, diffuse
+    (dome/on-axis), partial-bright-field (directional), dark-field.
+14. Software: LabVIEW, HALCON, Matrox, OpenCV, ImageJ, MATLAB. This course
+    uses MATLAB + IPT + CV System Toolbox + Statistics/ML Toolbox.
+
+--------------------------------------------------------------------------------
+
+5. FORMULA / DEFINITION BOX
+--------------------------------------------------------------------------------
+Distances:            DoF, WD, resolution, FOV (§2.1)
+Magnification:        β  =  h'/h  =  s'/s  =  sensor_size / FOV
+Gaussian lens:        1/s'  +  1/s  =  1/f'
+Focal-length estimate:f  =  (β · WD) / (1 + β)
+Snell (refraction):   n1 · sin θ1  =  n2 · sin θ2
+Pinhole:              h'/s'  =  h/s  =  tan α    (α = half-angle)
+LIDAR:                d  =  c · t / (2 · n),   n = 1 in air
+Pixel depth:          b bits → 2^b values (8→256, 10→1024, 12→4096)
+Frame time:           1/30 s (standard video, 30 fps)
+Temporal noise avg:   σ  ∝  1/sqrt(N)     for N averaged frames
+
+Interface table (memorise 4 rows):
+    Standard              Max length (m)   Max speed (MB/s)
+    USB 3.0                    5               4800
+    CameraLink                10               6120
+    GigE                     100               1000
+    10GigE / CoaxPress       100              10000
+
+--------------------------------------------------------------------------------
+
+6. HAND-CALC WORKED EXAMPLES
+--------------------------------------------------------------------------------
+
+EXAMPLE A — focal length from FOV + sensor + working distance
+--------------------------------------------------------------------------------
+[Matches syllabus Q4-2 and sample-exam Q1 in style.]
+
+Problem: image a 5-cm-wide object with a CCD whose sensor measures
+8.8 × 6.6 mm at a working distance of 0.5 m.
+
+  FOV        =  50 mm
+  Sensor     =  6.6 mm       (the dimension that matches the 50 mm FOV
+                              — the syllabus answer uses the vertical
+                              dimension because the object is described as
+                              "5 cm wide" and the sensor's matching axis is
+                              6.6 mm; use the sensor dimension parallel to
+                              the object dimension you are constraining.)
+  WD         =  500 mm
+
+  Magnification β  =  sensor_size / FOV
+                   =  6.6 / 50
+                   =  0.132
+  Focal length f   =  β · WD / (1 + β)
+                   =  0.132 · 500 / 1.132
+                   =  66 / 1.132
+                   =  58.30 mm
+
+  Nearest standard focal lengths (from syllabus Q4-2): 50 or 75 mm.
+  Decision: a 50 mm gives a LARGER field of view (lower resolution);
+  a 75 mm gives a SMALLER FOV (higher resolution) but may not fit the
+  full 5 cm object at 500 mm WD.
+
+--------------------------------------------------------------------------------
+
+EXAMPLE B — focal length from FOV + sensor + working distance
+[Matches syllabus Q4-3.]
+--------------------------------------------------------------------------------
+Problem: Mako G-125B/C, 1/3-inch sensor, FOV = 50 mm (horizontal),
+WD = 200 mm.
+
+  Sensor horizontal  =  4.8 mm  (1/3-inch standard)
+  FOV                =  50 mm
+  WD                 =  200 mm
+
+  β  =  4.8 / 50     =  0.096
+  f  =  0.096 · 200 / (1 + 0.096)
+     =  19.2 / 1.096
+     =  17.52 mm
+
+  Nearest standard: 18 mm lens (bigger FOV, slightly lower resolution) or
+  25 mm + extension ring (smaller FOV, higher resolution).
+
+--------------------------------------------------------------------------------
+
+EXAMPLE C — CCD resolution in line pairs / mm
+--------------------------------------------------------------------------------
+[Matches sample-exam Q1.]
+--------------------------------------------------------------------------------
+Problem: CCD 4 × 9 mm, 512 × 1024 elements, image distance s' = 40 mm,
+object distance s = 70 cm = 700 mm.
+
+  Step 1: magnification (using the 4-mm axis)
+        β  =  s' / s  =  40 / 700  =  0.05714
+  Step 2: object height that maps to the 4-mm sensor axis
+        h  =  h' / β  =  4 / 0.05714  =  70 mm  (= 0.07 m)
+  Step 3: sensor element density along that axis
+        512 elements / 4 mm  =  128 elements / mm at the sensor
+        At the object plane the density is the same: 512 elements / 70 mm
+        =  7.31 elements / mm
+  Step 4: conversion from elements/mm to line-pairs/mm
+        Line-pair = one bright + one dark stripe = 2 elements.
+        Resolution  =  7.31 / 2  =  3.66 line-pairs / mm
+        Rounded:  3.7 line-pairs / mm  ✓
+
+  Numeric sanity: 1/3.7 ≈ 0.27 mm per line-pair at the object plane — the
+  smallest reliably resolvable stripe pair is ~0.27 mm.
+
+--------------------------------------------------------------------------------
+
+EXAMPLE D — Snell's law
+--------------------------------------------------------------------------------
+[Matches L2 slide 44 example.]
+--------------------------------------------------------------------------------
+Light in water (n = 1.33) hits glass (n = 1.5) at 45°.
+
+  n1 · sin θ1  =  n2 · sin θ2
+  1.33 · sin(45°)  =  1.5 · sin(θ2)
+  1.33 · 0.7071    =  1.5 · sin(θ2)
+  0.9404           =  1.5 · sin(θ2)
+  sin(θ2)          =  0.6269
+  θ2               =  38.8°          ✓
+
+  Then from glass (1.5) to air (1.0) at 38.8°:
+  1.5 · sin(38.8°)  =  1 · sin(θ3)
+  1.5 · 0.6269      =  0.9404
+  sin(θ3)           =  0.9404
+  θ3                =  70.1°          ✓
+
+--------------------------------------------------------------------------------
+
+EXAMPLE E — bandwidth sizing
+--------------------------------------------------------------------------------
+Problem: 4-megapixel colour camera at 30 fps, 8 bits per channel. Does
+GigE suffice?
+
+  Frame size  =  4 · 10^6 pixels × 3 channels × 1 byte = 12 MB / frame
+  Frame rate  =  30 fps
+  Data rate   =  12 MB × 30  =  360 MB/s  =  2880 Mbps  ≈ 2.88 Gbps
+
+  GigE (1000 Mbps) → NOT sufficient.
+  10GigE (10000 Mbps) → sufficient.
+  CameraLink Base (~6.8 Gbps) → sufficient.
+
+  This is why the L2 frame-grabber table matters: a modern camera can
+  easily saturate GigE, forcing 10GigE / CoaxPress / CameraLink.
+
+--------------------------------------------------------------------------------
+
+7. SAMPLE-EXAM TAG
+--------------------------------------------------------------------------------
+Sample-exam Q1 (CCD resolution)        → EXAMPLE C.   Compute + justify.
+Sample-exam Q2 (diffuse lighting MCQ)  → §2.24, "diffuse (full bright
+                                           field)" geometry. Choose and
+                                           justify: fluorescent is the
+                                           answer on the sample exam
+                                           because it produces
+                                           non-directional large-area
+                                           diffuse light cheaply.
+Sample-exam Q3 (identify illumination) → §2.24, DOME diffuse light.
+                                           Identify from a figure
+                                           (surrounds the part on all
+                                           sides).
+Syllabus Q4-2 (focal length, 5 cm)     → EXAMPLE A.   Compute.
+Syllabus Q4-3 (focal length, Mako)     → EXAMPLE B.   Compute.
+Syllabus Q4-1 (CCD vs CMOS pros/cons
+  + hardware trends)                   → §2.3–§2.9, §2.16.  Explain.
+
+Question word type by Q:
+  Q1   : compute (formula chain).
+  Q2   : choose + justify.
+  Q3   : identify from figure.
+  Q4-1 : describe.
+  Q4-2, Q4-3 : compute.
+
+--------------------------------------------------------------------------------
+
+8. ASSESSMENT  (10 quiz questions + to-do + figures)
+--------------------------------------------------------------------------------
+Q1  List the five physical subsystems of a machine-vision system. For
+    each, name ONE parameter that drives cost or performance. §2.1
+Q2  Name the four defining distances of a machine-vision setup and give
+    the units for each. §2.1
+Q3  CCD vs CMOS: give three advantages of CMOS and two of CCD, and the
+    SNR crossover point at which the choice flips. §2.3–§2.9
+Q4  Describe the Bayer-filter acquisition chain in four steps. Why does
+    the colour resolution degrade relative to the pixel count? §2.6
+Q5  Global vs rolling shutter: define each, name one advantage and one
+    artefact of each, and state which sensor family typically uses which.
+    §2.7
+Q6  List the temporal and spatial noise sources and one mitigation each.
+    §2.8
+Q7  Fill factor: define it, and explain how microlenses raise the
+    effective fill factor without changing the photodiode area. §2.10
+Q8  Interlaced vs progressive: name one advantage and one artefact of
+    interlaced. Which is preferred in machine vision and why? §2.11
+Q9  Focal length: an object 100 mm wide, sensor 6.4 mm, WD 400 mm.
+    Compute the focal length, choose the nearest standard, and state the
+    FOV trade-off if you pick a shorter focal length. §2.19 + §6
+Q10 State the LIDAR formula and compute the distance for a round-trip
+    time of 100 ns in air. §2.14
+
+TO-DO: L2 .txt "TO DO" block (Zhou §1.1–1.11 is L1; for L2 the block
+lists "Questions from Syllabus: 4.1 – 4.end"). Every Q4.* answer is
+verified verbatim in §9.
+
+Figures to look up by name:
+  "Overview of most relevant distances in a camera setup"    (L2 slide 4)
+  "Bayer filter" — 4-step picture                             (L2 slide 7)
+  "Image sensors — CCD" — Φ1/Φ2/Φ3 cross-section              (L2 slide 9)
+  "Image sensors — Performance CCD vs CMOS" — SNR graph        (L2 slide 19)
+  "Interlaced / Progressive" pair of diagrams                 (L2 slide 21)
+  "Lens system — the pinhole camera" — h, h', s, s', α        (L2 slide 40)
+  "Telecentric lenses"                                        (L2 slide 46)
+  "LED — spectrum red LED"                                    (L2 slide 55)
+  "Back lightning", "Diffuse (full bright field) lightning",
+  "On-axis lightning", "Partial bright field", "Dark field lightning"
+                                                                (slides 56–58)
+  "Lighting technique application field" — flatness × reflectivity
+    (syllabus Figure 19, §4.4)
+
+--------------------------------------------------------------------------------
+
+9. TO DO  (from end of result-EVD2_–_Lesson_2_2526.txt, quoted + answered)
+--------------------------------------------------------------------------------
+L2 .txt "TO DO…" block, quoted verbatim:
+
+    TO DO…
+    • Questions from Syllabus: 4.1 – 4.end
+
+Every question below is answered VERBATIM from the uploaded Answer PDF:
+    - Answers to Questions 4.1-4.end_28_10_2024.txt
+Where the PDF is terse, the PDF's answer is preserved as-is (no
+embellishment); a "[note]" line flags a source-vs-first-principles
+difference.
+
+--------------------------------------------------------------------------------
+9.A  SYLLABUS CHAPTER 4 — HARDWARE  (Q 4.1 – 4.end)
+--------------------------------------------------------------------------------
+
+Q4-1  Based on this syllabus and the internet, describe:
+      a) Pros and cons of CCD and CMOS based cameras.
+      b) Hardware trends
+--------------------------------------------------------------------------------
+Official answer (verbatim summary — the PDF credits Mark Staarink, Gijs
+de Vries, and Matthijs van Delft):
+
+  "The main difference between CCD and CMOS sensors is how/when the
+   electron charge (generated by the photo-electric effect) is converted
+   to a voltage. CCD sensors buffer this voltage and output it as an
+   analog signal. In CMOS sensors, the voltage gets converted to bits as
+   soon as it's generated by a photo-sensitive cell. Note how CCD sensor
+   cells only have to bother with the photo-electric effect, whereas in
+   CMOS' sensor cells are required to do more than just that (like noise
+   reduction and conversion to bits). This gives CMOS the advantage in
+   speed, at the cost of uniformity (and thus image quality).
+
+   As technology advanced however, it became possible to make CMOS
+   sensors where the loss in image quality became negligible. In other
+   fields, like energy efficiency, dynamic range and overall sensor
+   reliability, CMOS has also managed to surpass CCD.
+
+   Still, there are some inherent differences that still make CCD the
+   preferred type for some applications. CCD sensors are still cheaper to
+   design/manufacture when specific requirements are in play, rather than
+   being able to settle for a generic, mass-produced CMOS solution. They
+   are also more sensitive to light, and provide marginally better results
+   when detecting light in the infrared spectrum.
+
+   Technology continues to improve, good solutions are getting cheaper but
+   requirements also become increasingly demanding. Not all older
+   alternatives die out: some continue to see use, but they have to adapt
+   to the increase in performance, quality.
+
+   CMOS-sensors are cheaper, CMOS-sensors are more energy efficient,
+   CMOS-sensors are less complex, CMOS-sensors have pixels that are
+   controlled individually, CMOS-sensor have less interference compared
+   to some CCD, CMOS-sensor often have a rolling shutter (better light
+   sensitivity), CMOS-sensors have higher dynamic range, CMOS-sensors
+   compute images faster and use windowing, CMOS-sensors are slightly
+   better than CCD with UV lighting, CMOS-sensors are digital (no data
+   loss when using analogue to digital converters), CMOS-sensors can be
+   equipped with a global shutter, CMOS-sensors have higher framerate
+   possibilities
+
+   CMOS-sensors often have a rolling shutter (disturbance with moving
+   objects), Production of smaller numbers of CMOS-sensors are more
+   expensive than CCD sensors.
+
+   CCD-sensors have a higher pixel density, CCD-sensors produce a better
+   uniform image
+
+   CCD-sensors can have blooming problems"
+
+  [note] Part (b) "Hardware trends" is answered by the paragraph in the
+  middle: "Technology continues to improve, good solutions are getting
+  cheaper but requirements also become increasingly demanding. Not all
+  older alternatives die out: some continue to see use, but they have to
+  adapt." Read that as the trend statement.
+
+--------------------------------------------------------------------------------
+
+Q4-2  It is required to image a 5-cm-wide object using a CCD camera whose
+      sensor measures 8.8 × 6.6 mm at a distance of 0.5 m. What focal
+      length lens should you choose?
+--------------------------------------------------------------------------------
+Official answer (verbatim):
+
+  "FOV             = 50 mm
+   Sensor size     = 6.6 [mm]
+   Working distance = 500 [mm]
+
+   Magnification of an image acquired
+       = (Sensor Size of the camera)/(Field of View)
+       = 6.6 / 50 = 0.132 [mm]
+
+   Focal Length
+       = (Magnification)*(Working Distance)/(1+Magnification)
+       = 0.132 * 500 / (1+0.132) = 58.30 [mm]
+
+   Based on some desktop study, common focal lengths are:
+       3.5, 4.5, 5, 6, 8, 12, 16, 17, 25, 28, 35, 50, 75 and 100 mm
+
+   So depending on the priorities (FOV versus Resolution) the best choice
+   might be a 50 or a 75 mm lens."
+
+  [note] The PDF uses the 6.6-mm sensor dimension (vertical). This is the
+  axis parallel to the 5-cm object's *height*; if "5 cm wide" refers to
+  the horizontal, the 8.8-mm dimension should be used, giving β = 0.176
+  and f ≈ 74.8 mm (i.e. nearest standard 75 mm). The PDF's 58.30 mm is the
+  official answer, so write it that way on the exam; note the alternative
+  in the working.
+
+--------------------------------------------------------------------------------
+
+Q4-3  The Mako G-125B/C is an industrial GigE camera with a sensor size of
+      1/3 inch. A particular application requires the camera to look at a
+      FOV of 50 mm (horizontal) and a working distance of about 200 mm.
+      Estimate a lens suitable for this application.
+--------------------------------------------------------------------------------
+Official answer (verbatim):
+
+  "FOV             = 50 [mm]
+   Sensor Size     = 4.8 mm (horizontal) x 3.6 mm (vertical) = 1/3 inch
+   Working distance = 200 [mm]
+
+   Magnification of an image acquired
+       = (Sensor Size of the camera)/(Field of View)
+       = 4.8 / 50 = 0.096
+
+   Focal Length
+       = (Magnification)*(Working Distance)/(1+Magnification)
+       = 17.52 [mm]
+
+   Select an 18 mm lens (e.g. Zeiss1518-427) to provide your application
+   with a bigger field of view in the expenses of resolution. Or select a
+   25 mm lens and add an extension ring to it (calculating and selecting
+   the right extension ring is then another consideration)."
+
+--------------------------------------------------------------------------------
+
+Q4-4  Explain shortly the following characteristics of illumination.
+      a) Diffuse light
+      b) Directed light
+      c) Telecentric light
+      d) Front light
+      e) Back light
+      f) Bright field
+      g) Dark field
+--------------------------------------------------------------------------------
+Official answers (verbatim, one per sub-question):
+
+  a) "Diffuse light is scattered in all directions in contrast to direct
+      light. Think about the light during a cloudy day. In this case the
+      direct light form the sun is scattered due to reflections in
+      clouds."
+
+  b) "In contrast to diffuse light, directed light is light in a single
+      direction. Directed light is emitted from point sources."
+
+  c) "In case of telecentric illumination, the light source emits only
+      parallel light rays in a single direction."
+
+  d) "If the light source is on the same side of the object as the
+      camera, we speak of front light. This is also often referred to as
+      incident light."
+
+  e) "If the light source is on the opposite side of the object as the
+      camera, we speak of back light."
+
+  f) "If the light source is placed at an angle to the object so that
+      most of the light is reflected to the camera, we speak of
+      bright-field illumination."
+
+  g) "If the light is placed in such a way that most of the light is
+      reflected away from the camera, and only light of certain parts of
+      the object is reflected to the camera, we speak of dark-field
+      illumination."
+
+--------------------------------------------------------------------------------
+
+Q4-5  Figure 1 shows four different types of illumination systems with
+      cameras. Assign the right characteristics of illumination as
+      mentioned in the syllabus to each of the illumination system.
+      There can be more than one relevant property for an illumination.
+--------------------------------------------------------------------------------
+Official answers (verbatim):
+
+  "A. Directed bright-field front light illumination.
+   B. Directed dark-field front light illumination. This type of
+      illumination is typically constructed as an LED ring light.
+   C. Diffuse bright-field back light illumination. This type of
+      illumination is often constructed with LED panels or fluorescent
+      lights with a diffuser in front of the lights.
+   D. Telecentric bright-field back light illumination"
+
+  [note] Figure 1 of the PDF is the four-camera figure that the syllabus
+  also shows as Figure 20. Look up by that caption to confirm the mapping.
+
+--------------------------------------------------------------------------------
+
+9.B  TO-DO CHECKLIST  (ticked = verified against official Answer PDF)
+--------------------------------------------------------------------------------
+[ ] 9.1  Read L2 slides §2.1–§2.26 of this file.
+[ ] 9.2  Q4-1 vs PDF 4.1-4.end.   ✓ (long verbatim quote preserved)
+[ ] 9.3  Q4-2 vs PDF.              ✓ (58.30 mm, 50 or 75 mm choice)
+[ ] 9.4  Q4-3 vs PDF.              ✓ (17.52 mm, 18 mm or 25 mm + ring)
+[ ] 9.5  Q4-4 vs PDF.              ✓ (a–g verbatim)
+[ ] 9.6  Q4-5 vs PDF.              ✓ (A–D verbatim)
+[ ] 9.7  Verify each figure by caption in the source slide file.
+
+================================================================================
+REVISION LOG
+================================================================================
+rev.1  First L2 writeup. Covers every slide of
+       result-EVD2_–_Lesson_2_2526.txt with inline slide pointers.
+       Older deck (result-EVD2__Lesson_2_2223.txt) checked and confirmed
+       to have identical content — no extra blocks needed.
+================================================================================
+END CHECKPOINT 1.2 — rev.1, page-complete
+================================================================================

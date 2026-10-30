@@ -1,0 +1,1496 @@
+================================================================================
+CHECKPOINT 1.3 — L3: MATLAB BASICS   (rev.1, page-complete)
+================================================================================
+Files: result-EVD2__Lesson_3_2021.txt
+       EVD2_Syllabus_2026_2027_v20260826.txt  §5, §6, §7
+Sample-exam match: indirect — Q4 (bitwise on uint8 requires data-class
+                   awareness), Q5 (imresize nearest), Q7 (histogram arrays).
+                   L3 supplies the tool, not the exam arithmetic.
+Progress tick: [ ] 1.3
+
+Revision log
+  rev.1  Initial page-complete pass. Covers every L3 page from title to
+         "TO DO". All Q5.1–5.24, Q6.1–6.9, Q7.1–7.11 with General Formula
+         per exercise. Assessment section omitted per standing instruction.
+================================================================================
+
+1. ESSENCE
+--------------------------------------------------------------------------------
+L3 is the tool lesson, not a vision lesson. It fixes the three facts that
+every later MATLAB exercise silently assumes: (a) a pixel is a matrix
+element whose *class* determines its legal range and therefore its arithmetic
+behaviour; (b) the difference between elementwise (.*) and matrix (*)
+operations; (c) the IPT's own vocabulary (imread / imshow / imtool / imadd …)
+which wraps the safe conversions you would otherwise do by hand. Everything
+after L3 is "use these functions in this order"; L3 is "know what the
+functions assume".
+
+--------------------------------------------------------------------------------
+2. CONTENT & EXPLANATION  (depth pass, page-complete)
+--------------------------------------------------------------------------------
+
+2.0  LEARNING OBJECTIVES AND POSITION IN THE COURSE
+--------------------------------------------------------------------------------
+[L3 — "WHAT WILL WE LEARN?"]
+  • What is MATLAB and why has it been selected as the tool of choice?
+  • How do I read an image from a file using MATLAB?
+  • What are the main data classes used for image representation and how can
+    I convert from one to another?
+  • Why is it important to understand the data class and range of pixel
+    values of images stored in memory?
+  • What control statements are available in MATLAB?
+  • How do I display an image using MATLAB?
+  • How can I explore the pixel contents of an image?
+  • How do I save an image to a file using MATLAB?
+
+  Note the two objectives that are *not* about syntax: "data class and range"
+  and "explore pixel contents". Those are the ones that decide whether an
+  arithmetic result is correct — the rest is lookup.
+
+[L3 — "EVD2 • Schedule"]
+  L3 sits in week 3 of the 14-lesson schedule, immediately after Hardware
+  and immediately before Mathematical Tools. Its outputs (data classes,
+  arithmetic operators, control statements) are consumed by L4 (matrix vs
+  elementwise ops, overflow), L6 (point transforms via LUTs), L7
+  (convolution), and every later MATLAB exercise.
+
+--------------------------------------------------------------------------------
+
+2.1  WHAT MATLAB IS AND WHY IT IS THE COURSE TOOL
+--------------------------------------------------------------------------------
+[L3 — "MATLAB"]
+  MATLAB = MATrix LABoratory. Data analysis, prototyping, and visualization
+  tool with built-in support for matrices and matrix operations, graphics
+  capabilities, and a high-level programming language plus development
+  environment.
+
+  Toolboxes named on the slide:
+    • Image acquisition toolbox
+    • Computer Vision System toolbox
+    • Image processing toolbox
+    • Vision HDL toolbox
+    • Statistics toolbox
+    • Machine learning toolbox
+
+  The course uses IPT (Image Processing Toolbox) most heavily; L14 uses
+  Statistics and Machine Learning Toolbox (fitcknn, confusionmat).
+
+[L3 — "MATLAB • Why MATLAB?"]
+  Verbatim list:
+    • Quick to learn
+    • Easy to use
+    • Integrated environment
+    • Interface to hardware
+    • Platform independent
+    • Scientific standard
+    • Rapid development
+
+  Translation: MATLAB is chosen because prototype speed matters more than
+  run-time speed in a teaching and research context. Every "why" on the list
+  is a development-time argument, none is a performance argument.
+
+[L3 — "MATLAB • www.mathworks.com …"]
+  Version named on the slide: R2017a (the 2026/2027 syllabus requires
+  MATLAB 2025a or later — follow the syllabus, not the slide).
+  Platforms: Windows, Mac, Linux.
+  Support: support@mathworks.com
+  Blog: http://blogs.mathworks.com/steve/  (Steve Eddins — IPT author)
+
+[L3 — "MATLAB Windows / Mac / Linux system requirements"]
+  Three consecutive slides show the platform requirement tables. The
+  content is hardware-spec lookup (RAM, disk, GPU); nothing examinable.
+  Point: MATLAB is available on all three platforms and the course assumes
+  you can install or use MATLAB Online.
+
+--------------------------------------------------------------------------------
+
+2.2  SUPPORT PACKAGES AND STARTUP
+--------------------------------------------------------------------------------
+[L3 — "INSTALL OF SUPPORT PACKAGES"]
+  Command shown on the slide:
+      >> supportPackageInstaller
+  This opens the GUI that installs hardware-support packages (webcam,
+  Arduino, Raspberry Pi, etc.). The slide specifically points at the webcam
+  support package — used for live acquisition demonstrations.
+
+[L3 — "MATLAB • Working environment"]
+  Four labelled regions on the screenshot:
+    Current directory     — files visible to MATLAB (path)
+    script files          — the Editor
+    Workspace variables   — every variable currently in memory
+    Preview / Command window — live output and prompt
+
+  Operational consequence: a script can only imread a file that is either in
+  the current directory or on the search path. This is the single most
+  common cause of "file not found" errors in the syllabus exercises.
+
+--------------------------------------------------------------------------------
+
+2.3  SIMULINK — THE BLOCK-DIAGRAM ALTERNATIVE
+--------------------------------------------------------------------------------
+[L3 — "SIMULINK • Building blocks versus code"]
+  Simulink is the graphical counterpart to MATLAB scripting: you wire blocks
+  instead of writing statements. The slide gives an equivalent pair:
+
+  Script version:
+      f = imread('belgie (247).jpg');
+      g = imrotate(f, pi/6 * 180/pi);   % from radians to degrees
+      imshow(g)
+
+  Simulink version:
+      model = 'rotate_image_model';
+      open_system(model);
+      cs = getActiveConfigSet(model);
+      set_param('rotate_image_model/Rotate','Angle','pi');
+      SimOut = sim(model,cs);
+
+  Translation: the block model still needs a set_param call to change the
+  rotation angle, so Simulink does not remove the need to know the
+  parameters — it removes the need to write the loop. The rest of the
+  course uses script MATLAB, not Simulink; the slide exists so you know
+  the alternative exists.
+
+--------------------------------------------------------------------------------
+
+2.4  COMMAND VOCABULARY
+--------------------------------------------------------------------------------
+[L3 — "MATLAB COMMANDS"]
+  Verbatim list from the slide, with what each does:
+
+    help                              open help options in command window
+    chdir('C:\Users\Roel\HAN\Education\EVD2')   change working directory
+    img = imread('test.png')          read image into variable
+    imwrite(img2,'test.png')          write image to file
+    imshow(img)                       display image
+    imshowpair(img_gr,img_log_trans,'montage')   side-by-side display
+    clc                               clear command window
+    clear all                         clear workspace variables
+    close all                         close all figures
+    print(figure(3),'ref_hist','-dpng','-r300')  save figure to file
+    iptdemos                          open IPT demo browser
+
+  Grouping for memory:
+    housekeeping   clc, clear all, close all
+    file I/O       imread, imwrite, print
+    display        imshow, imshowpair
+    help           help, iptdemos
+    path           chdir
+
+--------------------------------------------------------------------------------
+
+2.5  DATA CLASSES — THE CENTRAL FACT OF L3
+--------------------------------------------------------------------------------
+[L3 — "MATLAB – DATA CLASSES"]
+  Top-level matrix/array family (screenshot):
+      Matrix or Array (full or sparse)
+        logical   char   numeric   table   cell   struct
+                           |
+                        double / single / int8 / uint8 / …
+
+  The distinction that matters: numeric is one branch of many. An image is
+  a numeric array; a mask is a logical array; a colormap is a double array;
+  a label image from bwlabel is a double array (despite holding integers).
+
+[L3 — "MATLAB – DATA CLASSES" (table)]
+  Verbatim, with the range column kept exact:
+
+    Name     Description                                            Bytes
+    -------  -----------------------------------------------------  -----
+    Double   Double-precision floating point, approx -10^308..10^308   8
+    Uint8    Unsigned 8-bit integers, [0, 255]                        1
+    Uint16   Unsigned 16-bit integers, [0, 65535]                     2
+    Uint32   Unsigned 32-bit integers, [0, 4294967295]                4
+    Int8     Signed 8-bit integers, [-128, 127]                       1
+    Int16    Signed 16-bit integers, [-32768, 32767]                  2
+    Int32    Signed 32-bit integers, [-214783648, 2147483647]         4
+    Single   Single-precision floating point, approx -10^38..10^38    4
+
+  The three classes the course actually uses:
+      uint8    — standard 8-bit grayscale and RGB storage
+      double   — all arithmetic before display; range [0,1] for images
+      logical  — masks, BW images, roipoly output
+
+  Why the class matters (the L3 warning):
+    uint8 arithmetic SATURATES at 255 and FLOORS at 0. It does not wrap,
+    and it does not go negative.
+        uint8(200) + uint8(100)   →  255   (not 300, not 44)
+        uint8(10)  - uint8(50)    →    0   (not -40)
+    double arithmetic does neither. This is the entire reason IPT provides
+    imadd/imsubtract/immultiply/imdivide — they choose the safe behaviour
+    for you (L4 covers the details).
+
+  Bounded-range consequence for L1 arithmetic:
+    file size and bit depth are always expressed against these ranges.
+      uint8  → 256 levels,  8 bits  → 1 byte/pixel
+      uint16 → 65536 levels, 16 bits → 2 bytes/pixel
+      double → not a storage format; stored as 8 bytes/pixel in memory
+               regardless of the visual bit depth.
+
+--------------------------------------------------------------------------------
+
+2.6  MATRIX OPERATIONS AND STANDARD ARRAYS
+--------------------------------------------------------------------------------
+[L3 — "MATLAB – SPECIALIZED MATRIX OPERATIONS"]
+  Verbatim table:
+
+    Name                     MATLAB operator or function
+    -----------------------  ----------------------------
+    Matrix transpose         apostrophe (') operator
+    Inversion                inv
+    Matrix determinant       det
+    Flip up and down         flipud
+    Flip left and right      fliplr
+    Matrix rotation          rot90
+    Matrix reshape           reshape
+    Sum of diagonal elements trace
+
+  Note the two distinct transpose forms:
+      A'    conjugate transpose (Hermitian) — flips sign of imaginary part
+      A.'   plain transpose
+  For real-valued images they are identical; for complex FFT results (L8)
+  they are not. L8's fft2 output is complex, so this distinction matters.
+
+[L3 — "MATLAB – STANDARD ARRAYS"]
+  Verbatim table:
+
+    zeros(m,n)    m-by-n matrix of zeros
+    ones(m,n)     m-by-n matrix of ones
+    true(m,n)     m-by-n matrix of logical ones
+    false(m,n)    m-by-n matrix of logical zeros
+    eye(n)        n-by-n identity
+    magic(m)      m-by-m magic square
+    rand(m,n)     uniform pseudorandom in [0,1]
+    randn(m,n)    normal pseudorandom, mean 0, variance 1
+
+  Two facts that matter downstream:
+    true/false produce LOGICAL class — this is how you build masks without
+    going through roipoly (L9 region-of-interest processing).
+    rand vs randn: rand is uniform (used for uniform noise in L9), randn is
+    Gaussian (used for Gaussian noise in L9). Confusing them changes the
+    noise model, not just the numbers.
+
+--------------------------------------------------------------------------------
+
+2.7  OPERATORS — ARITHMETIC, RELATIONAL, LOGICAL
+--------------------------------------------------------------------------------
+[L3 — "MATLAB – ARITHMETIC OPERATORS"]
+  Verbatim table, split by elementwise vs matrix:
+
+    Operator  Meaning                        Function
+    --------  -----------------------------  ---------
+    +   -     array and matrix add/subtract  plus, minus
+    .*        element-by-element multiply    times
+    *         matrix multiplication          mtimes
+    ./        array right division           rdivide
+    .\        array left division            ldivide
+    /         matrix right division          mrdivide
+    \         matrix left division           mldivide
+    .^        array power                    power
+    ^         matrix power                   mpower
+    .'        vector and matrix transpose    transpose
+    +         unary plus                     uplus
+    -         unary minus                    uminus
+
+  The single most important row for this course:  .* versus *
+    .*  multiplies corresponding pixels  → the image-processing operation
+    *   multiplies matrices              → a geometric transformation
+  L4 opens with exactly this distinction (§8.1 of the syllabus is titled
+  "Elementwise versus matrix operations").
+
+[L3 — "MATLAB – RELATIONAL AND LOGICAL OPERATORS AND FUNCTIONS"]
+  Relational (return logical):
+    <    <=    >    >=    ==    ~=
+  Logical (combine logicals):
+    &  AND        |  OR         ~  NOT
+  Functions:
+    xor    exclusive-or between two operands
+    all    returns 1 if ALL vector elements are nonzero, else 0
+           (operates columnwise on matrices)
+    any    returns 1 if ANY vector element is nonzero, else 0
+           (operates columnwise on matrices)
+
+  Consequence for masks (used in L9, L10):
+    A & B     pointwise AND of two masks
+    A | B     pointwise OR
+    ~A        complement
+    A == B    elementwise comparison — the basis of the Q8/Q9/Q11 "are these
+              two images equal?" verification scripts.
+
+[L3 — "MATLAB – SELECTED BUILT-IN VARIABLES AND CONSTANTS"]
+  Verbatim table:
+
+    ans     most recent answer
+    eps     floating-point relative accuracy
+    i / j   imaginary unit (sqrt(-1))
+    NaN     Not-a-Number (e.g. 0/0)
+    Inf     Infinity (e.g. division by 0)
+    pi      nearest floating-point value of pi
+    clock   matrix with date and time
+    date    current date as a string
+
+  Two of these are examinable as *behaviour*, not as values:
+    NaN propagates: any arithmetic with NaN yields NaN. This is why
+    division-by-zero in a filter (L9 inverse filtering) must be guarded.
+    Inf propagates and dominates: 1/0 = Inf, and 9/Inf = 0. This is exactly
+    the harmonic-mean failure on pepper noise (Q15-4): 1/0 = Inf in the
+    denominator drives the filtered value to 0 (black).
+
+--------------------------------------------------------------------------------
+
+2.8  SCRIPTS AND FUNCTIONS
+--------------------------------------------------------------------------------
+[L3 — "MATLAB – SCRIPTS AND FUNCTIONS"]
+  An M-file is either a script or a function.
+
+  SCRIPT
+    • A sequence of commands to be interpreted and executed.
+    • May contain variable declarations, calls to user-created functions,
+      decision statements and repetition loops.
+    • Created in the Editor, saved with a meaningful name and .m extension.
+    • Invoked by typing its name at the prompt.
+
+  FUNCTION (structure, verbatim from slide):
+    1. The function definition line:
+           function [outputs] = function_name(inputs)
+    2. The H1 line — a single comment line immediately after the definition
+       line. It is the first text shown by "help function_name".
+    3. The help text — a block of comments after the H1 line, displayed by
+       "help function_name".
+    4. The function body — all the code that computes and assigns outputs.
+
+  Operational fact: the H1 line is what "help raise_to_power" prints first.
+  If you write a function without an H1 line, the help command returns an
+  empty first line.
+
+[L3 — "MATLAB – SCRIPTS AND FUNCTIONS • Anonymous function"]
+  Verbatim example:
+      sqr = @(x) x.^2;
+      a = sqr(5)        % a = 25
+
+  Anonymous functions are used in L9/L15 as filter kernels passed to
+  nlfilter:
+      fun = @(x) trimmean(x(:),25);
+      I_filt = nlfilter(In2,[5 5],fun);
+  The @(x) … form lets you pass a one-line kernel without creating a .m file.
+
+--------------------------------------------------------------------------------
+
+2.9  CONTROL STATEMENTS AND TIMING
+--------------------------------------------------------------------------------
+[L3 — "MATLAB – CONTROL STATEMENTS"]
+  Verbatim list:
+    • For loop
+    • While loop
+    • If statements
+    • If-elseif statement
+    • If statement and logical operators
+    • Switch-Case statement
+
+[L3 — "MATLAB – CONTROL STATEMENTS • For loop"]
+  Verbatim annotation:
+    • Repeats for a specific number of times
+    • Always executes computation loop at least once
+    • Can escape (break) out of computational loop
+  Code form:
+      for j = 1:10
+          % computations
+      end
+
+  [note] The slide's "always executes at least once" wording is imprecise
+  for a for-loop with an empty range (1:0 executes zero times). The
+  guarantee belongs to do-while, which MATLAB lacks. The slide's intent is
+  "runs the stated number of times", not "runs unconditionally".
+
+[L3 — "MATLAB – CONTROL STATEMENTS • While loop"]
+  Verbatim annotation:
+    • Will do computational loop only if while condition is met
+    • Be careful to initialize while variable
+    • Can loop forever if while variable is not updated within loop
+  Code form:
+      k = 0;
+      while k < 10
+          % computations
+          k = k + 1;      % change k
+      end
+
+  The two warnings on the slide (initialise before, update inside) are the
+  two ways a while loop fails. Both appear in practice as an infinite loop
+  and a frozen Command Window.
+
+[L3 — "MATLAB – CONTROL STATEMENTS • If statements / If-elseif"]
+  Verbatim annotation:
+    • Can include multiple statements
+    • Statements can also include other if statements (nested if)
+    • Be careful not to overlap (crossover) if statements
+    • If-elseif: can have several elseif conditions
+    • Else is optional and executes if all other tests fail
+
+  Used in L13/L14 to build a heuristic classifier:
+      if (TR(k) > 0.9)
+          name{1,k} = 'circle';
+      elseif (TR(k) > 0.8)
+          name{1,k} = 'square';
+      else
+          name{1,k} = 'other';
+      end
+
+[L3 — "MATLAB – TIMING • TIC • TOC • Vectorization"]
+  Verbatim list: TIC, TOC, Vectorization.
+    tic starts a stopwatch; toc reads it.
+    Vectorization = replacing a loop with a matrix operation.
+
+[L3 — "MATLAB – TIMING • Profile on • Profile viewer • Multithreading"]
+  Verbatim list: profile on, profile viewer, multithreading.
+    profile on / profile viewer produce a per-line timing report — used when
+    tic/toc identifies a slow section but not the slow line inside it.
+
+--------------------------------------------------------------------------------
+
+2.10  IPT ESSENTIAL FUNCTIONS
+--------------------------------------------------------------------------------
+[L3 — "IPT- ESSENTIAL FUNCTIONS • Data classes and data conversions"]
+  Common image classes (verbatim): uint8, double, logical.
+  Conversion table (verbatim):
+
+    Function    Converts image to class   |  Function   Converts … into …
+    ----------  -----------------------   |  ---------  -----------------------
+    im2single   single                    |  ind2gray  indexed → grayscale
+    im2double   double                    |  gray2ind   grayscale → indexed
+    im2uint8    uint8                     |  rgb2gray  RGB → grayscale
+    im2uint16   uint16                    |  rgb2ind   RGB → indexed
+    im2int16    int16                     |  ind2rgb   indexed → RGB
+
+  Two conversion traps the course relies on:
+    1. im2double SCALES. im2double(uint8(255)) = 1.0, not 255.
+       double(uint8(255)) = 255 (no scaling). The difference changes every
+       subsequent multiplication.
+    2. ind2gray / ind2rgb APPLY THE COLORMAP. Converting an indexed image
+       to grayscale without going through the colormap gives the wrong
+       result — the pixel values are indices, not intensities.
+
+[L3 — "IPT – ESSENTIAL FUNCTIONS • Displaying the contents of an image"]
+  Verbatim distinctions:
+    image    — displays an image using the CURRENT colormap.
+    imagesc  — scales image data to the full range of the current colormap,
+               then displays.
+    imshow   — displays an image with a number of optimizations and optional
+               parameters for property settings associated with image display.
+    imtool   — displays an image and contains a number of associated tools
+               for exploring the image contents.
+
+  The operational difference that matters:
+    imshow(I)       assumes the data class defines the display range
+                    (uint8 → 0..255; double → 0..1).
+    imshow(I,[])    auto-scales min→black, max→white. This is the "[] second
+                    argument" used throughout L8 (FFT magnitude), L9
+                    (Laplacian), L15 (scaled difference images) and L17.
+    Without [], a double image with values outside [0,1] displays as pure
+    black or pure white with no detail.
+
+[L3 — "IPT – ESSENTIAL FUNCTION • Exploring the contents of an image"]
+  imtool — verbatim: "Provides all the image display capabilities of imshow
+  as well as access to other tools for navigating and exploring images, such
+  as the Pixel Region tool, Image Information tool, and Adjust Contrast
+  tool."
+
+  Two companion functions appear in Syllabus §7 (not on the L3 slide but in
+  the same toolbox family and used by Q7-7/Q7-8):
+      impixelinfo   — status-bar readout of pixel value under the cursor
+      impixel       — returns r, c, p for clicked points
+
+[L3 — "IPT – ESSENTIAL FUNCTIONS" (arithmetic table)]
+  Verbatim:
+
+    Function      Description
+    ------------  ------------------------------------------------------
+    imadd         adds two images or adds a constant to an image
+    imsubtract    subtracts two images or a constant from an image
+    immultiply    multiplies two images (element-by-element) or a constant
+                  times an image
+    imdivide      divides two images (element-by-element) or an image by a
+                  constant
+    imabsdiff     absolute difference between two images
+    imcomplement  complements an image
+    imlincomb     linear combination of two or more images
+
+  The invariant: all seven handle class truncation, saturation, and
+  conversion internally. Using + - * / directly requires you to do the same
+  work manually (L4 shows both).
+
+--------------------------------------------------------------------------------
+
+2.11  CODE FOLDING AND STYLE
+--------------------------------------------------------------------------------
+[L3 — "MATLAB - VARIOUS • Code folding"]
+  Code folding collapses blocks (loops, functions, %{ %} comment blocks) so
+  that long scripts show their structure. Practical value: the syllabus
+  scripts are 100–200 lines; folding turns them into a table of contents.
+
+[L3 — "MATLAB STYLE GUIDELINES"]
+  Source cited: http://www.mathworks.com/matlabcentral/fileexchange/46056-
+  matlab-style-guidelines-2-0
+  Four categories (verbatim slide headings):
+    • Naming conventions
+        Variables, Constants, Structures, Functions, General
+    • Statements
+        Variables and constants, Globals, Loops, Conditionals, General
+    • Layout, Comments and Documentation
+        Layout, White Space, Comments
+    • Files and Organization
+        M files, Input and Output
+
+  The syllabus TO DO explicitly says "Study: MATLAB Style Guide 2.0".
+  The one rule that shows up in every syllabus script: a function's H1 line
+  must be a one-line summary, because help prints it.
+
+--------------------------------------------------------------------------------
+
+2.12  APPS — IMAGE PROCESSING AND COMPUTER VISION
+--------------------------------------------------------------------------------
+[L3 — "IMAGE PROCESSING AND COMPUTER VISION APPS" — ten consecutive slides]
+  The slide builds up the app list one app per slide. Final list:
+
+    • Camera calibrator          (used by L5 calibration)
+    • Color thresholder          (used by L12 colour segmentation)
+    • Image Acquisition          (hardware link from L2)
+    • Image batch processor      (batch preprocessing)
+    • Image region analyzer      (regionprops GUI equivalent)
+    • Image segmenter            (segmentation GUI)
+    • Image viewer               (imtool as an app)
+    • OCR trainer                (classification demo)
+    • Stereo image calibrator    (L2 stereo 3-D)
+    • Training image labeler     (L14 classification labels)
+
+  Why the slide exists: every one of these apps is a GUI over functions the
+  course teaches. Knowing the app names is knowing the function families.
+  "Image segmenter" is thresholding + region growing + watershed in one GUI;
+  "Image region analyzer" is regionprops; "Training image labeler" is the
+  labelling stage of L14.
+
+--------------------------------------------------------------------------------
+
+2.13  DEMONSTRATIONS
+--------------------------------------------------------------------------------
+[L3 — "DEMONSTRATION • Pendulum"]
+  Live MATLAB/Simulink demo. No examinable content; shows that MATLAB drives
+  physical hardware through the same script interface.
+
+[L3 — "DEMONSTRATION • HDL Pixel streaming"]
+  Hardware-description-language pixel streaming: image data is passed as a
+  stream of pixels through a hardware pipeline rather than stored as a
+  frame buffer. Relevant only as the motivation for the next slide.
+
+[L3 — "DEMONSTRATION • Implementation on FPGA using Vision HDL Toolbox"]
+  The Vision HDL Toolbox generates HDL from MATLAB functions. This is why
+  "Vision HDL toolbox" appears in the toolbox list in §2.1 — the course
+  mentions it, but does not use it.
+
+--------------------------------------------------------------------------------
+
+2.14  WHAT'S NEXT AND SUMMARY
+--------------------------------------------------------------------------------
+[L3 — "WHAT'S NEXT?"]
+  Verbatim list:
+    • Image Category Classification
+    • OCR
+    • Optical flow, activity recognition, motion estimation, and tracking
+    • 3-D vision → Kinect
+    • 3-D Point Cloud Registration and Stitching
+    • C Code generation
+    • Generating HDL code suitable for targeting video processing
+      application on an FPGA
+
+  Note the two "code generation" items: MATLAB to C (deployment on embedded
+  targets) and MATLAB to HDL (FPGA). These belong to the deep-learning/vision
+  minor's later modules, not to EVD2 itself.
+
+[L3 — "SUMMARY"]
+  Verbatim topic list:
+    • MATLAB
+    • Data classes
+    • Scripts and functions
+    • Matrix operations
+    • Arithmetic operators
+    • Built-in variables
+    • Control statements
+    • Simulink basics
+    • IPT – Essential functions
+
+  Master checklist for this lesson. If a topic is not on this list it is not
+  in L3.
+
+--------------------------------------------------------------------------------
+3. RELATED SUPPORTING CONCEPTS
+--------------------------------------------------------------------------------
+Depends on:
+  L1 §2.1        bit depth → the ranges in the data-class table
+                 (8-bit → uint8 [0,255]; 12-bit → uint16 [0,4095]).
+  L1 §2.1e       file formats → imread dispatches on extension.
+  L2 §2.6        GenICam / camera interface → "Image Acquisition" app and
+                 the hardware-support packages installed via
+                 supportPackageInstaller.
+
+Feeds into:
+  L4 arithmetic/logic      .* vs * (§2.7); uint8 saturation (§2.5);
+                           bitand/bitor/bitxor need uint8 inputs.
+  L5 geometric ops         imresize/imrotate rely on the data class to pick
+                           an interpolation default.
+  L6 point transforms      LUTs are uint8 → uint8 mappings built as
+                           uint8(0:255) index tables; intlut requires uint8.
+  L7 convolution           imfilter returns the same class as its input;
+                           the choice of double vs uint8 decides truncation.
+  L8 FFT                   fft2 requires double or single — im2double first.
+  L9 restoration           nlfilter with anonymous functions (§2.8);
+                           NaN/Inf behaviour (§2.7) explains harmonic-mean
+                           failure on pepper noise.
+  L13 features             struct and cell arrays hold regionprops output
+                           (stats(k).Area, name{1,k}).
+  L14 classification       fitcknn, confusionmat; cell-array of image file
+                           names; logical indexing of features.
+  Sample-exam Q4           bitwise AND/OR/XOR is only definable because
+                           inputs are uint8 (bit pattern), not double.
+  Sample-exam Q5           imresize('nearest','Antialiasing',false) — the
+                           data class and the flag together decide the result.
+  Sample-exam Q7           imhist returns a double array whose length equals
+                           the bin count; numel/cumsum operate on it.
+
+--------------------------------------------------------------------------------
+4. SUMMARY (exam-ready, 10 bullets)
+--------------------------------------------------------------------------------
+1. MATLAB = MATrix LABoratory. Chosen for prototype speed, not run-time
+   speed. IPT is the toolbox the course uses most.
+2. Working environment: Current directory, script files, Workspace,
+   Command Window. A script can only imread from the current directory or
+   the search path.
+3. Data classes that matter: uint8 [0,255] 1 B; uint16 [0,65535] 2 B;
+   double ([-10^308,10^308], 8 B); logical {0,1}, 1 B.
+   uint8 arithmetic SATURATES: 200+100 = 255, 10−50 = 0.
+4. im2double SCALES to [0,1]; double() does not. This changes every
+   subsequent multiplication.
+5. Elementwise (.*  ./  .^) versus matrix (*  /  ^). The course is
+   elementwise unless stated otherwise.
+6. Standard arrays: zeros, ones, true, false, eye, magic, rand (uniform),
+   randn (Gaussian). rand vs randn = different noise model, not different
+   numbers.
+7. Built-in constants: ans, eps, i/j, NaN, Inf, pi, clock, date.
+   NaN propagates; Inf dominates (1/0 = Inf; 9/Inf = 0).
+8. M-files: scripts (sequence of commands) vs functions
+   (function [out] = name(in), H1 line, help text, body).
+   Anonymous functions: sqr = @(x) x.^2.
+9. Control statements: for, while (initialise before / update inside),
+   if / elseif / else, switch-case. Timing via tic/toc; profile on/viewer;
+   vectorization beats loops.
+10. IPT essentials: im2double/im2uint8/im2single/im2uint16/im2int16;
+    ind2gray/gray2ind/rgb2gray/rgb2ind/ind2rgb; imshow(I,[]) auto-scales;
+    imtool; imadd/imsubtract/immultiply/imdivide/imabsdiff/imcomplement/
+    imlincomb handle saturation internally.
+
+--------------------------------------------------------------------------------
+5. FORMULA / DEFINITION BOX
+--------------------------------------------------------------------------------
+uint8 range:            [0, 255]            1 byte/pixel
+uint16 range:           [0, 65535]          2 bytes/pixel
+int8 range:             [-128, 127]         1 byte/pixel
+double range:           approx ±10^308      8 bytes/pixel
+single range:           approx ±10^38       4 bytes/pixel
+uint8 saturation:       a + b  →  min(a+b, 255)
+                        a − b  →  max(a−b, 0)
+Scaling conversion:     im2double(uint8(255)) = 1.0
+Non-scaling cast:       double(uint8(255))   = 255
+Elementwise vs matrix:  .*  ./  .^           vs   *  /  ^
+Transpose:              A'  (conjugate)   vs   A.'  (plain)
+Function definition:    function [out] = name(in)
+Anonymous function:     f = @(x) expr(x)
+Display range:          imshow(I)    uses class range
+                        imshow(I,[])  scales min→0, max→255
+rand vs randn:          rand  → uniform [0,1]
+                        randn → normal, mean 0, var 1
+Inf / NaN rules:        1/0 = Inf;   9/Inf = 0;   anything+NaN = NaN
+Common conversions:     im2double, im2uint8, im2uint16, im2single, im2int16
+                        ind2gray, gray2ind, rgb2gray, rgb2ind, ind2rgb
+Image arithmetic:       imadd, imsubtract, immultiply, imdivide,
+                        imabsdiff, imcomplement, imlincomb
+
+--------------------------------------------------------------------------------
+6. HAND-CALC WORKED EXAMPLES
+--------------------------------------------------------------------------------
+
+EXAMPLE A — uint8 saturation vs double arithmetic
+--------------------------------------------------------------------------------
+Given X = uint8(200), Y = uint8(100), Z = uint8(50):
+
+  X + Y in uint8          = 255      (saturated; true sum 300)
+  double(X) + double(Y)   = 300      (class double, no saturation)
+  uint8(300)              = 255      (cast back saturates again)
+  Y − Z in uint8          = 50       (100 − 50, no saturation)
+  Z − Y in uint8          = 0        (true result −50, floored to 0)
+  double(Z) − double(Y)   = −50      (preserved in double)
+
+  Exam relevance: the same arithmetic on a uint8 image and on a double
+  image produces different pictures. The IPT functions imadd / imsubtract
+  exist precisely so you do not have to remember this.
+
+EXAMPLE B — im2double vs double
+--------------------------------------------------------------------------------
+Given I = uint8 with a pixel value 51.
+
+  im2double(I)  = 51 / 255  = 0.2        (range compressed to [0,1])
+  double(I)     = 51                     (range unchanged)
+  im2uint8(0.2) = 51                     (round-trip back)
+
+  Now multiply by 2:
+  im2double → 0.4 → im2uint8 → 102
+  double    → 102 → uint8    → 102
+  Same numeric outcome HERE, but:
+  double(255) × 2  = 510, and uint8(510) = 255  (saturated, information lost)
+  im2double(255) × 2 = 2.0, and im2uint8(2.0) = 255 (also saturated, but
+                     the intermediate is honest — you can still divide back)
+  L4's dynamic-scaling example (multiply moon by 1.2) depends on this.
+
+EXAMPLE C — elementwise vs matrix multiplication
+--------------------------------------------------------------------------------
+Given two 2×2 images:
+    A = [1 2; 3 4]        B = [5 6; 7 8]
+
+  Elementwise  A .* B  =  [1·5  2·6 ; 3·7  4·8]
+                       =  [ 5   12 ;  21   32 ]
+
+  Matrix       A * B   =  [1·5+2·7   1·6+2·8 ; 3·5+4·7   3·6+4·8]
+                       =  [ 5+14    6+16  ; 15+28    18+32 ]
+                       =  [ 19      22   ; 43       50   ]
+
+  Image processing uses .* almost exclusively (pixel-by-pixel). Matrix
+  multiplication is reserved for geometric transformations (L5 affine
+  matrices) and linear algebra (eigen-analysis of GLCM in L13).
+
+EXAMPLE D — uint8 bitwise operations  (sample-exam Q4 pattern)
+--------------------------------------------------------------------------------
+Given X = uint8([200 100 100; 0 10 50; 50 250 120]) and
+      Y = uint8([100 220 230; 45 95 120; 205 100 0])
+
+  Bitwise AND (bitand(X,Y)) — keep bits set in BOTH:
+      200 = 1100 1000   100 = 0110 0100   →  AND = 0100 0000 =  64
+      100 = 0110 0100   220 = 1101 1100   →  AND = 0100 0100 =  68
+      100 = 0110 0100   230 = 1110 0110   →  AND = 0110 0100 = 100
+        0 = 0000 0000    45 = 0010 1101   →  AND = 0000 0000 =   0
+       10 = 0000 1010    95 = 0101 1111   →  AND = 0000 1010 =  10
+       50 = 0011 0010   120 = 0111 1000   →  AND = 0011 0000 =  48
+       50 = 0011 0010   205 = 1100 1101   →  AND = 0000 0000 =   0
+      250 = 1111 1010   100 = 0110 0100   →  AND = 0110 0000 =  96
+      120 = 0111 1000     0 = 0000 0000   →  AND = 0000 0000 =   0
+
+  Bitwise OR (bitor) — keep bits set in EITHER:
+      200 = 1100 1000   100 = 0110 0100   →  OR  = 1110 1100 = 236
+      ... and so on.
+
+  Bitwise XOR (bitxor) — keep bits set in exactly one:
+      200 = 1100 1000   100 = 0110 0100   →  XOR = 1010 1100 = 172
+      ... and so on.
+
+  Practical meaning (sample-exam answer):
+    AND  → dark regions dominate (only common bright bits survive)
+    OR   → brighter than both inputs
+    XOR  → highlights where the two images differ
+
+  Note: these operations require uint8 (or another integer class). Applied
+  to double, they are undefined. That is the L3 → Q4 dependency.
+
+EXAMPLE E — vectorization timing (order-of-magnitude arithmetic)
+--------------------------------------------------------------------------------
+Loop, no preallocation (MAX_CNT = 10000):    0.002904 s
+Loop, preallocated:                          0.000373 s
+Vectorized (i .^ 2):                         0.000185 s
+
+  Speed-ups:
+    preallocation vs none:      0.002904 / 0.000373  ≈ 7.8×
+    vectorization vs none:      0.002904 / 0.000185  ≈ 15.7×
+    vectorization vs prealloc:  0.000373 / 0.000185  ≈ 2.0×
+
+  These are the numbers from the Q6 answer PDF. The exact ratios are
+  hardware-dependent; the ORDER (vectorized < preallocated < naive loop) is
+  not.
+
+EXAMPLE F — image equality verification
+--------------------------------------------------------------------------------
+The syllabus repeats this idiom four times (Q8-7, Q9-7, Q11-2, Q16-15).
+The General Formula is:
+
+    if A == B
+        disp('A is equal to B');
+    else
+        disp('A and B are not the same');
+    end
+
+  Why the short form works: A == B returns a logical array the same size
+  as A and B. In an if-condition MATLAB treats the array as true only if
+  ALL elements are true. That is why the one-line test succeeds without
+  any all() call — although all(A(:) == B(:)) is the explicit equivalent.
+
+--------------------------------------------------------------------------------
+7. SAMPLE-EXAM TAG
+--------------------------------------------------------------------------------
+L3 does not map to a full sample-exam question of its own — it supplies the
+substrate for four of them:
+
+Q4  (bitwise AND/OR/XOR on 3×3)     Uses §2.5 (uint8) and §2.7 (logical
+                                    operators). Without the data-class
+                                    fact, the question is unanswerable.
+                                    Type: compute.
+Q5  (imresize nearest, no anti-alias)
+                                    Uses §2.10 (imresize is an IPT call
+                                    whose default interpolation is bicubic,
+                                    not nearest). Type: predict.
+Q7a (checkerboard histogram)        Uses §2.10 (imhist) and §2.7 (size /
+                                    numel / cumsum). Type: compute.
+Q7b (5×5 mean mask)                 Uses §2.6 (ones) and §2.7 (./). Type:
+                                    write.
+Q7c (edge pixel, zero-padding)      Uses §2.10 (imfilter) and §2.7
+                                    (elementwise ops). Type: compute.
+Q7d (pattern frequency)             Uses §2.7 (sum/count). Type: compute.
+
+Question word types: Q4 compute, Q5 predict, Q7a/b/c/d compute.
+
+--------------------------------------------------------------------------------
+8. TO DO  (Syllabus Q 5.1 – 5.end, 6.1 – 6.end, 7.1 – 7.end)
+================================================================================
+L3 .txt "TO DO…" block, quoted verbatim:
+
+    TO DO…
+    Study:
+    • MATLAB Style Guide 2.0
+    • Matlab Primer #1 – A Fast Start
+    • Matlab Primer #2 - Programming
+
+    Make:
+    • Questions from Syllabus: 5.1 – 5.end, 6.1 – 6.end, 7.1-7.end
+
+Every question below is answered VERBATIM from the uploaded Answer PDFs:
+    - Answers to Questions 5.1-5.end.txt
+    - Answers to Questions 6.1-6.end.txt
+    - Answers to Questions 7.1-7.end.txt
+Each answer is prefixed with a GENERAL FORMULA line.
+
+--------------------------------------------------------------------------------
+8.A  SYLLABUS CHAPTER 5 — MATLAB BASICS  (Q 5.1 – 5.24)
+--------------------------------------------------------------------------------
+
+Q5-1  What is the difference between the commands help, helpwin, and doc?
+--------------------------------------------------------------------------------
+General formula:
+  answer = "three levels of help access: "
+         + "command window (help) / separate window (helpwin) / "
+         + "full documentation browser (doc)."
+
+Official answer (verbatim):
+  "'help', opens all the help options in the command window.
+   'helpwin', opens all the help options in a new window.
+   'doc', shows the help documentation in the help browser."
+
+
+Q5-2  Execute the following commands and explain their function:
+      realmin, realmax, flintmax, computer, ver, version, license;
+      2+3 ; 2*3+4*5+6*7;
+--------------------------------------------------------------------------------
+General formula:
+  answer = "name → returned value → what that value represents in IEEE /
+            platform terms."
+
+Official answer (verbatim):
+  realmin   ans = 2.2251e-308 — smallest positive normalized floating-point
+            number in IEEE double precision.
+            "IEEE (pronounced as I triple E) stands for the Institute of
+             Electrical and Electronics Engineers … one of the leading
+             standards-making organizations in the world."
+  realmax   ans = 1.7977e+308 — largest finite floating-point number in
+            IEEE double precision.
+  flintmax  ans = 9.0072e+15 — largest consecutive integer in IEEE double.
+            Above this value, double-precision format does not have integer
+            precision.
+  computer  ans = PCWIN64 | GLNXA64 | MACI64 — character vector denoting
+            the type of computer on which MATLAB is executing.
+  ver       displays (1) header with MATLAB version, license number,
+            operating system, Java version; (2) version numbers for MATLAB
+            and all installed MathWorks products.
+  version   displays the version of MATLAB.
+  license   returns the license number for the MATLAB product.
+  2+3       = 5.
+  2*3+4*5+6*7;  provides the answer only in the workspace (semicolon
+            suppresses command-window output).
+
+
+Q5-3  What is the variable ans used for?
+--------------------------------------------------------------------------------
+General formula:
+  answer = "ans stores the most recent unassigned result."
+
+Official answer (verbatim):
+  "Proves the most recent answer." [sic — means "stores / holds"]
+
+
+Q5-4  What is the purpose of using a semicolon (;) at the end of a statement?
+--------------------------------------------------------------------------------
+General formula:
+  answer = "suppresses command-window output of that statement;
+            assignment still happens."
+
+Official answer (verbatim):
+  "The semicolon can be used to suppress output from a MATLAB command."
+
+
+Q5-5  Experiment with creating your own variables. Are variables case
+      sensitive?
+--------------------------------------------------------------------------------
+General formula:
+  answer = "YES for variables and built-in functions; "
+         + "for .m files, case-sensitive on UNIX, NOT on Windows."
+
+Official answer (verbatim):
+  ">> fruit_per_box = 20; num_of_boxes = 5;
+   >> total_num_of_fruit = Fruit_per_box * num_of_boxes
+   Undefined function or variable 'Fruit_per_box'.
+   So yes, MATLAB is case sensitive with respect to variable names. But
+   take care, MATLAB is not completely case sensitive. MATLAB is case
+   sensitive for variable names and built-in functions. For scripts and
+   functions stored in a MATLAB file with a .m extension, case sensitivity
+   is preserved on UNIX platforms but not on Windows platforms."
+
+
+Q5-6  What is the value/purpose of these variables: pi, eps, inf, i? Is it
+      possible to overwrite any of these variables? If so, how can it be
+      undone?
+--------------------------------------------------------------------------------
+General formula:
+  answer = "each is a built-in constant; all can be overwritten; "
+         + "restore with 'clear all' (or clear <name>)."
+
+Official answer (verbatim):
+  "pi  = 3.1416
+   eps = 2.2204e-16   (returns the distance from 1.0 to the next larger
+                       double-precision number)
+   inf = Infinity
+   i   returns the basic imaginary unit. i is equivalent to sqrt(-1).
+   These variables can be overwritten and changed back to their original
+   value. 'Clear all' is used to reset to default values."
+
+
+Q5-7  What is the use of the semicolon in this statement?
+      A = [5, 8; 3, 4]
+--------------------------------------------------------------------------------
+General formula:
+  answer = "inside [ ] the semicolon separates ROWS; outside [ ] it
+            suppresses output."
+
+Official answer (verbatim):
+  "In this statement, the semicolon is used as array row separator. When
+   used within square brackets to create a new array or concatenate existing
+   arrays, the semicolon creates a new row in the array."
+
+
+Q5-8  Write a statement that will generate a vector of values ranging from 0
+      to pi in increments of pi/4.
+--------------------------------------------------------------------------------
+General formula:
+  colon_vector  =  start : step : end
+
+Official answer (verbatim):
+  "0:pi/4:pi"
+
+
+Q5-9  Write a line of code that would generate the same 3×3 matrix as in the
+      variable A above, but using the colon operator to generate the sequence
+      of numbers in each row instead of explicitly writing them.
+--------------------------------------------------------------------------------
+General formula:
+  A  =  [ 1:n ; (n+1):2n ; (2n+1):3n ]   for a 3×3 with n = 3.
+
+Official answer (verbatim):
+  "A = [1:3; 4:6; 7:9]
+   A = [colon(1,3); colon(4,6); colon(7,9)]"
+
+
+Q5-10 What is the difference between the functions rand(M,N) and randn(M,N)?
+--------------------------------------------------------------------------------
+General formula:
+  rand(M,N)   → uniform   in (0,1),  positive only
+  randn(M,N)  → normal    mean 0, variance 1, signed
+
+Official answer (verbatim):
+  "rand(), provides only positive numbers, in the interval (0,1).
+   randn(), generates a matrix of normally distributed numbers.
+   x = randn(10000,1); histfit(x) will show you the normal distribution."
+
+
+Q5-11 What does the size function do?
+--------------------------------------------------------------------------------
+General formula:
+  size(A)  →  row vector of dimension lengths, one per array dimension.
+
+Official answer (verbatim):
+  "'size', this function returns a row vector whose elements contain the
+   length of the corresponding dimension of A."
+
+
+Q5-12 What does the disp function do?
+--------------------------------------------------------------------------------
+General formula:
+  disp(X)  →  prints X without printing the variable name.
+
+Official answer (verbatim):
+  "'disp', This function displays the value of variable X without printing
+   the variable name."
+
+
+Q5-13 What does the sum function do?
+--------------------------------------------------------------------------------
+General formula:
+  sum(A)  →  sum along the first non-singleton dimension.
+  sum(A(:)) → scalar total over all elements.
+
+Official answer (verbatim):
+  "'sum', this function returns the sum of the elements of A along the
+   first array dimension whose size does not equal 1."
+
+
+Q5-14 What does the prod function do?
+--------------------------------------------------------------------------------
+General formula:
+  prod(A)  →  product along the first non-singleton dimension.
+
+Official answer (verbatim):
+  "'prod', This function returns the product of the array elements of A."
+
+
+Q5-15 Why did the last operation fail?
+--------------------------------------------------------------------------------
+General formula:
+  matrix multiply A*B legal  ⇔  columns(A) == rows(B).
+  Failure means the inner dimensions do not match.
+
+Official answer (verbatim):
+  "Because the matrixes are not of the same size."
+
+
+Q5-16 What does the diag function do?
+--------------------------------------------------------------------------------
+General formula:
+  diag(A)  →  column vector of the main diagonal (top-left → bottom-right).
+  diag(v)  →  diagonal matrix with v on its main diagonal.
+
+Official answer (verbatim):
+  "'diag' returns the diagonal values of the matrix. In this case from top
+   left, to bottom right."
+
+
+Q5-17 What does the trace function do?
+--------------------------------------------------------------------------------
+General formula:
+  trace(A)  =  sum(diag(A))  =  sum of main-diagonal elements.
+
+Official answer (verbatim):
+  "'trace', This function is the sum of the diagonal elements of the
+   matrix A."
+
+
+Q5-18 Write an alternative statement that would produce the same results as
+      the trace function.
+--------------------------------------------------------------------------------
+General formula:
+  trace(A)  ≡  sum(diag(A))
+
+Official answer (verbatim):
+  "t = sum(diag(Y))"
+
+
+Q5-19 What does the celldisp function do?
+--------------------------------------------------------------------------------
+General formula:
+  celldisp(X)  →  recursively prints every cell's contents.
+
+Official answer (verbatim):
+  "This function recursively displays the contents of a cell array."
+
+
+Q5-20 What does the (%) character do?
+--------------------------------------------------------------------------------
+General formula:
+  %  →  starts a comment; rest of line ignored.
+  %{ ... %}  →  block comment.
+
+Official answer (verbatim):
+  "Use this symbol to describe comments in your code."
+
+
+Q5-21 What is the difference between the last two lines in the code above
+      (X(1) as opposed to X{1})?
+--------------------------------------------------------------------------------
+General formula:
+  X(i)  →  returns the CELL (the container, shown as its class).
+  X{i}  →  returns the CONTENTS of cell i.
+
+Official answer (verbatim):
+  "X(1), gives the data format of the cell.
+   X{1}, gives the content of the cell."
+
+
+Q5-22 What does the fieldnames function do?
+--------------------------------------------------------------------------------
+General formula:
+  fieldnames(S)  →  cell array of character vectors of the field names.
+
+Official answer (verbatim):
+  "This MATLAB function returns a cell array of character vectors containing
+   the names of the fields in the structure. In MATLAB, object oriented
+   programming is also possible. In that case, the function 'fieldnames'
+   returns the attributes of an object."
+
+
+Q5-23 What does it mean when the result from the function isstruct is 1?
+      What does it mean when it is 0?
+--------------------------------------------------------------------------------
+General formula:
+  isstruct(x) = 1  →  x is a MATLAB structure.
+  isstruct(x) = 0  →  x is not a structure.
+
+Official answer (verbatim):
+  "In case of 1, the array is a MATLAB structure.
+   In case of 0, the array is not a MATLAB structure."
+
+
+Q5-24 Use the help system to determine what function can be used to delete a
+      field from a structure.
+--------------------------------------------------------------------------------
+General formula:
+  S = rmfield(S, 'fieldname')  →  removes the named field.
+
+Official answer (verbatim):
+  "The rmfield function removes the specified field or fields from a
+   structure array."
+
+--------------------------------------------------------------------------------
+8.B  SYLLABUS CHAPTER 6 — PROGRAMMING IN MATLAB  (Q 6.1 – 6.9)
+--------------------------------------------------------------------------------
+
+Q6-1  Based on the script in file script3_1.m, what is the difference between
+      using a percent (%) sign and using %{ and %}?
+--------------------------------------------------------------------------------
+General formula:
+  %          →  single-line comment.
+  %{ ... %}  →  block comment.
+
+Official answer (verbatim):
+  "% is a line of comments. The same as // in C or C++.
+   %{ and %} is a block of comment. This is the same as using /* and */
+   in C or C++."
+
+
+Q6-2  What happened to the value of the variable gamma in the code?
+--------------------------------------------------------------------------------
+General formula:
+  "Increment and run" adds the entered step to the highlighted literal;
+  sign of the step determines increase or decrease.
+
+Official answer (verbatim):
+  "This variable either increases or decreases with 0.1 depending on
+   whether plus or minus is pressed."
+
+
+Q6-3  In addition to the modification of code, what else happened when the
+      plus button was pressed? What happens when it is pressed again?
+--------------------------------------------------------------------------------
+General formula:
+  Increment-and-run  →  value changed  →  cell re-executed  →  figure/histogram
+  redrawn. Pressing again repeats on the new value.
+
+Official answer (verbatim):
+  "The histogram modifies. If the variable gamma becomes larger, it means
+   the intensity of the color decreases until all colors are black. When
+   decreasing gamma, the effect is the opposite."
+
+
+Q6-4  Other than the ones described in this tutorial, what features are
+      available when cell mode is active?
+--------------------------------------------------------------------------------
+General formula:
+  answer = "code folding + section evaluation shortcuts."
+
+Official answer (verbatim):
+  "When cell mode is active, it is possible to use code folding. Cells can
+   be expanded (Ctrl+Shift+.) and folded (Ctrl+.). To evaluate the current
+   section, Ctrl+Enter can be pressed."
+
+
+Q6-5  Compare the help documentation with the comments in the M-file. How
+      does MATLAB determine which comments are to be displayed for help and
+      which are just comments in the function code?
+--------------------------------------------------------------------------------
+General formula:
+  help prints the FIRST contiguous comment block after the function
+  definition line (H1 line + help text). Later comments are ignored.
+
+Official answer (verbatim):
+  "MATLAB takes the first block of comments. This can also be seen by the
+   minus symbol."
+
+
+Q6-6  By what factor did preallocating the array x increase performance?
+--------------------------------------------------------------------------------
+General formula:
+  speed_up  =  t_not_allocated / t_preallocated
+
+Official answer (verbatim):
+  "Not allocated: Elapsed time is 0.002904 seconds.
+   Allocated:     Elapsed time is 0.000373 seconds.
+   0.002904 / 0.000373 = 7.8 times faster in case the memory is allocated.
+   This increase depends on the computer's specifications and the running
+   processes on the computer."
+
+
+Q6-7  In the code above, why do we use .^ instead of just ^?
+--------------------------------------------------------------------------------
+General formula:
+  .^  →  elementwise power (each element raised separately).
+  ^   →  matrix power (A^2 = A*A).
+
+Official answer (verbatim):
+  ".^ means element-wise power."
+
+
+Q6-8  How much faster is loop vectorization than our previous two
+      implementations?
+--------------------------------------------------------------------------------
+General formula:
+  speed_up  =  t_slowest / t_vectorized
+
+Official answer (verbatim):
+  "Not allocated:     Elapsed time is 0.002937 seconds.
+   Allocated:         Elapsed time is 0.000263 seconds.
+   Loop vectorization: Elapsed time is 0.000185 seconds."
+
+
+Q6-9  Consider the following pseudocode. Write a vectorized equivalent.
+--------------------------------------------------------------------------------
+General formula:
+  i = 0
+  for t = 0 to 2*pi in steps of pi/4
+      do i = i + 1
+         x(i) = sin(t)
+  →  t = 0:pi/4:2*pi ;  x = sin(t)
+
+Official answer (verbatim):
+  "t = 0:pi/4:2*pi
+   x = sin(t)"
+
+--------------------------------------------------------------------------------
+8.C  SYLLABUS CHAPTER 7 — THE IMAGE PROCESSING TOOLBOX  (Q 7.1 – 7.11)
+--------------------------------------------------------------------------------
+
+Q7-1  What type of image is coins.png?
+--------------------------------------------------------------------------------
+General formula:
+  image_type  =  file extension of the loaded file  (PNG → "PNG image").
+
+Official answer (verbatim):
+  "PNG image."
+
+
+Q7-2  Why do we use the semicolon (;) operator after the imread statement?
+      What happens if we omit it?
+--------------------------------------------------------------------------------
+General formula:
+  ;  suppresses output. Omitting it prints the entire pixel array.
+
+Official answer (verbatim):
+  "If we do not use the semicolon, all pixel values will be provided in the
+   command window."
+
+
+Q7-3  How many dimensions does the variable X_rgb have and what are their
+      sizes?
+--------------------------------------------------------------------------------
+General formula:
+  size(RGB image)  =  [rows  columns  3]
+
+Official answer (verbatim):
+  "258x350x3 double"
+
+
+Q7-4  What class type is X_gray?
+--------------------------------------------------------------------------------
+General formula:
+  intensity image loaded from an indexed source via ind2gray → class
+  uint8 (or the class of the source).
+
+Official answer (verbatim):
+  "Intensity image." [sic — the PDF names the IMAGE TYPE, not the MATLAB
+  class. If a strict class is asked for, uint8 is the expected answer for
+  an ind2gray output.]
+
+
+Q7-5  Why are we required to use the colon operator (:) when specifying the
+      X_gray variable? What happens if we omit it?
+--------------------------------------------------------------------------------
+General formula:
+  max(A(:))  →  single global maximum.
+  max(A)     →  row vector of per-column maxima.
+
+Official answer (verbatim):
+  "Without the colon, the function returns the minimum and maximum values
+   for each individual column."
+
+
+Q7-6  What is the range of values for the new variable X_gray_dbl?
+--------------------------------------------------------------------------------
+General formula:
+  im2double(uint8 image)  →  range [0, 1], class double.
+
+Official answer (verbatim):
+  "258x350 double"  [sic — the PDF reports size + class, not the numeric
+  range. The numeric range under im2double is [0, 1].]
+
+
+Q7-7  Consider an image where the range of possible values for each pixel is
+      not [0, 255], but a nonstandard range such as [0, 99]. How would we
+      display the image so that a value of 99 represents white and a value
+      of 0 represents black?
+--------------------------------------------------------------------------------
+General formula:
+  imshow(I, [lo hi])  →  lo → black,  hi → white.
+  So for [0, 99]:  imshow(I, [0 99]).
+
+Official answer (verbatim):
+  "[I, map] = imread('coins.png');
+   h = imshow(I, [0 99])
+   impixelinfo(h)"
+
+
+Q7-8  What is the meaning of the values stored in variables r, c, and p?
+--------------------------------------------------------------------------------
+General formula:
+  [c, r, p] = impixel(…)  →  c = column (x), r = row (y), p = pixel value(s).
+  If RGB, p is an N×3 array of R,G,B triples.
+
+Official answer (verbatim):
+  "r = row values of the selected pixels (x-values)
+   c = column values of the selected pixels (y-values)
+   p = RGB content of the pixel (Red, Green, Blue)"
+
+  [note] The PDF's parenthetical "(x-values)" / "(y-values)" follows the
+  spatial-coordinate convention (x = column). The variable NAMES r and c
+  are row and column respectively; the parentheticals describe which
+  spatial axis each corresponds to.
+
+
+Q7-9  What is the range of values for image A and image B?
+--------------------------------------------------------------------------------
+General formula:
+  range(I)  =  max(I(:)) − min(I(:))
+  report BOTH min and max.
+
+Official answer (verbatim):
+  "'pout.tif' min = 74 and max = 224.
+   'cameraman.tif' min = 7 and max = 253."
+
+
+Q7-10 What happened to the coins image just after the trees image was
+      displayed? Explain your answer.
+--------------------------------------------------------------------------------
+General formula:
+  subplot shares ONE colormap per figure. Displaying an indexed image
+  (trees + map) after a grayscale image recolours the first image too.
+  Fix: subimage() (converts each to RGB) or separate figures.
+
+Official answer (verbatim):
+  "The colour of the images becomes strange because the coins map is
+   overridden by the map corresponding to trees.tif."
+
+
+Q7-11 What do the variables I_ind and I_map contain?
+--------------------------------------------------------------------------------
+General formula:
+  [I_ind, I_map] = gray2ind(I, 256)
+    I_ind  →  index image (integers into the colormap)
+    I_map  →  256×3 colormap
+
+Official answer (verbatim):
+  "I_ind contains the index image which is made out of the grayscale image.
+   I_map contains the map which is made out of the grayscale image."
+
+--------------------------------------------------------------------------------
+8.D  GENERAL FORMULA QUICK-REFERENCE  (all exercises in one block)
+--------------------------------------------------------------------------------
+Help levels:              help / helpwin / doc
+Output suppression:       ;  (statement executes, output hidden)
+Row separator in [ ]:     ;  creates a new row
+Comments:                 %  line ;  %{ … %}  block
+Colon vector:             start : step : end
+Row generation:           [1:n ; (n+1):2n ; (2n+1):3n]
+rand / randn:             uniform [0,1] / normal(0,1)
+size / disp / sum / prod: [dim lengths] / print / sum / product
+diag / trace:             main diagonal / sum(diag(A))
+Cells:                    X(i) = cell container ; X{i} = contents
+Structs:                  fieldnames(S) ; rmfield(S,'f') ; isstruct → 1/0
+Preallocation speed-up:   t_naive / t_prealloc
+Vectorization speed-up:   t_naive / t_vectorized
+Elementwise power:        .^
+Scalar max / min:         max(A(:)) / min(A(:))
+Per-column max:           max(A)
+Display range override:   imshow(I, [lo hi])
+Pixel inspection:         impixelinfo ; [c,r,p] = impixel(…)
+Indexed → index+map:      [I_ind, I_map] = gray2ind(I, 256)
+Image type question:      answer with file extension (PNG/TIF/…)
+Image class question:     answer with class (uint8 / double / logical)
+
+--------------------------------------------------------------------------------
+8.E  TO DO CHECKLIST  (ticked = verified against official Answer PDF)
+--------------------------------------------------------------------------------
+[ ] 8.1  Study MATLAB Style Guide 2.0                       (external)
+[ ] 8.2  Study Matlab Primer #1 – A Fast Start              (external)
+[ ] 8.3  Study Matlab Primer #2 – Programming               (external)
+[ ] 8.4  Q5-1  vs PDF 5.1-5.end.   ✓ matches
+[ ] 8.5  Q5-2  vs PDF.             ✓ matches (7 commands)
+[ ] 8.6  Q5-3  vs PDF.             ✓ matches
+[ ] 8.7  Q5-4  vs PDF.             ✓ matches
+[ ] 8.8  Q5-5  vs PDF.             ✓ matches (case sensitivity)
+[ ] 8.9  Q5-6  vs PDF.             ✓ matches (pi/eps/inf/i)
+[ ] 8.10 Q5-7  vs PDF.             ✓ matches (row separator)
+[ ] 8.11 Q5-8  vs PDF.             ✓ matches (0:pi/4:pi)
+[ ] 8.12 Q5-9  vs PDF.             ✓ matches (colon rows)
+[ ] 8.13 Q5-10 vs PDF.             ✓ matches (rand vs randn)
+[ ] 8.14 Q5-11 vs PDF.             ✓ matches (size)
+[ ] 8.15 Q5-12 vs PDF.             ✓ matches (disp)
+[ ] 8.16 Q5-13 vs PDF.             ✓ matches (sum)
+[ ] 8.17 Q5-14 vs PDF.             ✓ matches (prod)
+[ ] 8.18 Q5-15 vs PDF.             ✓ matches (dimension mismatch)
+[ ] 8.19 Q5-16 vs PDF.             ✓ matches (diag)
+[ ] 8.20 Q5-17 vs PDF.             ✓ matches (trace)
+[ ] 8.21 Q5-18 vs PDF.             ✓ matches (sum(diag))
+[ ] 8.22 Q5-19 vs PDF.             ✓ matches (celldisp)
+[ ] 8.23 Q5-20 vs PDF.             ✓ matches (%)
+[ ] 8.24 Q5-21 vs PDF.             ✓ matches (X(1) vs X{1})
+[ ] 8.25 Q5-22 vs PDF.             ✓ matches (fieldnames)
+[ ] 8.26 Q5-23 vs PDF.             ✓ matches (isstruct 1/0)
+[ ] 8.27 Q5-24 vs PDF.             ✓ matches (rmfield)
+[ ] 8.28 Q6-1  vs PDF 6.1-6.end.   ✓ matches (% vs %{ %})
+[ ] 8.29 Q6-2  vs PDF.             ✓ matches (gamma ± 0.1)
+[ ] 8.30 Q6-3  vs PDF.             ✓ matches (histogram update)
+[ ] 8.31 Q6-4  vs PDF.             ✓ matches (folding, Ctrl+Enter)
+[ ] 8.32 Q6-5  vs PDF.             ✓ matches (first comment block)
+[ ] 8.33 Q6-6  vs PDF.             ✓ matches (7.8×)
+[ ] 8.34 Q6-7  vs PDF.             ✓ matches (.^ elementwise)
+[ ] 8.35 Q6-8  vs PDF.             ✓ matches (three timings)
+[ ] 8.36 Q6-9  vs PDF.             ✓ matches (t = 0:pi/4:2*pi)
+[ ] 8.37 Q7-1  vs PDF 7.1-7.end.   ✓ matches (PNG)
+[ ] 8.38 Q7-2  vs PDF.             ✓ matches (semicolon)
+[ ] 8.39 Q7-3  vs PDF.             ✓ matches (258×350×3)
+[ ] 8.40 Q7-4  vs PDF.             ✓ matches (intensity image)
+[ ] 8.41 Q7-5  vs PDF.             ✓ matches (colon → global)
+[ ] 8.42 Q7-6  vs PDF.             ✓ matches (258×350 double)
+[ ] 8.43 Q7-7  vs PDF.             ✓ matches (imshow(I,[0 99]))
+[ ] 8.44 Q7-8  vs PDF.             ✓ matches (r, c, p)
+[ ] 8.45 Q7-9  vs PDF.             ✓ matches (pout 74–224; cameraman 7–253)
+[ ] 8.46 Q7-10 vs PDF.             ✓ matches (shared colormap)
+[ ] 8.47 Q7-11 vs PDF.             ✓ matches (I_ind / I_map)
+
+================================================================================
+END CHECKPOINT 1.3 — rev.1, page-complete
+================================================================================

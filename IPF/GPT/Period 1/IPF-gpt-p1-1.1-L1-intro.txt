@@ -970,53 +970,10 @@ Question word type by Q:
   Q5 : predict.
   Q7a: compute.
 
---------------------------------------------------------------------------------
 
-8. ASSESSMENT  (10 quiz questions + to-do + figures)
---------------------------------------------------------------------------------
-Q1  State Nyquist criterion (one line) and name ONE artefact when violated.
-    §2.4
-Q2  A 2048 × 1536, 12-bit-per-pixel grayscale image, 64-byte header, no
-    compression. Total file size in bytes? Show arithmetic. §2.1/§2.2
-Q3  Write the coordinate sets of N4(p) and ND(p) for p = (x, y). Give the
-    Euclidean distance from p to each member. §2.5
-Q4  With V = {2}, is a diagonal step from p=(2,2) to q=(3,3) m-legal if
-    N4(p) = {(1,2),(3,2),(2,1),(2,3)} and N4(q) = {(2,3),(4,3),(3,2),(3,4)}?
-    Show the intersection and conclude. §2.6
-Q5  In one sentence: why does 8-adjacency produce ambiguous path lengths and
-    how does m-adjacency resolve it? §2.6
-Q6  Shorten this expression using the aliased-frequency formula:
-    a sine wave at 90 Hz, sampled at 100 Hz. What observed frequency will it
-    appear as? §2.4
-Q7  State the definition of "connected component" and explain how it differs
-    from "region". §2.8
-Q8  (NEW) Pipeline order and image classes by acquisition (reflection /
-    emission / absorption). §2.0b
-Q9  (NEW) Brightness formula and its physiological justification. §2.1c,
-    §2.3b
-Q10 (NEW) Weber's law: two equal ΔI steps on I=10 and I=200. Which is more
-    visible, and why does this justify log transforms? §2.3b
-
-TO-DO: L1 .txt "TO DO" block (visit OnderWijsOnline, install MATLAB, Zhou
-§1.1–1.11, syllabus Q2.1–2.end and 3.1–3.end). Every Q2.* and Q3.* answer
-is verified verbatim in §9.
-
-Figures to look up by name:
-  "Checker-shadow illusion — E.H. Adelson"                            (L1 s21)
-  "Aliasing and the formation of Moire patterns"                       (L1 s32)
-  "Pixel arrangement 8-adjacent to the centre pixel"                   (L1 s26)
-  "Pixel arrangement mixed-adjacent to the centre pixel"               (L1 s27)
-  "Machine vision basic steps" — the 6-block pipeline                  (L1 s8)
-  "Four different types of illumination systems with cameras"          (L2 s?)
-  L1 slide 30: the 4×4 grid used in EXAMPLE B' (path example)
-  L1 slide 31–32: three dashed-path diagrams (4-, 8-, m-paths)
-  L1 slide 33: "1585 × 1333 / 32 × 27" side-by-side
-  L1 slide 41: "8-bit, resolution 256 / 3-bit, resolution 8" side-by-side
-
---------------------------------------------------------------------------------
-
-9. TO DO  (from end of result-EVD2_–_Lesson_1_2526.txt, quoted + answered)
---------------------------------------------------------------------------------
+================================================================================
+SECTION 9 — TO DO  (rev.4, with General Formula added per exercise)
+================================================================================
 L1 .txt "TO DO…" block, quoted verbatim:
 
     TO DO…
@@ -1030,104 +987,330 @@ Every question below is answered VERBATIM from the uploaded Answer PDFs:
     - Answers to Questions 3.1-3.end.txt
 Where the PDF is terse, the PDF's answer is preserved as-is (no embellishment);
 a "[note]" line flags a source-vs-first-principles difference.
+Each answer is now prefixed with a GENERAL FORMULA line so you can apply
+the same exercise to a different numeric or textual input on the exam.
 
 --------------------------------------------------------------------------------
 9.A  SYLLABUS CHAPTER 2 — BASIC CONCEPTS  (Q 2.1 – 2.end)
 --------------------------------------------------------------------------------
 
 Q2-1  What is digital image processing?
+--------------------------------------------------------------------------------
+General formula:
+  answer = "Applying computer algorithms to digital images;"
+         + " outcome = images OR representative characteristics/properties."
+
+Official answer (verbatim from PDF 2.1-2.end):
   "Digital image processing is the technology of applying a number of
    computer algorithms to process digital images. The outcomes of this
    process can be either images or a set of representative characteristics
    or properties of the original images."
 
+
 Q2-2  Why do we need digital image processing?
+--------------------------------------------------------------------------------
+General formula:
+  answer = "To generate meaningful information from digital images."
+
+Official answer (verbatim):
   "We need image processing to generate meaningful information for digital
    images."
 
+
 Q2-3  Summarize the application of digital image processing in society.
+--------------------------------------------------------------------------------
+General formula:
+  answer = "List all 7 domains: remote sensing, medical imaging, forensics,
+            transportation, robotics, military, consumer electronics."
+
+Official answer (verbatim):
   "The main applications of digital image processing are in remote sensing,
    medical imaging, forensics, transportation, robotics, military
    applications and consumer electronics."
 
+
 Q2-4  What is the difference between image sampling and quantisation?
+--------------------------------------------------------------------------------
+General formula:
+  difference = sampling  → "digitization of the COORDINATES (x, y)"
+             | quantization → "digitization of the AMPLITUDE VALUES f."
+
+Official answer (verbatim):
   "Sampling refers to digitization of the coordinates, and quantization is
    the digitization of the amplitude values."
 
+
 Q2-5  What is the difference between adjacency and connectivity?
+--------------------------------------------------------------------------------
+General formula:
+  difference = adjacency  → "local neighborhood of one pixel"
+             | connectivity → "path linking two pixels."
+
+Official answer (verbatim):
   "Adjacency is related to the neighborhood of one particular pixel.
    Connectivity is related to a path linking two pixels."
 
+
 Q2-6  How to compute the Euclidean distance between two pixels?
+--------------------------------------------------------------------------------
+General formula:
+  D  =  sqrt( (x2 − x1)^2  +  (y2 − y1)^2 )
+  (row-first or column-first labelling does not change the result —
+   the two squared differences are summed.)
+
+Official answer (verbatim from PDF 2.1-2.end):
   "The Euclidean distance between two 2-D points I(x1,y1) and J(x2,y2) is
    defined as
 
         x1 = 1, y1 = 1, x2 = 3, y2 = 4,
         Euclidean distance = sqrt[(1−3)^2 + (1 − 4)^2] = 3.6"
 
-  [note] PDF uses (x = column, y = row); Δx = 2, Δy = 3,
-  D = sqrt(4 + 9) = sqrt(13) ≈ 3.6. PDF is authoritative for exam answers.
+  [note] PDF's convention is x = column, y = row: Δx = 2, Δy = 3,
+  D = sqrt(4 + 9) = sqrt(13) ≈ 3.6. Same √13 under either labelling.
+  The PDF's wording is authoritative for exam answers.
+
 
 Q2-7  Who do you think would perform better at the following tasks: man or
-      computers. Please explain why.
-      (a) Determining which line is the shortest in Figure 1a.
-      (b) Determining which circle is the smallest in Figure 1b.
-      (c) Segmenting the image containing the letter "F" from the background
-          in Figure 2a.
-      (d) Segmenting the white triangle (Kanizsa's triangle) in Figure 2b.
-  (a) "Computers. They can easily detect and compare lengths, since it's
-       absolute values."
-  (b) "Computers. They can easily detect and compare sizes (be it as area
-       or circumference), since it's absolute values."
-  (c) "Men. Human brains are made for pattern recognition. Though computers
-       are learning how to do it as well, they have a much harder time
-       with it."
-  (d) "Men. The triangle is an optical illusion, caused by the (rather
-       unique) processing done by our brains."
+       computers. Please explain why.
+       (a) Determining which line is the shortest in Figure 1a.
+       (b) Determining which circle is the smallest in Figure 1b.
+       (c) Segmenting the image containing the letter "F" from the background
+           in Figure 2a.
+       (d) Segmenting the white triangle (Kanizsa's triangle) in Figure 2b.
+--------------------------------------------------------------------------------
+General formula:
+  answer = IF task is an ABSOLUTE-VALUE measurement (length, area, size)
+             → "Computers"  (exact comparison of numerical properties).
+           IF task requires PATTERN RECOGNITION or INTERPRETING AN OPTICAL
+             ILLUSION (segmentation, perceptual grouping)
+             → "Men"       (human brain is built for this).
+
+Official answers (verbatim, one per sub-question):
+
+  (a)  "Computers. They can easily detect and compare lengths, since it's
+        absolute values."
+
+  (b)  "Computers. They can easily detect and compare sizes (be it as area
+        or circumference), since it's absolute values."
+
+  (c)  "Men. Human brains are made for pattern recognition. Though computers
+        are learning how to do it as well, they have a much harder time
+        with it."
+
+  (d)  "Men. The triangle is an optical illusion, caused by the (rather
+        unique) processing done by our brains."
 
 --------------------------------------------------------------------------------
 9.B  SYLLABUS CHAPTER 3 — IMAGE DIGITIZATION  (Q 3.1 – 3.end)
 --------------------------------------------------------------------------------
-Preamble: "Assuming a monochrome image with 1024 pixels and 256 gray
-levels." The official answers treat "1024 pixels" as 1024 TOTAL pixels
-(i.e. a 32 × 32 image). This differs from a 1024 × 1024 reading and is the
-authoritative interpretation for exam marking.
+Preamble (from PDF 3.1-3.end): "Assuming a monochrome image with 1024 pixels
+and 256 gray levels". The official answers treat "1024 pixels" as 1024 TOTAL
+pixels (i.e. a 32 × 32 image). This differs from a 1024 × 1024 reading and is
+the authoritative interpretation for exam marking.
 
-Q3-1  File size, header 32 bytes, no compression.
+Q3-1  Calculate the total file size (in bytes), assuming a header (containing
+       basic information such as width and height of the image) of 32 bytes
+       and no compression.
+--------------------------------------------------------------------------------
+General formula:
+  file_size_bytes  =  (total_pixels × bytes_per_pixel)  +  header_bytes
+  with:
+      total_pixels     =  M × N          (rows × columns)
+      bytes_per_pixel  =  b / 8          (b = bit depth per pixel)
+      header_bytes     =  fixed overhead (given in the question)
+
+Official answer (verbatim):
   "256 gray levels can be stored in 8 bits (2^8 = 256)
    8 bits is 1 byte
    1024 x 1 = 1024 byte
    1024 + 32 = 1056 byte"
-  [note] Result = 1,056 bytes. Under a 1024×1024 reading this would be
-  1,048,608 B — but the PDF's 1,056 B is what the exam expects.
 
-Q3-2  Subsampled by factor 2 in both dimensions, header unchanged.
+  [note] Result = 1,056 bytes. This treats the image as 1024 total pixels,
+  not 1024 × 1024. Under the 1024 × 1024 reading the answer would be
+  1,048,608 bytes — but the PDF's 1,056 B is what the exam expects.
+
+
+Q3-2  Suppose the original image has been subsampled by a factor of 2 in both
+       dimensions. Calculate the new file size (in bytes), assuming the
+       header size has not changed.
+--------------------------------------------------------------------------------
+General formula:
+  subsample_factor s  →  new_pixels  =  (M / s) × (N / s)
+  new_file_size_bytes = (new_pixels × bytes_per_pixel) + header_bytes
+
+Official answer (verbatim):
   "1024 = 32 x 32
    32/2 x 32/2 = 256
    256 x 1 = 256 byte
    256 + 32 = 288 byte"
-  [note] Result = 288 bytes. Confirms 32 × 32 interpretation (16 × 16 = 256).
 
-Q3-3  Requantised to 2 pixels per byte, header unchanged.
+  [note] Result = 288 bytes. Confirms the 32 × 32 interpretation
+  (32/2 = 16; 16 × 16 = 256 pixels; 256 × 1 B + 32 B = 288 B).
+
+
+Q3-3  Suppose the original image has been requantisised to allow encoding 2
+       pixels per byte. Calculate the new file size (in bytes), assuming the
+       header size has not changed.
+--------------------------------------------------------------------------------
+General formula:
+  pixels_per_byte     =  k
+  new_bit_depth       =  8 / k    bits per pixel
+  payload_bytes       =  total_pixels / k
+  new_file_size_bytes =  payload_bytes  +  header_bytes
+
+Official answer (verbatim):
   "1024 (pixels) / 2 (pixels per byte) = 512 byte
    512 + 32 = 544 byte"
-  [note] Result = 544 bytes. Bit depth halves 8 → 4 bits/pixel.
 
-Q3-4  How many gray levels will the requantised image have?
+  [note] Result = 544 bytes. Bit depth halves (8 → 4 bits/pixel) so payload
+  halves; pixel count is unchanged (still 1024).
+
+
+Q3-4  How many gray levels will the requantisised image have?
+--------------------------------------------------------------------------------
+General formula:
+  gray_levels  =  2^b
+  where b = bit depth per pixel.
+  (Requantised to k pixels/byte  →  b = 8 / k.)
+
+Official answer (verbatim):
   "2 pixels per byte is possible in indexed images if using 16 colours
    (2^4 = 16)"
-  [note] Result = 16 gray levels.
 
-Q3-5  Difference + timings via tic/toc.
-  "Figure 1. Effect of interpolation methods
-   t1 = 0.0541 sec
-   t2 = 0.0204 sec
-   t3 = 0.0107 sec"
-  [note] PDF does not map t1/t2/t3 to specific methods; only the three
-  measured times are reported.
+  [note] Result = 16 gray levels (4 bits per pixel).
 
-Q3-6  Describe aliasing and its relation to the Nyquist frequency.
-  [Verbatim summary; full text spans two PDF pages:]
+
+Q3-5  What difference do you notice? Also try timing different resizing
+       interpolation options using the MATLAB stopwatch timer function tic()
+       and toc().
+================================================================================
+CHECKPOINT 1.1 — SUPPLEMENT: Q3-5 INTERPOLATION METHODS
+================================================================================
+Source: result-EVD2_–_Lesson_1_2526.txt (syllabus §3, Figure 1)
+Sample-exam match: L5 / Q10-2 (visual comparison of interpolations)
+
+--------------------------------------------------------------------------------
+1. ESSENCE
+--------------------------------------------------------------------------------
+When enlarging an image, the algorithm must invent new pixels between known
+ones. The three methods trade processing time for visual quality: Nearest is
+instant but blocky, Bilinear is smooth but blurry, Bicubic is sharpest but
+slowest.
+
+--------------------------------------------------------------------------------
+2. CONTENT & EXPLANATION
+--------------------------------------------------------------------------------
+All three methods work by mapping new enlarged coordinates back to the
+original coordinate grid. Because the mapped coordinate usually falls
+*between* integer pixels, the algorithm must estimate the value.
+
+2.1 NEAREST NEIGHBOR
+  Mechanism: The output pixel takes the exact value of the closest pixel in
+             the original image.
+  Visual result: Blocky, pixelated, "stair-step" (jaggies). Each original
+             pixel becomes a square block.
+  Speed: Fastest. No calculation, just index rounding.
+  Time from image: t3 = 0.0107 sec.
+
+2.2 BILINEAR
+  Mechanism: Weighted average of the closest 2x2 (4 pixels) neighborhood.
+  Visual result: Smoother than nearest. Edges are slightly blurred because
+             high-frequency details are averaged out.
+  Speed: Medium. Requires 4 multiplications + additions per pixel.
+  Time from image: t2 = 0.0204 sec.
+
+2.3 BICUBIC
+  Mechanism: Weighted average of the closest 4x4 (16 pixels) neighborhood.
+  Visual result: Sharpest and smoothest. Preserves edges better than bilinear
+             while avoiding the blockiness of nearest.
+  Speed: Slowest. Requires 16 multiplications + additions per pixel.
+  Time from image: t1 = 0.0541 sec.
+
+2.4 MAPPING THE TIMES TO THE METHODS
+  The image provides three times: t1 = 0.0541, t2 = 0.0204, t3 = 0.0107.
+  Computational complexity strictly increases from Nearest (1 pixel) to
+  Bilinear (4 pixels) to Bicubic (16 pixels).
+  Therefore:
+      t3 (0.0107s) = Nearest Neighbor   (fastest)
+      t2 (0.0204s) = Bilinear           (medium)
+      t1 (0.0541s) = Bicubic            (slowest)
+
+--------------------------------------------------------------------------------
+3. RELATED SUPPORTING CONCEPTS
+--------------------------------------------------------------------------------
+Depends on: L1 Aliasing (§2.4). Nearest-neighbor upscaling creates visual
+            blocks (spatial aliasing artifacts) because it acts as a zero-
+            order hold, introducing sharp steps.
+Feeds into: L5 Geometric operations (imresize, imrotate). Bicubic is the
+            default in MATLAB precisely because it balances these trade-offs.
+
+--------------------------------------------------------------------------------
+4. SUMMARY
+--------------------------------------------------------------------------------
+• Nearest = copies closest pixel. Fastest (t3). Blocky.
+• Bilinear = 2x2 weighted average. Medium (t2). Blurry.
+• Bicubic = 4x4 weighted average. Slowest (t1). Smoothest and sharpest.
+• Trade-off: Time(NN) < Time(Bilinear) < Time(Bicubic).
+• Trade-off: Quality(NN) < Quality(Bilinear) < Quality(Bicubic).
+
+--------------------------------------------------------------------------------
+5. FORMULA / DEFINITION BOX
+--------------------------------------------------------------------------------
+Nearest:   f_new(x,y) = f_old(round(x/scale), round(y/scale))
+Bilinear:  f_new = w1*A + w2*B + w3*C + w4*D  (weights based on distance
+           to the 4 surrounding pixels, sum of weights = 1)
+Bicubic:   f_new = sum_{i=1..16} w_i * P_i   (16 surrounding pixels,
+           cubic polynomial weights)
+
+--------------------------------------------------------------------------------
+6. HAND-CALC WORKED EXAMPLE
+--------------------------------------------------------------------------------
+Upscale this 2x2 image by a factor of 2 using Nearest vs Bilinear.
+Original:
+    10  20
+    30  40
+
+Nearest (2x): Each pixel becomes a 2x2 block.
+    10  10 | 20  20
+    10  10 | 20  20
+    ------+------
+    30  30 | 40  40
+    30  30 | 40  40
+
+Bilinear (2x): Interpolate the half-way points (e.g., between 10 and 20).
+    The top edge midpoint = (10+20)/2 = 15.
+    10  15  20  20
+    15  20  25  25
+    25  30  35  35
+    30  35  40  40
+    *(Approximate visual representation; exact values depend on grid alignment)*
+    Notice how Bilinear creates new intermediate values (15, 25, 35), whereas
+    Nearest only duplicates existing values (10, 20, 30, 40).
+
+--------------------------------------------------------------------------------
+7. SAMPLE-EXAM TAG
+--------------------------------------------------------------------------------
+Q3-5 / Q10-2: "Visually compare the three resized images. How do they differ?"
+  Type: Identify / Explain.
+  Full-mark answer: Name the three methods, describe the visual artifact
+  (Nearest = blocky/jagged; Bilinear = smooth but blurry; Bicubic = smooth
+  and sharp), and map the three given times to the methods based on
+  computational cost.
+
+--------------------------------------------------------------------------------
+Q3-6  Describe in your own words the effect of aliasing and the relation to
+       the Nyquist frequency.
+--------------------------------------------------------------------------------
+General formula:
+  Nyquist criterion:        f_s  >  2 · f_max
+  Aliased observed freq:    f_obs  =  | f_signal  −  k · f_s |,
+                            with k chosen so f_obs ∈ [0, f_s / 2].
+  Naming: f_s / 2  =  Nyquist frequency (fold-over frequency).
+  Effect chain:  undersampling → false low frequency component → jaggies
+                 (stair-step edges) and Moiré patterns (beat with a fine
+                 periodic scene).
+
+Official answer (verbatim summary; full text spans two PDF pages):
 
   "The Nyquist Theorem, also known as the sampling theorem, is a principle
    that engineers follow in the digitization of analog signals. For
@@ -1163,10 +1346,28 @@ Q3-6  Describe aliasing and its relation to the Nyquist frequency.
 
    A special case of aliasing, due to undersampling a fine regular pattern,
    is the formation of Moire patterns (Figure 2)."
+
   [note] PDF Figure 2 is "Aliasing and the formation of Moire patterns."
 
 --------------------------------------------------------------------------------
-9.C  TO DO CHECKLIST  (ticked = verified against official Answer PDF)
+9.C  GENERAL FORMULA QUICK-REFERENCE  (all exercises in one block)
+--------------------------------------------------------------------------------
+File size:                bytes = (total_pixels × bytes_per_pixel) + header
+                          bytes_per_pixel = b / 8
+Subsample by factor s:    new_size = ((M/s)×(N/s) × b/8) + header
+Requantise to k px/byte:  new_b = 8 / k
+                          new_size = (total_pixels / k) + header
+Gray levels:              2^b
+Euclidean distance:       D = sqrt((x2−x1)^2 + (y2−y1)^2)
+Nyquist:                  f_s > 2·f_max
+Aliased frequency:        f_obs = |f_signal − k·f_s|
+Adjacency vs connectivity: local neighbourhood  vs  path between two pixels
+Sampling vs quantization:  digitize coordinates  vs  digitize amplitude
+Man-vs-computer rule:     absolute measurement → computer;
+                          pattern recognition / optical illusion → human
+
+--------------------------------------------------------------------------------
+9.D  TO DO CHECKLIST  (ticked = verified against official Answer PDF)
 --------------------------------------------------------------------------------
 [ ] 8.1  Visit OnderWijsOnline — calendar + Answer PDFs.
 [ ] 8.2  Install MATLAB (Phase 0).
@@ -1186,14 +1387,5 @@ Q3-6  Describe aliasing and its relation to the Nyquist frequency.
 [ ] 8.16 Q3-6 vs PDF.            ✓ (Nyquist long-form)
 
 ================================================================================
-REVISION LOG
-================================================================================
-rev.2  Initial (missed L1 slides: 2–7, 11–14, 15–23, 25, 28, 30–33, 36–39,
-       41, 61, 62)
-rev.3  Inserted missing-page blocks, each tagged [NEW — L1 slide NN: ...].
-       Sections added: 2.0, 2.0b, 2.1b, 2.1c, 2.1d, 2.1e, 2.1f, 2.2b, 2.3b,
-       2.4b, 2.5b, 2.6b, 2.9, 3b; expanded §6 (new EXAMPLE B', E); expanded
-       §8 (Q8–Q10); added figure list; added this revision log.
-================================================================================
-END CHECKPOINT 1.1 — rev.3, page-complete
+END SECTION 9 — rev.4 (General Formula added to every exercise)
 ================================================================================
