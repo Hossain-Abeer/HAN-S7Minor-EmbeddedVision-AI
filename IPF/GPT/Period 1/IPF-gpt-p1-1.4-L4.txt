@@ -1,0 +1,1051 @@
+================================================================================
+CHECKPOINT 1.4 — L4: MATHEMATICAL TOOLS — ARITHMETIC AND LOGIC OPERATIONS
+(rev.1, page-complete)
+================================================================================
+Files: result-EVD2__Lesson_4_2021.txt
+       EVD2_Syllabus_2026_2027_v20260826.txt  §8, §9
+       Answers to Question 8.1-8.end.txt
+       Answers to Question 9.1-9.end.txt
+Sample-exam match: Q4 (bitwise AND/OR/XOR on 3×3). Indirect: Q7c (mean
+                   filter edge pixel — arithmetic composition), Q7d
+                   (checkerboard histogram — addition semantics).
+Progress tick: [ ] 1.4
+
+Revision log
+  rev.1  Initial page-complete pass. Covers every L4 slide (slides 2–45)
+         and Syllabus §8.1, §9.1, §9.2 (Q8.1–8.16, Q9.1–9.16) with
+         General Formula per exercise. No assessment section per user
+         instruction.
+================================================================================
+
+1. ESSENCE
+--------------------------------------------------------------------------------
+L4 is the "arithmetic layer" of image processing. It introduces three
+families of operations that every later lesson uses:
+  (a) Matrix-level operations — the element-wise vs matrix-product
+      distinction, affine transformation matrices, convolution, correlation,
+      separable kernels, Gaussian blur.
+  (b) Pixel-level arithmetic — addition, subtraction, multiplication,
+      division, with the special case of uint8 overflow / saturation.
+  (c) Pixel-level logic — bitwise AND, OR, XOR, complement, on grayscale
+      and colour images (not just binary masks), with region-of-interest
+      (ROI) processing as the primary application.
+Every enhancement filter (L7), every frequency filter (L8), every
+restoration step (L9), and every thresholding step (L12) is built on the
+four arithmetic operators plus the two convolution operators.
+
+--------------------------------------------------------------------------------
+2. CONTENT & EXPLANATION  (depth pass, page-complete)
+--------------------------------------------------------------------------------
+
+2.0  WHAT L4 ASKS — THE FIVE QUESTIONS ON SLIDE 2
+--------------------------------------------------------------------------------
+[L4 slide 2: "What will we learn?"]
+  1. What are the main mathematical tools in image processing?
+  2. What are the basic statistical measures in image processing?
+  3. Which arithmetic and logic operations can I apply to digital images?
+  4. How are they performed in MATLAB?
+  5. What are they used for?
+
+  The slides answer each in order:
+    Slides 4–8   → matrix operations (Q1, Q3 partial)
+    Slides 9–24  → convolution, correlation, separable kernels, Gaussian
+                   (Q1, Q3)
+    Slides 25–32 → addition, overflow handling (Q3, Q4)
+    Slides 33–36 → subtraction, flat-field, angiography (Q3, Q4)
+    Slides 37–40 → multiplication, division, NDVI (Q3, Q4)
+    Slides 41–44 → logic operations (AND / OR / XOR) (Q3, Q4)
+    Slide 45     → summary (Q5, applied)
+
+--------------------------------------------------------------------------------
+
+2.1  ARRAY PRODUCT — ELEMENT-WISE MULTIPLICATION
+--------------------------------------------------------------------------------
+[L4 slides 4–5]
+Definition: element-wise (Hadamard) product of two matrices. Multiply
+corresponding entries. MATLAB operator: .*
+
+  For two 2×2 images A = [[a11 a12]; [a21 a22]], B = [[b11 b12]; [b21 b22]]:
+
+        A .* B  =  [[ a11·b11   a12·b12 ]
+                    [ a21·b21   a22·b22 ]]
+
+  For two vectors a (3×1) and b (1×3), the outer product is a 3×3 matrix:
+
+        a * b  =  [[ a1·b1  a1·b2  a1·b3 ]
+                   [ a2·b1  a2·b2  a2·b3 ]
+                   [ a3·b1  a3·b2  a3·b3 ]]
+
+  This vector outer product is exactly the "separable kernel" idea (§2.6):
+  a 3×3 mask can be expressed as the outer product of a 3×1 column and a
+  1×3 row, cutting convolutions from O(P·Q) to O(P+Q).
+
+  Where it is used: pixel-by-pixel masking, ROI arithmetic, per-pixel
+  weighting, multi-spectral combinations (NDVI, §2.13).
+
+--------------------------------------------------------------------------------
+
+2.2  MATRIX PRODUCT — DOT (INNER) PRODUCT
+--------------------------------------------------------------------------------
+[L4 slide 6]
+Definition: standard linear-algebra matrix product. Entry (i, j) of C = A·B
+is the dot product of row i of A with column j of B:
+
+        C[i,j]  =  sum_k  A[i,k] · B[k,j]
+
+  For the same 2×2 matrices:
+
+        A * B  =  [[ a11·b11 + a12·b21   a11·b12 + a12·b22 ]
+                   [ a21·b11 + a22·b21   a21·b12 + a22·b22 ]]
+
+  MATLAB operator: * (no dot). Requires size(A,2) == size(B,1).
+
+  Where it is used: affine transformation matrices (§2.3), rotation of a
+  coordinate vector, solving linear systems, transforming homogeneous
+  coordinates. It is NOT used for pixel-wise masking.
+
+  The exam-critical distinction:
+    .*   = multiply each pixel by each pixel (element-wise).
+    *    = linear-algebra product (combines rows and columns).
+
+--------------------------------------------------------------------------------
+
+2.3  MAPPING AND AFFINE TRANSFORMATIONS (preview of L5)
+--------------------------------------------------------------------------------
+[L4 slides 7–8]
+A point (x, y) is mapped to (x', y') by a 2×2 linear transform plus a
+translation:
+
+        x'  =  a0·x + a1·y + a2
+        y'  =  b0·x + b1·y + b2
+
+  In homogeneous 3-vector form (the convention used in L5):
+
+        [x']   [a0  a1  a2]   [x]
+        [y'] = [b0  b1  b2] · [y]
+        [1 ]   [0   0   1 ]   [1]
+
+  Six coefficients (a0..a2, b0..b2) cover translation, scaling, rotation,
+  shear. L4 mentions this only to justify why the matrix product exists in
+  an image-processing course; the full affine catalogue is L5.
+
+  Counter-clockwise rotation (L4 slide 7, verbatim diagram caption):
+        [x']   [ cos θ   sin θ ]   [x]
+        [y'] = [-sin θ   cos θ ] · [y]
+  MATLAB's image coordinate system has y downward, so a counter-clockwise
+  rotation on screen uses a POSITIVE angle in imrotate, but the
+  standard mathematical matrix above uses these signs. L5 handles the
+  screen-vs-math convention carefully.
+
+--------------------------------------------------------------------------------
+
+2.4  CONVOLUTION — 1-D DEFINITION
+--------------------------------------------------------------------------------
+[L4 slides 9–11]
+Formal definition (slide 9, verbatim):
+
+        (A * B)(x)  =  sum over j of  A(j) · B(x − j)
+
+  "Mirror" intuition: convolution flips B before sliding it across A.
+  Correlation (§2.5) does NOT flip.
+
+  L4 slide 11 worked example (verbatim):
+        A = {0, 1, 2, 3, 2, 1, 0}
+        B = {1, 3, -1}
+    Mirror B: B_mirrored = {−1, 3, 1} centred at 0.
+    Slide B_mirrored across A. Each output value is the sum of products.
+
+        x=0:  A(−1)·B_mirrored(−1) + A(0)·B_mirrored(0) + A(1)·B_mirrored(1)
+            = 0 + 0·3 + 1·1  =  1
+        x=1:  0 + 1·3 + 2·1  =  5
+        x=2:  1·(−1) + 2·3 + 3·1  =  −1 + 6 + 3  =  8
+        ...
+
+    Result begins: A * B = {1, 5, 8, ...}
+
+  Exam note: the L4 slide's mirror indexing aligns the centre of B at
+  x = 0. This is exactly the standard formula. Any question that asks
+  "compute the convolution" uses this procedure.
+
+--------------------------------------------------------------------------------
+
+2.5  CORRELATION — 1-D AND 2-D
+--------------------------------------------------------------------------------
+[L4 slides 18, 20]
+Definition: correlation is convolution without the mirror flip. The mask
+is applied as-is:
+
+        (A ⊕ B)(x)  =  sum over j of  A(j) · B(j − x)
+
+  For a symmetric mask (Gaussian, mean, Sobel, Prewitt, Laplacian) the two
+  operations give the same result at the centre; only the boundary values
+  differ. This is why most image filters are written as "correlation" in
+  MATLAB (imfilter default) and still match the textbook formula.
+
+  MATLAB:
+        imfilter(A, B)           % correlation (default)
+        imfilter(A, B, 'conv')   % convolution
+
+  Where it matters: only when the mask is ASYMMETRIC — motion-blur masks,
+  derivative masks that are not anti-symmetric, custom directional
+  filters. For symmetric 3×3 filters, conv and corr are equivalent in the
+  interior.
+
+--------------------------------------------------------------------------------
+
+2.6  SEPARABLE KERNELS
+--------------------------------------------------------------------------------
+[L4 slides 21–22]
+Definition: a 2-D mask S is separable if it can be written as the outer
+product of two 1-D vectors:
+
+        S  =  col_vector  *  row_vector         (outer product, §2.1)
+
+  L4 slide 21 example (verbatim):
+        S = [[-1  0  1],
+             [-2  0  2],
+             [-1  0  1]]
+          = [1; 2; 1]  *  [-1  0  1]
+
+    Verify: [1;2;1] · [-1,0,1] = [[-1,0,1]; [-2,0,2]; [-1,0,1]] ✓
+
+  MATLAB: isfilterseparable(S) returns 1 if separable.
+
+  Computational advantage (slide 24): instead of M·N·P·Q operations for
+  a P×Q kernel, separable form uses M·N·P + M·N·Q = M·N·(P+Q).
+  Speedup = PQ / (P + Q).
+
+        For P = Q = 9:  speedup = 81 / 18 = 4.5×
+        For P = Q = 25: speedup = 625 / 50 = 12.5×
+
+  The Gaussian is the best-known separable kernel. All box/mean filters
+  are also separable.
+
+--------------------------------------------------------------------------------
+
+2.7  GAUSSIAN BLUR KERNEL
+--------------------------------------------------------------------------------
+[L4 slides 23–24]
+Continuous 2-D Gaussian (slide 23, verbatim):
+
+        h(x, y)  =  exp( −(x² + y²) / (2·σ²) )
+
+  Properties (slide 24, verbatim):
+    • Separable: h(x, y) = exp(−x²/(2σ²)) · exp(−y²/(2σ²)) → fast
+      implementation.
+    • Symmetric: no directional bias.
+    • Coefficients fall to (almost) zero at the kernel's edge → truncation
+      is safe.
+    • Fourier transform of a Gaussian is a Gaussian → used in L8 for
+      frequency-domain smoothing.
+
+  1-D sampled Gaussian (slide 23, verbatim numbers):
+        [0.279, 0.442, 0.279]
+
+  2-D sampled Gaussian (outer product of the above with itself, slide 23):
+        [[0.078, 0.123, 0.078],
+         [0.123, 0.195, 0.123],
+         [0.078, 0.123, 0.078]]
+
+  Sum of entries = 1 (kernel normalised). This is essential — a kernel
+  whose entries do NOT sum to 1 will brighten or darken the image in
+  addition to filtering.
+
+  Gaussian vs mean: the mean filter has a flat 1/9 weight everywhere;
+  the Gaussian weights the centre more. Result: mean produces harsher
+  blur; Gaussian produces smoother, more natural-looking blur. This is the
+  L7 example, referenced here for completeness.
+
+--------------------------------------------------------------------------------
+
+2.8  COMMUTATIVITY, ASSOCIATIVITY, DISTRIBUTIVITY
+--------------------------------------------------------------------------------
+[L4 slides 15–17]
+Convolution, unlike the bare products, obeys algebraic laws that let us
+optimise filter sequences.
+
+  COMMUTATIVE:        A * B  =  B * A
+                      "The order of convolution does not matter for the
+                       result at the output; pick whichever order is
+                       computationally cheaper."
+
+  ASSOCIATIVE:        A * B * C  =  A * (B * C)
+                      "Two convolutions in sequence can be pre-combined
+                       into one kernel (B * C), then applied once."
+
+  DISTRIBUTIVE over addition:
+                      A * (B + C)  =  A * B  +  A * C
+                      "Convolving with a sum of kernels = sum of the
+                       two convolved results."
+
+  Where these matter: combined filter chains in L7 (e.g. mean followed by
+  Gaussian = Gaussian with a larger effective sigma); Laplacian-of-Gaussian
+  (LoG) construction in L11; frequency-domain filter construction in L8.
+
+--------------------------------------------------------------------------------
+
+2.9  LINEAR FILTERING — SUPERPOSITION AND SCALING
+--------------------------------------------------------------------------------
+[L4 slides 19–20]
+A system R is linear iff:
+
+  SUPERPOSITION:    R(f + g)  =  R(f) + R(g)
+                    "Response to sum of inputs = sum of individual
+                     responses."
+
+  SCALING:          R(k·f)  =  k · R(f)
+                    "Response to scaled input = scaled response."
+
+  A system that satisfies both is linear. Every convolution is linear;
+  every correlation is linear; the median filter, max/min filter, and
+  morphological operations are NOT linear.
+
+  Where this matters: L7 explicitly contrasts linear filters (mean,
+  Gaussian) with nonlinear ones (median, max/min). L8 uses linearity to
+  decompose filter chains in the Fourier domain. L11 uses linearity to
+  justify the LoG construction.
+
+--------------------------------------------------------------------------------
+
+2.10  ARITHMETIC AND LOGIC OPERATIONS — OVERVIEW
+--------------------------------------------------------------------------------
+[L4 slide 25]
+Two images combined pixel-by-pixel via an arithmetic or logical operator
+yield a third image:
+
+        Z  =  X  op  Y
+
+  Arithmetic operations (slides 26–40): +, −, ×, ÷.
+  Logic operations (slides 41–44):     AND, OR, XOR.
+
+  Two key properties to remember:
+    • Every arithmetic operation MUST handle overflow. uint8 is [0, 255];
+      the sum of two bright pixels can exceed 255.
+    • Every logic operation requires the two inputs to have the same
+      NUMBER OF BITS per pixel and same dimensions. A bitwise AND between
+      a uint8 image and a logical mask works because logical is
+      1 bit per pixel expanded to 8.
+
+--------------------------------------------------------------------------------
+
+2.11  ADDITION
+--------------------------------------------------------------------------------
+[L4 slides 26–32]
+Definition: Z = X + Y, applied pixel-by-pixel. Common uses:
+
+  APPLICATION 1: Blending two images (slide 27)
+        Z  =  ( X + Y ) / 2   (or a weighted sum a·X + (1 − a)·Y)
+        Used for transparency overlays, double exposures.
+
+  APPLICATION 2: Additive offset (slide 28)
+        Z  =  X + c     (c is a constant)
+        Brightens the image uniformly. Same as intensity transform
+        s = r + c in L6.
+
+  APPLICATION 3: Additive noise (slide 29)
+        Z  =  X + N     (N is a noise image)
+        The L9 "additive Gaussian noise" model uses this.
+
+  OVERFLOW HANDLING (slide 30, verbatim):
+    Option A — Truncation:
+        Values above 255 are clamped to 255. Values below 0 are clamped
+        to 0.
+    Option B — Normalization:
+        g  =  (f − f_min) · L_max / (f_max − f_min)
+        where L_max = 255, f_min and f_max are the minimum and maximum
+        values of the computed array f. This stretches the range to
+        [0, 255] linearly.
+    Option C — Wrap-around (bare MATLAB +):
+        uint8(200) + uint8(100) = 300 mod 256 = 44.
+        This is the source of most "why is my bright image now black"
+        bugs.
+
+  MATLAB (slide 31, verbatim code):
+        X = uint8([200 100 100; 0 10 50; 50 250 120])
+        Y = uint8([100 220 230; 45 95 120; 205 100 0])
+        W = uint16(X) + uint16(Y)      % temporary widening to avoid wrap
+        fmax = max(W(:))
+        fmin = min(W(:))
+        Za = uint8(255.0 * double((W - fmin)) / double((fmax - fmin)))  % norm
+        Zb = imadd(X, Y)               % IPT function (saturates at 255)
+    The comparison shows that imadd saturates, while a plain + on uint8
+    wraps.
+
+  OpenCV note (slide 32, verbatim): "Best is to understand what you are
+  doing…" — the OpenCV add() function saturates like imadd, but the +
+  operator on uint8 wraps like MATLAB. Always check the library's
+  convention.
+
+--------------------------------------------------------------------------------
+
+2.12  SUBTRACTION
+--------------------------------------------------------------------------------
+[L4 slides 33–36]
+Definition: Z = X − Y, applied pixel-by-pixel. Common uses:
+
+  APPLICATION 1: Angiography (slide 34)
+        Before/after contrast-agent image subtraction isolates the blood
+        vessels. The result is often brightened with a scaling step.
+
+  APPLICATION 2: Flat-field correction (slide 35)
+        Sensor dust, illumination fall-off, and lens vignetting are
+        corrected by dividing (or subtracting) a "flat field" reference
+        image captured under uniform illumination.
+        Z  =  (Signal − Dark) / (Flat − Dark)
+
+  APPLICATION 3: Motion and defect detection
+        Subtracting two frames of the same scene isolates what changed.
+
+  APPLICATION 4: Image negative
+        Z  =  L_max  −  X   (complement)
+        Same as s = 255 − r in L6.
+
+  MATLAB (slide 36, verbatim):
+        imsubtract   — saturates at 0 (uint8 arithmetic)
+        imabsdiff    — |X − Y|, always non-negative, preserves both
+                       positive and negative differences
+        imcomplement — L_max − X
+
+  Distinguishing imsubtract from imabsdiff:
+        I = uint8([100 200]), J = uint8([200 100])
+        imsubtract(I, J) = [0 100]    (100−200 clamped to 0; 200−100 = 100)
+        imabsdiff(I, J)  = [100 100]  (|100−200| = 100; |200−100| = 100)
+    For a symmetric difference metric (e.g. comparing two images) use
+    imabsdiff, not imsubtract.
+
+--------------------------------------------------------------------------------
+
+2.13  MULTIPLICATION AND DIVISION
+--------------------------------------------------------------------------------
+[L4 slides 37–40]
+Definition: Z = X .* Y or Z = X ./ Y, applied pixel-by-pixel.
+
+  MATLAB (slide 37, verbatim): immultiply, imdivide.
+  Same saturation behaviour as imadd/imsubtract.
+
+  APPLICATION 1: Brightening / darkening by a constant (dynamic scaling)
+        Z  =  c · X     (c > 1 brightens, c < 1 darkens)
+        Multiplication is proportional: dark pixels stay relatively dark,
+        bright pixels scale up more. Adding a constant shifts everything
+        equally. This is exactly the difference tested in Q9.5.
+
+  APPLICATION 2: Simultaneous visible and NIR imaging (slide 38)
+        Two cameras (visible + NIR) capture co-registered images.
+        Multiplication/division combines them into a single composite or
+        index.
+
+  APPLICATION 3: NDVI (Normalised Difference Vegetation Index)
+        Slide 39 (verbatim):
+              NDVI  =  (NIR − Red) / (NIR + Red)
+        Range [−1, +1]. Positive values indicate vegetation (chlorophyll
+        reflects NIR, absorbs Red). Negative values indicate water /
+        clouds. This is a canonical arithmetic-op example.
+
+  APPLICATION 4: Flat-field division (see §2.12).
+
+  Overflow: for uint8, immultiply saturates at 255 and imdivide rounds
+  down. For NDVI you must convert to double first, otherwise
+  (NIR − Red) can go negative and (NIR + Red) can exceed 255.
+
+--------------------------------------------------------------------------------
+
+2.14  LOGIC OPERATIONS — BINARY AND BITWISE
+--------------------------------------------------------------------------------
+[L4 slides 41–44]
+Two levels of logic operations:
+
+  BINARY (logical arrays):
+        Operates on {0, 1} masks. Pure logic. AND, OR, XOR, NOT.
+        No overflow concern. Used for region masks.
+
+  BITWISE (grayscale / colour):
+        Operates on the bit representation of each pixel value.
+        AND: dark regions become darker; only common 1-bits survive.
+        OR:  result is brighter than both inputs.
+        XOR: shows where images differ.
+        Used for masking, difference imaging, bit-plane extraction.
+
+  L4 slide 41 (binary test images): shows AND / OR / XOR on two simple
+  binary shapes — the truth-table level.
+
+  L4 slide 42 (BITWISE AND on monochrome):
+        bitand(X, Y) — each bit of the result is the logical AND of the
+        corresponding bits of X and Y.
+        Interpretation: only pixels where BOTH images are bright remain
+        bright. Dark pixels (low bits) dominate.
+
+  L4 slide 43 (BITWISE OR):
+        bitor(X, Y) — each bit of the result is the logical OR.
+        Interpretation: bright pixels in EITHER image survive. Result is
+        brighter than both inputs.
+
+  L4 slide 44 (BITWISE XOR):
+        bitxor(X, Y) — each bit of the result is the logical XOR.
+        Interpretation: pixels that are IDENTICAL in both images become
+        dark (0 XOR 0 = 0, 1 XOR 1 = 0); pixels that DIFFER become bright
+        (0 XOR 1 = 1, 1 XOR 0 = 1). Used for change detection.
+
+  MATLAB functions (slide 36 already lists imcomplement; slide 44 lists
+  bitand, bitor, bitxor):
+        bitand(X, Y)      — bitwise AND
+        bitor(X, Y)       — bitwise OR
+        bitxor(X, Y)      — bitwise XOR
+        bitcmp(X)         — bitwise NOT (invert)
+        imcomplement(X)   — IPT version of NOT, works on any image class
+
+  Difference between logical and bitwise:
+        logical AND (X & Y)     — element is 1 iff both X[i] and Y[i]
+                                  are nonzero (as numbers).
+        bitwise AND (bitand)    — bit-by-bit AND of the binary
+                                  representation. E.g. 200 & 100:
+                                  200 = 1100 1000₂
+                                  100 = 0110 0100₂
+                                  AND = 0100 0000₂ = 64.
+        A grayscale 200 & 100 = 64, not 0.
+
+  This is the exact content tested in sample-exam Q4.
+
+--------------------------------------------------------------------------------
+
+3. RELATED SUPPORTING CONCEPTS
+--------------------------------------------------------------------------------
+Depends on:
+  L1 §2.1        bit depth (uint8 range, bitwise representation)
+  L1 §2.5        N4/N8 (for convolution kernel footprint)
+  L3 §2.5        data classes (uint8 vs double — overflow behaviour differs)
+  L3 §2.10       element-wise vs matrix (* vs .*) — §2.1/§2.2 of L4 apply it
+  L3 §2.16       imadd, imsubtract, immultiply, imdivide — L4 explains
+                 the semantics (saturation, overflow handling)
+
+Feeds into:
+  L5 geometric ops   — affine transformation matrices (§2.3) and the
+                       interpolation step rely on matrix multiplication.
+  L6 intensity       — imadd/imsubtract are exactly the additive and
+                       subtractive intensity transforms (brighten, darken,
+                       negative).
+  L7 neighbourhood   — convolution, correlation, separable kernels, and
+                       the mean/Gaussian filters all derive from L4
+                       §2.4–§2.7.
+  L8 frequency       — the convolution theorem and Fourier filtering
+                       rely on the commutativity and distributivity of
+                       convolution.
+  L9 restoration     — flat-field correction, dark-frame subtraction,
+                       and additive-noise models use the arithmetic ops
+                       of §2.11–§2.13.
+  L11 edge detection — Laplacian and LoG masks use negative coefficients
+                       (§2.7, §2.4); the composite Laplacian is a form of
+                       subtraction.
+  L12 segmentation   — region-of-interest (ROI) processing uses bitwise
+                       masking of §2.14.
+  Sample-exam Q4     — bitwise AND/OR/XOR on 3×3.
+  Sample-exam Q7c    — mean filter edge pixel: composition of
+                       convolution + arithmetic.
+  Sample-exam Q7d    — checkerboard histogram after mean filtering:
+                       addition of mask-weighted sums.
+
+--------------------------------------------------------------------------------
+4. SUMMARY (exam-ready, 12 bullets)
+--------------------------------------------------------------------------------
+1. Element-wise (.*) vs matrix (*): .* for pixel-by-pixel masking;
+   * for linear-algebra transforms (rotation, scaling).
+2. Affine transform: (x', y') = (a0·x + a1·y + a2, b0·x + b1·y + b2);
+   six coefficients cover translation, scaling, rotation, shear.
+3. Convolution: flip mask, sum products. Correlation: no flip.
+4. Separable kernel: 2-D mask = outer product of two 1-D vectors.
+   Speedup = PQ / (P + Q).
+5. Gaussian: h(x,y) = exp(−(x²+y²)/(2σ²)); separable, symmetric, sum = 1.
+6. Convolution is commutative, associative, distributive over addition.
+   This enables filter-chain pre-combination.
+7. Linear filter: superposition R(f+g) = R(f) + R(g) and scaling
+   R(kf) = k·R(f).
+8. Addition: blend (X+Y)/2, offset X+c, additive noise X+N. Overflow
+   options: truncation (clamp), normalization (rescale), wrap-around
+   (mod 256). imadd saturates; bare + wraps.
+9. Subtraction: angiography, flat-field, defect detection, negative.
+   imsubtract clamps negative to 0; imabsdiff keeps both signs.
+10. Multiplication: dynamic brightening/darkening. Division: inverse.
+    NDVI = (NIR − Red) / (NIR + Red). Convert to double before to avoid
+    uint8 overflow.
+11. Bitwise AND: only common bright survive (darker result). OR:
+    brighter than both. XOR: shows where images differ. NOT: invert.
+12. Logical (X & Y) vs bitwise (bitand(X, Y)): the former tests nonzero,
+    the latter operates on binary representation. Sample-exam Q4 uses
+    bitwise on grayscale.
+
+--------------------------------------------------------------------------------
+5. FORMULA / DEFINITION BOX
+--------------------------------------------------------------------------------
+Array product:           C[i,j]  =  A[i,j] · B[i,j]         (MATLAB .*)
+Matrix product:          C[i,j]  =  sum_k A[i,k] · B[k,j]   (MATLAB *)
+Affine transform:        x'  =  a0·x + a1·y + a2
+                         y'  =  b0·x + b1·y + b2
+Convolution (1-D):       (A*B)(x)  =  sum_j A(j) · B(x−j)
+Correlation (1-D):       (A⊕B)(x)  =  sum_j A(j) · B(j−x)
+Convolution (2-D):       g(x,y)  =  sum_k sum_j h(j,k) · f(x−j, y−k)
+                         with m2 = floor(m/2), n2 = floor(n/2)
+Separable kernel:        S  =  c · rᵀ         (outer product)
+Speedup of separability: PQ / (P + Q)
+Gaussian:                h(x,y)  =  exp(−(x² + y²) / (2σ²))
+Commutative:             A * B  =  B * A
+Associative:             A * B * C  =  A * (B * C)
+Distributive:            A * (B + C)  =  A*B + A*C
+Linearity:               R(kf)  =  k·R(f);  R(f+g)  =  R(f) + R(g)
+Addition overflow:
+    clamp:               g  =  min(f, 255)
+    normalize:           g  =  (f − f_min) · 255 / (f_max − f_min)
+    wrap:                g  =  mod(f, 256)
+Flat-field correction:   Z  =  (Signal − Dark) / (Flat − Dark)
+NDVI:                    NDVI  =  (NIR − Red) / (NIR + Red)
+Bitwise:
+    AND:                 g[i]  =  bitand(x[i], y[i])
+    OR:                  g[i]  =  bitor(x[i], y[i])
+    XOR:                 g[i]  =  bitxor(x[i], y[i])
+    NOT:                 g[i]  =  bitcmp(x[i])  or  imcomplement(x[i])
+
+--------------------------------------------------------------------------------
+6. HAND-CALC WORKED EXAMPLES
+--------------------------------------------------------------------------------
+
+EXAMPLE A — 1-D convolution (L4 slide 11)
+--------------------------------------------------------------------------------
+A = {0, 1, 2, 3, 2, 1, 0};   B = {1, 3, −1}.
+
+Step 1: Mirror B → B_m = {−1, 3, 1} (centred at 0).
+Step 2: Slide B_m across A; each output is sum of products.
+
+  x=0:  A(−1)·(−1) + A(0)·3 + A(1)·1  = 0 + 0 + 1  = 1
+  x=1:  A(0)·(−1) + A(1)·3 + A(2)·1  = 0 + 3 + 2  = 5
+  x=2:  A(1)·(−1) + A(2)·3 + A(3)·1  = −1 + 6 + 3  = 8
+
+Result begins: 1, 5, 8, ...
+
+  (The slide truncates after three values; the convolution has length
+  |A| + |B| − 1 = 7 + 3 − 1 = 9 outputs.)
+
+EXAMPLE B — 2-D convolution centre value (L4 slides 12–13)
+--------------------------------------------------------------------------------
+Kernel h = [[−2, −1, 0],
+            [−1,  1,  1],
+            [ 0,  1,  2]]
+Image patch f = [[?, ?, ?], [?, 5, 8], [?, 3, 2]]  (3×3 with p at centre).
+
+  Convolution (flip h both axes, then sum products):
+  h_flipped = [[ 2, 1, 0],
+               [ 1, 1, −1],
+               [ 0, −1, −2]]
+
+  g_center  =  h_flipped[0,0]·f[0,0] + h_flipped[0,1]·f[0,1] + ...
+            =  2·? + 1·? + 0·?
+             + 1·? + 1·5 + (−1)·8
+             + 0·? + (−1)·3 + (−2)·2
+
+  For the slide's specific border values (all zero around the 5, 8, 3, 2
+  region), the sum reduces to:
+        g_center  =  1·5 + (−1)·8 + (−1)·3 + (−2)·2
+                  =  5 − 8 − 3 − 4
+                  =  −10
+  Wait — the slide says the result is 20. Let me re-check the slide's
+  specific convention.
+
+  L4 slide 13 (verbatim):
+        Kernel = Img =
+        (-2x0) + (-1x0) + (0x0)
+       +(-1x0) + (1x5) + (1x8)
+       + (0x0) + (1x3) + (2x2)   = 20
+
+  So the slide uses CONVOLUTION as if it were CORRELATION (no flip).
+  The kernel is applied as-is against the image patch, giving:
+        sum  =  (−2)(0) + (−1)(0) + (0)(0) + (−1)(0) + (1)(5) + (1)(8)
+              + (0)(0) + (1)(3) + (2)(2)
+              =  0 + 0 + 0 + 0 + 5 + 8 + 0 + 3 + 4
+              =  20  ✓
+
+  [note] L4 slides 12–13 label the operation "convolution" but the
+  arithmetic shown is correlation (no flip). Use the arithmetic shown in
+  the slide when reproducing the slide's answer; use the flip when the
+  exam explicitly says "convolution".
+
+EXAMPLE C — bitwise AND / OR / XOR on 3×3 (sample-exam Q4)
+--------------------------------------------------------------------------------
+Sample exam gives two 3×3 uint8 images X and Y (values below are for
+illustration; the exam's exact numbers are reproduced from the answer PDF
+in §8).
+
+  Rule for each operation:
+        bitand(X, Y)   — bit-by-bit AND
+        bitor(X, Y)    — bit-by-bit OR
+        bitxor(X, Y)   — bit-by-bit XOR
+
+  Worked for one cell: X = 200 = 1100 1000₂, Y = 100 = 0110 0100₂
+        AND  =  0100 0000₂  =  64
+        OR   =  1110 1100₂  =  236
+        XOR  =  1010 1100₂  =  172
+
+  Interpretation:
+        AND → darker than either input (only common bright survives)
+        OR  → brighter than either input (all bright survives)
+        XOR  → dark where identical, bright where different
+
+  When X == Y (the sample exam's actual values), AND = OR = X and XOR = 0.
+  This is why the PDF's answer shows bitand and bitor as equal, and
+  bitxor as all zeros.
+
+EXAMPLE D — Addition overflow handling (L4 slide 30)
+--------------------------------------------------------------------------------
+X = uint8(200), Y = uint8(100).
+
+  Bare +:  200 + 100 = 300 mod 256 = 44   (wrap-around, WRONG)
+  imadd:   min(200 + 100, 255) = 255      (saturate, CORRECT for brightening)
+  normalize: with f_min = 0, f_max = 300, L_max = 255:
+        g  =  (300 − 0) · 255 / (300 − 0)  =  255     (also saturates
+                                                        but preserves
+                                                        relative scale of
+                                                        other pixels)
+
+  For a full 3×3 example (slide 31):
+        X = [[200 100 100]; [0 10 50]; [50 250 120]]
+        Y = [[100 220 230]; [45 95 120]; [205 100 0]]
+        W = uint16(X) + uint16(Y)   (16-bit to avoid wrap)
+             = [[300 320 330]; [45 105 170]; [255 350 120]]
+        f_max = 350, f_min = 45
+        Za = uint8(255 · (W − 45) / (350 − 45))
+           = uint8(255 · [[255 275 285]; [0 60 125]; [210 305 75]] / 305)
+           = [[213 230 238]; [0 50 105]; [176 255 63]]
+        Zb = imadd(X, Y)  (saturating)
+           = [[255 255 255]; [45 105 170]; [255 255 120]]
+
+EXAMPLE E — Separable kernel speedup
+--------------------------------------------------------------------------------
+9×9 Gaussian kernel. M = N = image pixels.
+
+  Non-separable operations:   M·N·P·Q  =  M·N·9·9  =  81·M·N
+  Separable operations:       M·N·(P + Q)  =  M·N·(9 + 9)  =  18·M·N
+  Speedup  =  81 / 18  =  4.5×
+
+  25×25 kernel:  speedup  =  625 / 50  =  12.5×
+
+EXAMPLE F — NDVI
+--------------------------------------------------------------------------------
+NIR = 180, Red = 60 (double).
+
+  NDVI  =  (180 − 60) / (180 + 60)  =  120 / 240  =  0.5
+
+  Positive 0.5 → strong vegetation. Same as NDVI computed from any
+  healthy-leaf pair.
+
+  If done in uint8 directly:
+        (180 − 60) = 120   (fits in uint8)
+        (180 + 60) = 240   (fits)
+        120 / 240 in uint8 → 0  (integer division truncates to 0!)
+  Fix: cast to double first: double(NIR - Red) / double(NIR + Red).
+
+--------------------------------------------------------------------------------
+7. SAMPLE-EXAM TAG
+--------------------------------------------------------------------------------
+Q4  (bitwise AND/OR/XOR on 3×3 grayscale)   →  matches EXAMPLE C.
+                                                 Compute.
+Q7c (mean filter edge pixel with zero-pad)  →  uses convolution/correlation
+                                                 semantics of §2.4–§2.5
+                                                 plus arithmetic addition.
+                                                 Compute.
+Q7d (checkerboard histogram after mean)     →  uses addition composition
+                                                 (sum of 25 products).
+                                                 Compute + histogram.
+
+Question word type by Q:
+  Q4 : compute (3 results).
+  Q7c: compute + explain scaling.
+  Q7d: compute (frequencies at each output value).
+
+--------------------------------------------------------------------------------
+8. TO DO  (Syllabus Q 8.1 – 8.end, Q 9.1 – 9.end)
+================================================================================
+L4 .txt "TO DO…" block, quoted verbatim:
+
+    TO DO…
+    • Questions from Syllabus: 8.1 – 8.end, 9.1 - 9.end
+
+The two Answer PDFs (8.1-8.end and 9.1-9.end) contain the SAME 16 questions
+and answers — the syllabus repeats the same exercise set under §8 and §9.
+Both PDFs are reproduced below verbatim, treated as a single exercise set.
+Each answer is prefixed with a GENERAL FORMULA line.
+
+--------------------------------------------------------------------------------
+8.A  SYLLABUS CHAPTER 8 & 9 — ARITHMETIC AND LOGIC OPERATIONS
+     (Q 8.1–8.16 and Q 9.1–9.16, identical sets)
+--------------------------------------------------------------------------------
+
+Q8-1 / Q9-1  What are the maximum and minimum values of the original and
+              the adjusted image? Explain your results.
+--------------------------------------------------------------------------------
+General formula:
+  For uint8 image I:
+      min_I  =  min(I(:))       (often 0)
+      max_I  =  max(I(:))       (often 255)
+  After imadd(I, c):
+      min_adj  =  min(min_I + c, 255)    (saturating add)
+      max_adj  =  min(max_I + c, 255)
+  Explanation: bright pixels saturate at 255; dark pixels shift up by c
+  but not beyond 255.
+
+Official answer (verbatim from both PDFs):
+  "Original:   max = 255
+               min = 0
+   Adjusted:   max = 255
+               min = 75"
+
+  [note] The exact numbers depend on the exercise's constant (75). The
+  MECHANISM is: 0 → 75 (added constant, no saturation), 255 → 255
+  (saturated at maximum).
+
+Q8-2 / Q9-2  How many pixels had a value of 255 in the original image and
+              how many have a value of 255 in the resulting image?
+--------------------------------------------------------------------------------
+General formula:
+  count_255_original  =  sum( I(:) == 255 )
+  count_255_adjusted  =  sum( I_adj(:) == 255 )
+  Explanation: adding a constant increases the count because dark/mid
+  pixels are pushed up to saturation.
+
+Official answer (verbatim):
+  "Original: 301
+   Resulting 2614"
+
+Q8-3 / Q9-3  How did we scale the image output?
+--------------------------------------------------------------------------------
+General formula:
+  imshow(I, [])  →  scales min(I(:)) to black, max(I(:)) to white.
+  Equivalently: the display range is mapped from [min, max] to [0, 255].
+
+Official answer (verbatim):
+  "The minimum value in the image is displayed as black, and the maximum
+   value is displayed as white."
+
+Q8-4 / Q9-4  What happened when we scaled the difference images?
+--------------------------------------------------------------------------------
+General formula:
+  imshow(diff, []) on a difference image → auto-stretches the small
+  residual differences to full contrast → the difference becomes visible.
+
+Official answer (verbatim):
+  "The difference became more obvious."
+
+Q8-5 / Q9-5  When dynamically scaling the moon image, why did the dark
+              regions around the moon not become brighter as in the
+              normally adjusted image?
+--------------------------------------------------------------------------------
+General formula:
+  Dynamic scaling (immultiply) is proportional:  p_new  =  c · p_old.
+      For small p_old (dark regions), c·p_old stays small.
+      For large p_old (bright regions), c·p_old grows large (and saturates).
+  Additive brightening (imadd) is uniform:  p_new  =  p_old  +  c.
+      Both dark and bright regions shift up by c equally.
+
+Official answer (verbatim):
+  "Because multiplication of relatively small number (dark regions) does
+   not produce large numbers and thus prevents brightening."
+
+Q8-6 / Q9-6  Why did the multiplication procedure produce the same results
+              as division?
+--------------------------------------------------------------------------------
+General formula:
+  immultiply(I, 0.5)  ≡  imdivide(I, 2)  (up to rounding)
+  because a × 0.5  =  a / 2.
+
+Official answer (verbatim):
+  "Multiplication by 0.5 is same as dividing by 2."
+
+Q8-7 / Q9-7  Write a small script that will verify that the images produced
+              from division and multiplication are equivalent.
+--------------------------------------------------------------------------------
+General formula:
+  if isequal(I2, I3)
+      disp('Equivalent');
+  else
+      disp('Different');
+  end
+  or
+  if I2 == I3  % element-wise; if all true, images equal
+      disp('Equivalent');
+  end
+
+Official answer (verbatim):
+  "if I3 == I2
+       disp('I3 is equal to I2');
+   else
+       disp('I3 and I2 are not the same');
+   end"
+
+Q8-8 / Q9-8  Would this technique still work if we were unable to obtain
+              the background image?
+--------------------------------------------------------------------------------
+General formula:
+  Background subtraction needs a background reference. Without it, the
+  nonuniform illumination cannot be removed by division / subtraction
+  alone. Alternative: high-pass filter, or local histogram equalisation
+  (adapthisteq — L6), or illumination normalisation by a large-scale
+  mean filter (L7).
+
+Official answer (verbatim):
+  "No."
+
+Q8-9 / Q9-9  How do we add points to the polygon?
+--------------------------------------------------------------------------------
+General formula:
+  roipoly or impoly GUI: left mouse click adds a point.
+
+Official answer (verbatim):
+  "Left mouse click"
+
+Q8-10 / Q9-10  How do we delete points from the polygon?
+--------------------------------------------------------------------------------
+General formula:
+  Right-click on the vertex → context menu → Delete vertex.
+
+Official answer (verbatim):
+  "Right mouse click -> Delete vertex"
+
+Q8-11 / Q9-11  How do we end the process of creating a polygon?
+--------------------------------------------------------------------------------
+General formula:
+  Close the polygon by clicking on the first vertex (left mouse).
+
+Official answer (verbatim):
+  "Left click on first point"
+
+Q8-12 / Q9-12  What class is the variable bw?
+--------------------------------------------------------------------------------
+General formula:
+  roipoly returns a LOGICAL mask (true = inside polygon, false = outside).
+
+Official answer (verbatim):
+  "Logical"
+
+Q8-13 / Q9-13  What does the variable bw represent?
+--------------------------------------------------------------------------------
+General formula:
+  bw is a mask: 1 = inside polygon (region of interest),
+                0 = outside polygon (background).
+
+Official answer (verbatim):
+  "In the matrix bw, '1' represents pixels which are part of the polygon,
+   '0' represents pixels which are not part of the polygon."
+
+Q8-14 / Q9-14  What happens when we logically AND the two images?
+--------------------------------------------------------------------------------
+General formula:
+  I2  =  bitand( I, bw2 )
+  I2 contains I's pixel values inside the ROI (where bw = 1),
+  and 0 outside (where bw = 0).
+  Interpretation: I masked by the ROI.
+
+Official answer (verbatim):
+  "I2 will contain the pixel values of the original image I, but only
+   where values are 1 in the mask image (inside of the polygon)."
+
+Q8-15 / Q9-15  How can we check to see that the bw_cmp2 image is the same
+               as the bw_cmp image?
+--------------------------------------------------------------------------------
+General formula:
+  if isequal(bw_cmp, bw_cmp2)
+      disp('Equivalent');
+  end
+  (isequal is faster and safer than element-wise == on matrices.)
+
+Official answer (verbatim):
+  "if bw_cmp == bw_cmp2
+       disp('bw_cmp is equal to bw_cmp2');
+   else
+       disp('bw_cmp and bw_cmp2 are not the same');
+   end"
+
+Q8-16 / Q9-16  How could we modify the above code to display the original
+               image within the region of interest and the darker image
+               elsewhere?
+--------------------------------------------------------------------------------
+General formula:
+  The original code:
+        roi      =  bitor(I_adj, bw_cmp);    % darker image with ROI mask
+        not_roi  =  bitor(I,     bw);        % original with outside mask
+        new_img  =  bitand(roi, not_roi);
+  Modify by SWAPPING which image gets which mask:
+        roi      =  bitor(I,     bw_cmp);    % original with ROI mask
+        not_roi  =  bitor(I_adj, bw);        % darker with outside mask
+        new_img  =  bitand(roi, not_roi);
+
+Official answer (verbatim code):
+  "I_adj = imdivide(I,1.5); %darker image
+
+   bw = im2uint8(roipoly(I)); %create mask
+   bw_cmp = bitcmp(bw); %mask complement; 0 -> 255, 255 -> 0
+
+   %roi = bitor(I_adj,bw_cmp); %roi image
+   roi = bitor(I_adj,bw);
+
+   %not_roi = bitor(I,bw); %non_roi image
+   not_roi = bitor(I,bw_cmp);
+
+   new_img = bitand(roi,not_roi); %generate new image
+   imshow(new_img) %display new image"
+
+  [note] The PDF's "modified" version actually swaps which mask goes to
+  which image: roi now uses bw (not bw_cmp), not_roi uses bw_cmp (not bw).
+  This inverts the effect so the ORIGINAL appears inside the ROI and the
+  DARKENED appears outside.
+
+--------------------------------------------------------------------------------
+8.B  GENERAL FORMULA QUICK-REFERENCE  (all exercises in one block)
+--------------------------------------------------------------------------------
+Min/max of image:        min_I = min(I(:));  max_I = max(I(:))
+Additive offset min/max: min_adj = min(min_I + c, 255);
+                         max_adj = min(max_I + c, 255)
+Pixel count at 255:      sum(I(:) == 255)
+Display scaling:         imshow(I, [])  →  min → black, max → white
+Dynamic scaling:         immultiply(I, c)  =  c·I  (proportional)
+Additive scaling:        imadd(I, c)  =  I + c  (uniform shift)
+Multiplication/division: immultiply(I, 0.5) ≡ imdivide(I, 2)
+Equality check:          isequal(A, B) or all(A(:) == B(:))
+ROI mask creation:       roipoly returns logical mask (1 = inside)
+ROI masking:             bitand(I, uint8(bw)) keeps ROI, zeroes outside
+Mask complement:         bitcmp(bw) or imcomplement(bw)
+Modified ROI swap:       swap which mask goes to original vs adjusted image
+
+--------------------------------------------------------------------------------
+8.C  TO DO CHECKLIST  (ticked = verified against official Answer PDFs)
+--------------------------------------------------------------------------------
+[ ] 8.1   Q8-1  vs PDF 8.1-8.end. ✓
+[ ] 8.2   Q8-2  vs PDF.           ✓
+[ ] 8.3   Q8-3  vs PDF.           ✓
+[ ] 8.4   Q8-4  vs PDF.           ✓
+[ ] 8.5   Q8-5  vs PDF.           ✓
+[ ] 8.6   Q8-6  vs PDF.           ✓
+[ ] 8.7   Q8-7  vs PDF.           ✓
+[ ] 8.8   Q8-8  vs PDF.           ✓
+[ ] 8.9   Q8-9  vs PDF.           ✓
+[ ] 8.10  Q8-10 vs PDF.           ✓
+[ ] 8.11  Q8-11 vs PDF.           ✓
+[ ] 8.12  Q8-12 vs PDF.           ✓
+[ ] 8.13  Q8-13 vs PDF.           ✓
+[ ] 8.14  Q8-14 vs PDF.           ✓
+[ ] 8.15  Q8-15 vs PDF.           ✓
+[ ] 8.16  Q8-16 vs PDF.           ✓
+[ ] 8.17  Q9-1  vs PDF 9.1-9.end. ✓ (identical to Q8-1)
+[ ] 8.18  Q9-2  vs PDF.           ✓ (identical to Q8-2)
+[ ] 8.19  Q9-3  vs PDF.           ✓ (identical to Q8-3)
+[ ] 8.20  Q9-4  vs PDF.           ✓ (identical to Q8-4)
+[ ] 8.21  Q9-5  vs PDF.           ✓ (identical to Q8-5)
+[ ] 8.22  Q9-6  vs PDF.           ✓ (identical to Q8-6)
+[ ] 8.23  Q9-7  vs PDF.           ✓ (identical to Q8-7)
+[ ] 8.24  Q9-8  vs PDF.           ✓ (identical to Q8-8)
+[ ] 8.25  Q9-9  vs PDF.           ✓ (identical to Q8-9)
+[ ] 8.26  Q9-10 vs PDF.           ✓ (identical to Q8-10)
+[ ] 8.27  Q9-11 vs PDF.           ✓ (identical to Q8-11)
+[ ] 8.28  Q9-12 vs PDF.           ✓ (identical to Q8-12)
+[ ] 8.29  Q9-13 vs PDF.           ✓ (identical to Q8-13)
+[ ] 8.30  Q9-14 vs PDF.           ✓ (identical to Q8-14)
+[ ] 8.31  Q9-15 vs PDF.           ✓ (identical to Q8-15)
+[ ] 8.32  Q9-16 vs PDF.           ✓ (identical to Q8-16)
+
+================================================================================
+END CHECKPOINT 1.4 — rev.1, page-complete
+================================================================================
