@@ -1,0 +1,1357 @@
+================================================================================
+CHECKPOINT 2.x — SYLLABUS §5, §6, §7
+     (MATLAB basics · Programming in MATLAB · Image Processing Toolbox)
+     rev.4 — content + concept-before/after each question + TO-DO
+================================================================================
+Files: EVD2_Syllabus_2026_2027_v20260826.txt  §5, §6, §7
+       Answers to Questions 5.1-5.end.txt
+       Answers to Questions 6.1-6.end.txt
+       Answers to Questions 7.1-7.end.txt
+       L3 slides intentionally omitted (per user direction).
+Progress tick: [ ] 2.x
+
+REVISION NOTE — rev.4 vs rev.3
+  Each question now has:
+    [Concept before]  lecture explanation (from syllabus, or expanded
+                      if the syllabus is thin — expansion flagged).
+    [Question]        verbatim syllabus question.
+    [General formula] how to answer any variant.
+    [Answer]          verbatim from the official Answer PDF.
+    [Why / context]   elaboration when the answer is terse.
+================================================================================
+
+================================================================================
+1. CONTENT & EXPLANATION  (with concept surrounding each question)
+================================================================================
+
+================================================================================
+§5  MATLAB BASICS
+================================================================================
+Syllabus introduction (§5 preamble, verbatim):
+  "In commercial mass-produced systems, image processing is implemented
+   by specialized hardware and software. However, in the research and
+   development stages of an imaging system the processing is often
+   implemented using MATLAB and its toolboxes."
+
+Tools assumed:
+  • MATLAB R2025a or later with Image Processing, Computer Vision, and
+    Statistics-and-Machine-Learning toolboxes, OR
+  • MATLAB Online (browser-based; best in Chrome; compatible with Edge,
+    Firefox, Safari). Parts of the syllabus that cannot be done in
+    MATLAB Online are marked green.
+
+Reference documents (OnderwijsOnline):
+  • MATLAB Primer #1 — A Fast Start
+  • MATLAB Primer #2 — Programming
+  • MATLAB Style Guidelines 2.0
+
+On startup, MATLAB shows: Command Window (compute), Workspace
+(variables), Current Directory (files), Copilot (AI assistant, new in
+the 25/26 revision).
+
+--------------------------------------------------------------------------------
+§5.1  MATLAB AND ITS PROGRAMMING ENVIRONMENT
+--------------------------------------------------------------------------------
+
+[Concept before — help system]
+MATLAB provides three overlapping help destinations. `help` returns a
+short block of documentation in the Command Window — cheap, keeps
+focus, good for a quick signature check. `helpwin` opens the same
+content in a separate window (legacy UI). `doc` opens the full
+documentation browser with examples, related functions, and version
+notes — the current GUI. For an exam, remember which lives where:
+Command Window / separate window / browser.
+
+Question 5-1. What is the difference between the commands help, helpwin,
+             and doc?
+
+General formula:
+  help    → Command Window.
+  helpwin → help in a NEW window.
+  doc     → help browser (full GUI, current interface).
+
+Verbatim answer (from PDF 5.1-5.end):
+  "help", opens all the help options in the command window.
+  "helpwin", opens all the help options in a new windows.
+  "doc", shows the help documentation in the help browser.
+
+[Why / context]
+The three commands return the SAME text; the difference is WHERE it is
+rendered. `doc` is the preferred modern entry point because it also
+indexes cross-references.
+
+--------------------------------------------------------------------------------
+
+[Concept before — machine limits and environment]
+MATLAB stores numbers in IEEE 754 double precision by default. IEEE
+stands for the Institute of Electrical and Electronics Engineers — the
+standards body that defines floating-point representation. Three
+constants summarise the usable range:
+  realmin  — smallest POSITIVE NORMALISED double (2.2251e-308).
+  realmax  — largest finite double (1.7977e+308).
+  flintmax — largest integer that can be represented EXACTLY (no gaps)
+             in double precision (9.0072e+15). Above this, some
+             integers are skipped.
+These matter because every pixel array, every filter coefficient, and
+every arithmetic result in MATLAB is stored in this format.
+
+Additionally, MATLAB identifies its host environment via `computer`,
+its version via `version`, and its installed-toolbox inventory via `ver`.
+
+Question 5-2. Execute the following commands, one at a time, and explain
+             their function: realmin, realmax, flintmax, computer, ver,
+             version, license.
+
+General formula:
+  answer = "value + one-line description + IEEE 754 context" per command.
+
+Verbatim answer (from PDF 5.1-5.end):
+  realmin   → ans = 2.2251e-308
+               The smallest positive normalized floating-point number in
+               IEEE standard for double precision.
+               IEEE (Institute of Electrical and Electronics Engineers)
+               is the world's largest technical professional association
+               and a leading standards-making organization.
+  realmax   → ans = 1.7977e+308
+               realmax returns the largest finite floating-point number
+               in IEEE double precision.
+  flintmax  → ans = 9.0072e+15
+               flintmax returns the largest consecutive integer in IEEE
+               double precision. Above this value, double-precision
+               format does not have integer precision, and not all
+               integers can be represented exactly.
+  computer  → 'PCWIN64' | 'GLNXA64' | 'MACI64'
+               Returns character vector C denoting the type of computer
+               on which MATLAB is executing.
+  ver       → displays (1) a header with MATLAB version, license number,
+               OS, Java version; (2) version numbers of MATLAB and all
+               other installed MathWorks products.
+  version   → displays the version of MATLAB.
+  license   → returns the license number for your MATLAB product.
+
+Additional examples from the same PDF:
+  2+3 = 5 (shown in Command Window)
+  2 * 3 + 4*5 + 6*7; (result only in workspace)
+
+[Why / context]
+flintmax is not a "max pixel value" — it is the boundary above which
+integers are no longer exactly representable. A uint32 can hold up to
+4 294 967 295, well below flintmax; only very large integer arithmetic
+near 9e15 hits the gap.
+
+--------------------------------------------------------------------------------
+
+[Concept before — output suppression and ans]
+When you type an expression at the prompt without assigning it, MATLAB
+stores the result in a reserved variable called `ans` and prints it.
+Adding a semicolon at the end suppresses the printout but still stores
+the value in `ans` (unless an explicit assignment `x = expr;` was
+used, in which case the value goes to `x` and `ans` is unchanged). The
+semicolon is therefore an OUTPUT-suppressor, not a computation-
+suppressor.
+
+Question 5-3. What is the variable ans used for?
+
+General formula:
+  answer = ans holds the most recent unassigned result.
+
+Verbatim answer:
+  "Proves the most recent answer."
+
+[Why / context]
+"Proves" is a terse phrasing — it means "holds/returns". Any expression
+evaluated without `x = ...` populates `ans`.
+
+Question 5-4. What is the purpose of using a semicolon (;) at the end of
+             a statement?
+
+General formula:
+  answer = suppress command-window output.
+
+Verbatim answer:
+  "The semicolon can be used to suppress output from a MATLAB command."
+
+[Why / context]
+The semicolon does not stop the computation; it only stops the DISPLAY.
+The value is still assigned or stored in `ans`.
+
+--------------------------------------------------------------------------------
+
+[Concept before — case sensitivity]
+MATLAB is case-sensitive for variable names and built-in function names.
+`Fruit_per_box` is a different identifier from `fruit_per_box`; the
+former triggers "Undefined function or variable" if it was never
+assigned. File names (.m) are case-sensitive on UNIX-like systems
+(Linux, macOS) but not on Windows — this matters when porting scripts
+across platforms.
+
+Question 5-5. Experiment with creating your own variables. Are variables
+             case sensitive?
+
+General formula:
+  yes for variable names and built-in function names; platform-dependent
+  for .m filenames.
+
+Verbatim answer:
+  >> fruit_per_box = 20; num_of_boxes = 5;
+  >> total_num_of_fruit = Fruit_per_box * num_of_boxes
+  Undefined function or variable 'Fruit_per_box'.
+
+  "So yes, MATLAB is case sensitive with respect to variable names. But
+   take care, MATLAB is not completely case sensitive. MATLAB is case
+   sensitive for variable names and built-in functions. For scripts and
+   functions stored in a MATLAB file with a .m extension, case
+   sensitivity is preserved on UNIX platforms but not on Windows
+   platforms."
+
+[Why / context]
+The "not completely case sensitive" caveat is the platform-dependent
+file-name rule. In exam answers, mention both: identifiers are always
+case-sensitive; filenames depend on the OS.
+
+--------------------------------------------------------------------------------
+
+[Concept before — built-in constants]
+Four reserved names are commonly shadowed by user variables:
+  pi   — π at double precision.
+  eps  — the distance from 1.0 to the next larger double (2.2204e-16).
+          This is the smallest representable increment at value 1.0, not
+          the smallest positive double (which is realmin).
+  inf  — infinity. Result of 1/0, log(0), overflow.
+  i    — the imaginary unit (sqrt(-1)). `j` is identical.
+All four can be overwritten by assignment; `clear all` removes the
+shadowing variable and restores the built-in definition.
+
+Question 5-6. What is the value/purpose of these variables: pi, eps, inf,
+             i? Is it possible to overwrite any of these variables? If
+             so, how can it be undone?
+
+General formula:
+  value → meaning per constant; overwrite = yes; undo via clear all.
+
+Verbatim answer:
+  "These are standard variables in MATLAB. These variables can be
+   overwritten and changed back to their original value. 'Clear all' is
+   used to reset to default values.
+   pi   = 3.1416
+   eps  = 2.2204e-16   (d = eps returns the distance from 1.0 to the
+                       next larger double-precision number)
+   inf  = Infinity
+   i    = the basic imaginary unit (equivalent to sqrt(-1))"
+
+[Why / context]
+`clear all` (not `clc`) is the reset. `clc` only wipes the Command
+Window display; it leaves shadowed variables in the workspace.
+
+--------------------------------------------------------------------------------
+
+[Concept before — semicolon as row separator]
+Inside square brackets, the semicolon has a completely different role
+from the end-of-statement semicolon: it separates ROWS of a matrix.
+`[5, 8; 3, 4]` builds a 2-row, 2-column matrix. Commas (or spaces)
+separate COLUMNS. The end-of-line semicolon still suppresses output;
+the IN-bracket semicolon is purely structural.
+
+Question 5-7. What is the use of the semicolon in this statement?
+             (A = [5, 8; 3, 4])
+
+General formula:
+  answer = row separator inside [ ].
+
+Verbatim answer:
+  "In this statement, the semicolon is used as array row separator.
+   When used within square brackets to create a new array or concatenate
+   existing arrays, the semicolon creates a new row in the array:
+       A = [5, 8; 3, 4]
+       A =
+            5     8
+            3     4"
+
+[Why / context]
+Two roles: row separator (inside `[ ]`) and output suppressor (end of
+statement). Do not confuse them.
+
+--------------------------------------------------------------------------------
+
+[Concept before — colon operator]
+The colon creates a vector from a start value to an end value with an
+optional step: `start:step:end`. If step is omitted, step = 1. Step can
+be negative (descending). For evenly-spaced values with a KNOWN COUNT,
+use `linspace(start, end, n)`. Inside matrix indexing, `A(:,1)` means
+"all rows, column 1" (a column vector) and `A(1,:)` means "row 1, all
+columns" (a row vector). `A(3,:) = []` deletes row 3.
+
+Question 5-8. Write a statement that will generate a vector of values
+             ranging from 0 to π in increments of π/4.
+
+General formula:
+  answer = start:step:end.
+
+Verbatim answer:
+  0:pi/4:pi
+
+[Why / context]
+Result has 5 elements: 0, π/4, π/2, 3π/4, π. Length = floor((end−start)/
+step) + 1 = floor(π / (π/4)) + 1 = 4 + 1 = 5.
+
+Question 5-9. Write a line of code that would generate the same 3×3
+             matrix as in the variable A above, but using the colon
+             operator to generate the sequence of numbers in each row
+             instead of explicitly writing them.
+
+General formula:
+  build rows from colon sequences; combine with [ ] and ;.
+
+Verbatim answer:
+  A = [1:3; 4:6; 7:9]
+  A = [colon(1,3); colon(4,6); colon(7,9)]
+
+[Why / context]
+`colon(a,b)` is the function form of `a:b` — same result, occasionally
+preferred for readability or for passing as a function handle.
+
+--------------------------------------------------------------------------------
+
+[Concept before — random generators]
+Two pseudo-random generators:
+  rand(m,n)  — uniform in (0,1). Every value equal probability; can
+               never be negative.
+  randn(m,n) — normal (Gaussian) with mean 0, variance 1. Bell-shaped;
+               half of the values are negative.
+`randn` is the workhorse for simulating additive Gaussian noise in
+image restoration (L9). `rand` is used for uniform noise.
+
+Question 5-10. What is the difference between the functions rand(M,N)
+              and randn(M,N)?
+
+General formula:
+  rand  → uniform (0,1), non-negative.
+  randn → normal (mean 0, variance 1), can be negative.
+
+Verbatim answer:
+  "rand(), provides only positive number, in the interval (0,1).
+   randn(), generates a matrix of normal distributed numbers.
+   x = randn(10000,1); histfit(x) will show you the normal distribution
+   of x (Figure 1)."
+
+[Why / context]
+`histfit` overlays a normal curve on the histogram — a quick visual
+verification that `randn` is indeed Gaussian.
+
+--------------------------------------------------------------------------------
+
+[Concept before — array-shape functions]
+  size(A)      returns a row vector [rows, cols] (or [r, c, p] for 3-D).
+  numel(A)     returns the total number of elements (rows × cols).
+  length(A)    returns the longest dimension (useful for vectors).
+  disp(X)      displays X without printing the variable name.
+  sum(A)       sums along the first non-singleton dimension. For a vector:
+               total. For a matrix: column sums (a row vector).
+  prod(A)      same as sum but multiplying.
+The `sum(A(:))` / `max(A(:))` idiom (flatten-then-aggregate) gives
+the GLOBAL statistic, not per-column.
+
+Question 5-11. What does the size function do?
+
+General formula:
+  returns a row vector of dimensions.
+
+Verbatim answer:
+  "size, this function returns a row vector whose elements contain the
+   length of the corresponding dimension of A."
+
+[Why / context]
+`size(A,1)` returns just the number of rows; `size(A,2)` just the
+columns.
+
+Question 5-12. What does the disp function do?
+
+General formula:
+  displays value without printing variable name.
+
+Verbatim answer:
+  "disp, this function displays the value of variable X without printing
+   the variable name."
+
+[Why / context]
+Compare: typing `X` prints "X = ..." then the value. Typing `disp(X)`
+prints just the value. Use `disp` when formatting matters or when
+building output strings.
+
+Question 5-13. What does the sum function do?
+
+General formula:
+  sums along first non-singleton dimension; sum(A(:)) = global sum.
+
+Verbatim answer:
+  "sum, this function returns the sum of the elements of A along the
+   first array dimension whose size does not equal 1."
+
+[Why / context]
+"First non-singleton dimension" means the first dimension whose size
+is not 1. For a 3×4 matrix, both dims ≠ 1, so sum operates down rows
+(columns summed) → result is 1×4. For a row vector 1×N, the first
+non-singleton is the second (N), so the row is summed to a scalar.
+
+Question 5-14. What does the prod function do?
+
+General formula:
+  product along first non-singleton dimension.
+
+Verbatim answer:
+  "prod, this function returns the product of the array elements of A."
+
+[Why / context]
+Symmetric to sum. `prod(size(A))` = numel(A).
+
+--------------------------------------------------------------------------------
+
+[Concept before — matrix-shape requirement]
+For matrix multiplication A * B, size(A,2) must equal size(B,1) —
+the inner dimensions must agree. A 3×4 times a 4×2 yields 3×2; a 4×2
+times a 3×4 errors because 2 ≠ 3. Element-wise .* has a different rule:
+both operands must be the SAME size (or one is scalar).
+
+Question 5-15. Why did the last operation fail?
+
+General formula:
+  matrix multiply requires inner dimensions to match.
+
+Verbatim answer:
+  "Because the matrixes are not of the same size."
+
+[Why / context]
+X = eye(3,4) is 3×4; Y = rand(4,2) is 4×2. X*Y works (inner dims
+match at 4). Y*X errors because Y's second dim (2) ≠ X's first dim (3).
+"Not the same size" is imprecise — better: "inner dimensions do not
+match".
+
+--------------------------------------------------------------------------------
+
+[Concept before — matrix helpers]
+  diag(M)   on a matrix → the main diagonal as a column vector.
+            on a vector → a matrix with that vector on the diagonal.
+  trace(M)  sum of the main diagonal (a scalar).
+  det(M)    determinant (a scalar). Non-zero ⇔ invertible.
+  inv(M)    matrix inverse. M * inv(M) = identity.
+These are foundational matrix operations.
+
+Question 5-16. What does the diag function do?
+
+General formula:
+  returns the main diagonal as a column vector.
+
+Verbatim answer:
+  "diag returns the diagonal values of the matrix. In this case from top
+   left, to bottom right."
+
+[Why / context]
+Only the main diagonal (top-left to bottom-right). Off-diagonal
+extraction requires diag(A,k) with an offset k.
+
+Question 5-17. What does the trace function do?
+
+General formula:
+  sum of main diagonal.
+
+Verbatim answer:
+  "trace, this function is the sum of the diagonal elements of the
+   matrix A."
+
+[Why / context]
+trace(Y) is invariant under transposition and under cyclic permutation
+of matrix products.
+
+Question 5-18. Write an alternative statement that would produce the
+              same results as the trace function.
+
+General formula:
+  sum(diag(Y)).
+
+Verbatim answer:
+  t = sum(diag(Y))
+
+[Why / context]
+trace(Y) is implemented internally as sum(diag(Y)); writing them
+explicitly is a good sanity check when debugging.
+
+--------------------------------------------------------------------------------
+
+[Concept before — cell arrays]
+A normal MATLAB matrix holds elements of ONE data type. A cell array
+holds elements of ANY type, each cell independently. This is how
+heterogeneous data (an image directory, a mixed parameter list) is
+stored.
+
+Access rules — the critical distinction:
+  X(1)   — wraps cell 1 in a 1×1 CELL (the "wrapper").
+  X{1}   — unpacks the CONTENTS of cell 1.
+Assignment has the same rule:
+  X(1) = {value}   — wrapper form; braces around the value.
+  X{1} = value     — content form; no braces needed.
+celldisp(X) recursively prints every cell.
+
+Question 5-19. What does the celldisp function do?
+
+General formula:
+  recursively displays the whole cell array.
+
+Verbatim answer:
+  "This function recursively displays the contents of a cell array."
+
+[Why / context]
+Recursively means cells inside cells are also shown, not just the top
+level.
+
+Question 5-20. What does the (%) character do?
+
+General formula:
+  comment marker (single line).
+
+Verbatim answer:
+  "Use this symbol to describe comments in your code."
+
+[Why / context]
+From the % to end-of-line is ignored. A % followed by { and later %}
+defines a BLOCK comment; those braces must sit on their own lines.
+
+Question 5-21. What is the difference between the last two lines in the
+              code above (X(1) as opposed to X{1})?
+
+General formula:
+  X(1) → wrapper;  X{1} → content.
+
+Verbatim answer:
+  "X(1), gives the data format of the cell.
+   X{1}, gives the content of the cell."
+
+[Why / context]
+X(1) returns a 1×1 cell array; X{1} returns the underlying value
+(number, string, matrix). This is the most-tested cell-array
+distinction.
+
+--------------------------------------------------------------------------------
+
+[Concept before — structures]
+A structure is a "record": named fields instead of numbered slots.
+Built via dot notation:
+    s.name = 'Image 1';  s.width = 256;  s.height = 256;
+Introspection functions:
+    fieldnames(s)  → cell array of field names.
+    isstruct(s)    → 1 (true) or 0 (false).
+    class(s)       → 'struct'.
+Deletion:
+    rmfield(s, 'fieldname') → a new struct without that field.
+Structures are how imfinfo returns image metadata and how regionprops
+returns per-object measurements.
+
+Question 5-22. What does the fieldnames function do?
+
+General formula:
+  returns a cell array of field names.
+
+Verbatim answer:
+  "This MATLAB function returns a cell array of character vectors
+   containing the names of the fields in the structure.
+   In MATLAB, object oriented programming is also possible. In that case,
+   the function 'fieldnames' returns the attributes of an object."
+
+[Why / context]
+Returns a CELL ARRAY (not a plain cell), so you can iterate with
+`for f = fieldnames(s)'` and index into `s.(f{1})`.
+
+Question 5-23. What does it mean when the result from the function
+              isstruct is 1? What does it mean when it is 0?
+
+General formula:
+  1 → array IS a struct;  0 → array is NOT a struct.
+
+Verbatim answer:
+  "In case of 1, the array is a MATLAB structure.
+   In case of 0, the array is not a MATLAB structure."
+
+[Why / context]
+Useful guard before calling dot notation — you can write
+`if isstruct(entry), entry.name, end` to avoid errors on non-struct
+elements in a heterogeneous cell array.
+
+Question 5-24. Use the help system to determine what function can be
+              used to delete a field from a structure.
+
+General formula:
+  rmfield.
+
+Verbatim answer:
+  "The rmfield function removes the specified field or fields from a
+   structure array."
+
+[Why / context]
+`rmfield` returns a NEW struct; the original is unmodified unless you
+reassign (`s = rmfield(s, 'name')`).
+
+================================================================================
+§6  PROGRAMMING IN MATLAB
+================================================================================
+Syllabus introduction (§6 preamble, verbatim):
+  "Although the command window is simple and convenient to use, it does
+   not provide a way of saving or editing your code. The commands stored
+   in the Command History window can, however, be easily made into a
+   script file. A script is a text file with the extension .m and is
+   used to store MATLAB code. Scripts can be created and modified using
+   the built-in editor."
+
+Key mechanism (§6 content):
+  • File → New → M-file creates a new script.
+  • Comments: % (line) or %{ ... %} (block).
+  • F9 runs the highlighted selection.
+  • %% starts a code section (cell mode).
+  • Cell-mode increment (± × ÷ on a numeric literal) re-runs the cell
+    with a new value.
+  • A function is a .m file whose first line is
+    `function [out] = name(in)`. The first contiguous %-block after
+    that line is the help text (what `help name` prints).
+  • Preallocation vs vectorization controls runtime.
+
+--------------------------------------------------------------------------------
+
+[Concept before — two comment styles]
+A single `%` starts a comment that runs to end-of-line. This is
+equivalent to `//` in C/C++.
+`%{` on its own line opens a BLOCK comment; `%}` on its own line
+closes it. Everything between (spanning multiple lines) is ignored.
+This is equivalent to `/*` and `*/` in C/C++. The block form must have
+its delimiters alone on their lines — anything else on the same line
+disables the block.
+
+Question 6-1. Based on the script in file script3_1.m, what is the
+             difference between using a percent (%) sign and using
+             %{ and %}?
+
+General formula:
+  %     → single-line comment.
+  %{ %} → block comment (own lines only).
+
+Verbatim answer:
+  "% is a line of comments. The same as // in C or C++.
+   %{ and %} is a block of comment. This is the same as using /* and */
+   in C or C++."
+
+[Why / context]
+Block form is useful for temporarily commenting out a chunk of code
+during debugging, or for header comments spanning several lines.
+
+--------------------------------------------------------------------------------
+
+[Concept before — cell mode]
+A cell (or code section) begins with a line whose first two characters
+are `%%`. Each cell is independently executable: place the cursor
+inside a cell and press Ctrl+Enter (or F5) to run only that cell.
+Critically, you can highlight a numeric literal and click Increment /
+Decrement to add/subtract a step, then re-run the cell — perfect for
+tuning gamma, threshold, or any single parameter without editing the
+file.
+
+Question 6-2. What happened to the value of the variable gamma in the
+             code?
+
+General formula:
+  the +/− buttons increment/decrement the literal by the specified step
+  (0.1 in the exercise).
+
+Verbatim answer:
+  "This variable either increases or decreases with 0.1 depending on
+   whether plus or minus is pressed."
+
+[Why / context]
+The displayed value of gamma in the script itself updates, and the
+subsequent computation uses the new value on the next run.
+
+Question 6-3. In addition to the modification of code, what else
+             happened when the plus button was pressed? What happens
+             when it is pressed again?
+
+General formula:
+  the histogram re-renders with the new gamma; each press keeps
+  incrementing.
+
+Verbatim answer:
+  "The histogram modifies. If the variable gamma becomes larger, it
+   means the intensity of the color decreases until all colors are
+   black. When decrease gamma, the effects is the opposite."
+
+[Why / context]
+Each press triggers a re-execution of the cell and redraws the figure
+with the new gamma. Pressing repeatedly accumulates the increments
+(e.g. 1.0 → 1.1 → 1.2 → ...).
+
+Question 6-4. Other than the ones described in this tutorial, what
+             features are available when cell mode is active?
+
+General formula:
+  code folding (Ctrl+Shift+. expand; Ctrl+. fold); evaluate section
+  (Ctrl+Enter).
+
+Verbatim answer:
+  "When cell mode is active, is it possible to use code folding. Cells
+   can be expanded (Ctrl+Shift+.) and folded (Ctrl+.). To evaluate the
+   current section, Ctrl+Enter can be pressed."
+
+[Why / context]
+Folding collapses a cell into a single line — useful for hiding long
+setup blocks in a script with many cells.
+
+--------------------------------------------------------------------------------
+
+[Concept before — function-file help]
+A function file is a .m file whose first line is
+    function [out] = name(in)
+The line immediately after defines the "H1 line" (a one-line summary,
+shown by `lookfor`). The contiguous block of %-comment lines
+immediately after the H1 line becomes the "help text" — this is what
+`help name` prints. Once a non-comment statement is reached, the help
+block ends; any later comments are ordinary code comments.
+
+Question 6-5. Compare the help documentation with the comments in the
+             M-file. How does MATLAB determine which comments are to be
+             displayed for help and which are just comments in the
+             function code?
+
+General formula:
+  the first contiguous %-block immediately after the function definition
+  line becomes the help text.
+
+Verbatim answer:
+  "MATLAB takes the first block of comments. This can also be seen by
+   the minus symbol."
+
+[Why / context]
+"Minus symbol" refers to the small dash MATLAB shows beside help text
+in the editor margin. Comments AFTER the first executable statement
+are ordinary comments (not shown by `help`).
+
+--------------------------------------------------------------------------------
+
+[Concept before — preallocation]
+MATLAB arrays grow dynamically. If a loop writes to `x(i)` without first
+allocating `x`, MATLAB reallocates the array on each iteration — each
+growth step copies the existing contents into a larger buffer. The
+result is quadratic time in array size.
+Preallocating `x = zeros(1, MAX_CNT)` before the loop eliminates the
+growth steps, so each assignment writes into pre-existing memory.
+
+Question 6-6. By what factor did preallocating the array x increase
+             performance?
+
+General formula:
+  speedup = t_noalloc / t_alloc.
+
+Verbatim answer:
+  "Not allocated: Elapsed time is 0.002904 seconds.
+   Allocated:     Elapsed time is 0.000373 seconds.
+   0.002904 / 0.000373 = 7.8 times faster in case the memory is
+   allocated. This increase depends of the computers specifications and
+   the running processes on the computer."
+
+[Why / context]
+The ratio is machine- and load-dependent, but the order of magnitude
+(~10×) is the standard result for this size of loop.
+
+--------------------------------------------------------------------------------
+
+[Concept before — element-wise vs matrix power]
+`^` is matrix power (A multiplied by itself n times in the matrix-
+algebra sense; only defined for square matrices and integer exponents).
+`.^` is element-wise power (each element raised individually). For
+image formulas — s = c · r^gamma — the operation is element-wise by
+definition, so the correct MATLAB operator is `.^`.
+
+Question 6-7. In the code above, why do we use .^ instead of just ^?
+
+General formula:
+  .^ = element-wise power;  ^ = matrix power.
+
+Verbatim answer:
+  ".^ means element-wise power."
+
+[Why / context]
+Using `^` on a non-square vector errors outright; on a square matrix
+it computes a completely different (matrix-algebra) result. Both are
+wrong for pixel formulas.
+
+Question 6-8. How much faster is loop vectorization than our previous
+             two implementations?
+
+General formula:
+  speedup = t_noalloc / t_vectorized.
+
+Verbatim answer:
+  "Not allocated:      Elapsed time is 0.002937 seconds.
+   Allocated:          Elapsed time is 0.000263 seconds.
+   Loop vectorization: Elapsed time is 0.000185 seconds."
+
+[Why / context]
+Speedup vs no-prealloc = 0.002937 / 0.000185 ≈ 15.9. Speedup vs
+prealloc = 0.000263 / 0.000185 ≈ 1.4. Vectorization also removes the
+need for explicit preallocation.
+
+Question 6-9. Consider the following pseudocode. Write a vectorized
+             equivalent.
+
+General formula:
+  t = start:step:end;  x = sin(t);
+
+Verbatim answer:
+  t = 0:pi/4:2*pi
+  x = sin(t)
+
+[Why / context]
+The original pseudocode is:
+    i = 0
+    for t = 0 to 2*pi in steps of pi/4
+        do i = i + 1
+        x(i) = sin(t)
+The vectorised form builds the index vector first, then applies sin
+element-wise — no loop, no preallocation.
+
+================================================================================
+§7  THE IMAGE PROCESSING TOOLBOX
+================================================================================
+Syllabus introduction (§7 preamble, verbatim):
+  "The image processing toolbox supports images of type binary, indexed,
+   intensity, and truecolor. Before an image can be processed in MATLAB,
+   it must first be loaded into memory. To read in an image, we use the
+   imread function."
+
+Key mechanism (§7 content):
+  • Four image types: binary (logical {0,1}), intensity (uint8 [0,255] /
+    uint16 / double [0,1]), truecolor (M×N×3), indexed (M×N integer +
+    L×3 colormap).
+  • Conversions: im2double, im2single, im2uint8, im2uint16, im2int16;
+    rgb2gray, gray2ind, ind2gray, ind2rgb, rgb2ind.
+  • Display: image, imagesc, imshow, imtool; imshowpair; subimage.
+  • Pixel tools: impixelinfo, impixel → [c,r,p], improfile.
+  • Save: imwrite; metadata: imfinfo.
+
+--------------------------------------------------------------------------------
+
+[Concept before — image file type vs data class]
+"PNG" is a FILE FORMAT (lossless compression, supports 1/8/16-bit
+depth). "Intensity image" is a DATA TYPE inside MATLAB (grayscale;
+single channel; class typically uint8 with 256 levels). The two are
+orthogonal: a PNG file can hold a binary, grayscale, or RGB image.
+coins.png is a grayscale image stored in PNG format.
+
+Question 7-1. What type of image is coins.png?
+
+General formula:
+  answer = PNG (lossless format), stored as intensity (grayscale).
+
+Verbatim answer:
+  "PNG image."
+
+[Why / context]
+If the exam asks for data class, coins.png loads as uint8. The file
+format and the MATLAB class are two different questions.
+
+--------------------------------------------------------------------------------
+
+[Concept before — output suppression on imread]
+`imread` returns a matrix of pixel values. Without a trailing semicolon,
+MATLAB prints the matrix to the Command Window. For a 256×256 image
+that is 65 536 values rendered as multiple lines of text. The
+semicolon suppresses this — the image loads into memory either way.
+
+Question 7-2. Why do we use the semicolon (;) operator after the imread
+             statement? What happens if we omit it?
+
+General formula:
+  suppress output; without it, every pixel value prints.
+
+Verbatim answer:
+  "If we do not use the semi column, all pixel values will be provided
+   in the command windows."
+
+[Why / context]
+This is the same output-suppression rule as Q5-4, applied to a very
+large return value.
+
+--------------------------------------------------------------------------------
+
+[Concept before — truecolor dimension]
+An RGB image is stored as a 3-D array: rows × columns × 3 (one plane
+per R, G, B channel). For a 258 × 350 image, the size is
+258 × 350 × 3 = 270 900 numbers. The class after `ind2rgb` is double.
+
+Question 7-3. How many dimensions does the variable X_rgb have and what
+             are their sizes?
+
+General formula:
+  M × N × 3 for any RGB image; the sample image is 258 × 350 × 3.
+
+Verbatim answer:
+  "258×350×3 double."
+
+[Why / context]
+The exam's sample image has those specific dimensions. In general,
+state the format "M × N × 3, class depends on conversion function".
+
+--------------------------------------------------------------------------------
+
+[Concept before — intensity class]
+"Intensity" is the IPT term for grayscale. A grayscale image has one
+channel; class is typically uint8 [0,255], uint16 [0,65535], or
+double [0,1]. The x_gray variable in the tutorial is the intensity
+form of the trees image.
+
+Question 7-4. What class type is X_gray?
+
+General formula:
+  "Intensity image" (grayscale).
+
+Verbatim answer:
+  "Intensity image."
+
+[Why / context]
+If asked for MATLAB class specifically: uint8 (after the tutorial's
+conversion step). The PDF answer names the IPT TYPE, not the class.
+
+--------------------------------------------------------------------------------
+
+[Concept before — colon flattening]
+`max(A)` on a matrix returns a ROW VECTOR of per-column maxima. `max(A)`
+on a vector returns a scalar. To get a single global maximum from a
+matrix, flatten it first with `A(:)` — this produces a single column
+vector of all elements, so `max(A(:))` is a scalar. Same for `min`,
+`sum`, `mean`.
+
+Question 7-5. Why are we required to use the colon operator (:) when
+             specifying the X_gray variable? What happens if we omit it?
+
+General formula:
+  without (:), max/min return per-column values (row vector); with (:),
+  you get the global max/min.
+
+Verbatim answer:
+  "Without the semi column, the function returns the minimum and maximum
+   values for each individual column."
+
+[Why / context]
+"Per-column" = a row vector of size 1 × N (N = number of columns). Each
+element is the max of that column. The (:) form collapses the matrix
+to a column vector, so max/min operate on all elements.
+
+--------------------------------------------------------------------------------
+
+[Concept before — double range]
+`im2double` converts any integer-class image to double AND rescales the
+range to [0,1]. For uint8 [0,255], the mapping is value/255. For
+uint16 [0,65535], the mapping is value/65535. The resulting image is a
+2-D double array in [0,1]; it is NOT a [0,255] double.
+
+Question 7-6. What is the range of values for the new variable
+             X_gray_dbl?
+
+General formula:
+  double class, range [0,1] after im2double.
+
+Verbatim answer:
+  "258×350 double."
+
+[Why / context]
+The PDF answer gives the size, not the range. After im2double the
+range is [0,1]. Both facts together describe the variable fully.
+
+--------------------------------------------------------------------------------
+
+[Concept before — non-standard display range]
+`imshow(I)` uses the class default: [0,255] for uint8, [0,1] for
+double. `imshow(I,[])` scales to [min(I(:)), max(I(:))]. `imshow(I,
+[lo hi])` scales so lo → black, hi → white. For an image with values
+in [0,99], pass `[0 99]` to make 99 white and 0 black.
+
+Question 7-7. Consider an image where the range of possible values for
+             each pixel is not [0, 255], but a nonstandard range such as
+             [0, 99]. How would we display the image so that a value of
+             99 represents white and a value of 0 represents black?
+
+General formula:
+  imshow(I, [0 99]).
+
+Verbatim answer:
+  [I, map] = imread('coins.png');
+  h = imshow(I, [0 99])
+  impixelinfo(h)
+
+[Why / context]
+`impixelinfo(h)` attaches a status-bar pixel-value readout to the
+figure handle h. The [0 99] pair maps the image's min to black and max
+to white; everything in between is linearly distributed.
+
+--------------------------------------------------------------------------------
+
+[Concept before — impixel output]
+`impixel` lets you click on pixels interactively and returns three
+arrays:
+  c — column coordinates (x-values).
+  r — row coordinates (y-values).
+  p — pixel values (RGB triple for color; scalar for grayscale).
+The r/c convention matches imtool's spatial-coordinate system
+(x = column, y = row), not the matrix-index system (row, col).
+
+Question 7-8. What is the meaning of the values stored in variables
+             r, c, and p?
+
+General formula:
+  r = row / x-values;  c = column / y-values;  p = pixel value(s).
+
+Verbatim answer:
+  "r = row values of the selected pixels (x-values)
+   c = column values of the selected pixels (y-values)
+   p = RGB content of the pixel (Red, Green, Blue)"
+
+[Why / context]
+The PDF labels r as BOTH "row" and "x-values" because imtool uses the
+spatial convention x = column, y = row. Row index = y-value; column
+index = x-value. Same data, two naming frames.
+
+--------------------------------------------------------------------------------
+
+[Concept before — image min/max]
+The same `I(:)` flattening idiom is used to find global min and max.
+Different test images have very different ranges (this matters when
+choosing intensity transforms in L6):
+    pout.tif       min = 74,   max = 224
+    cameraman.tif  min = 7,    max = 253
+Both are uint8, but their useful range is much narrower than [0,255]
+— which is why auto-contrast (`imadjust`) helps.
+
+Question 7-9. What is the range of values for image A and image B?
+
+General formula:
+  min(I(:)) / max(I(:)).
+
+Verbatim answer:
+  "'pout.tif' min=74 and max=224.
+   'cameraman.tif' min=7 and max=253.
+   A = imread('pout.tif'); B = imread('cameraman.tif');
+   max(A(:)); min(A(:)); max(B(:)); min(B(:));"
+
+[Why / context]
+Both classes are uint8, so the theoretical range is [0,255] but the
+actual data occupies only [74,224] and [7,253] — this is the
+"dynamic range vs bit depth" distinction.
+
+--------------------------------------------------------------------------------
+
+[Concept before — colormap conflict in subplots]
+`imshow(I)` (grayscale) and `imshow(X, map)` (indexed) both use the
+figure's CURRENT colormap. If you plot a grayscale image first and an
+indexed image second, the colormap attached by the second call
+overrides the first — both subplots now use the indexed image's map.
+The coins image, interpreted through the trees colormap, shows
+strange colours.
+
+Fix: use `subimage`, which converts each image to RGB internally so
+each keeps its own colours.
+
+Question 7-10. What happened to the coins image just after the trees
+             image was displayed? Explain your answer.
+
+General formula:
+  last colormap wins; both subplots use the trees map; colours on
+  coins become strange.
+
+Verbatim answer:
+  "The colour of the images becomes strange because the coins map is
+   overridden by the map corresponding to trees.tif."
+
+[Why / context]
+The fix appears in the syllabus as a follow-up exercise: use `subimage`
+or convert each image to RGB by hand (`gray2ind` → `ind2rgb`).
+
+--------------------------------------------------------------------------------
+
+[Concept before — gray2ind outputs]
+`gray2ind(I, n)` converts a grayscale image to an INDEXED image with n
+levels. Two outputs:
+  I_ind — the index image. Each pixel holds an integer in [0, n−1]
+          pointing into the colormap.
+  I_map — the n×3 colormap. Row k is the RGB triple for index k.
+The grayscale-to-RGB path goes through indexed because there is no
+direct intensity → RGB converter: `ind2rgb(I_ind, I_map)` produces the
+RGB image.
+
+Question 7-11. What do the variables I_ind and I_map contain?
+
+General formula:
+  I_ind = index image;  I_map = colormap.
+
+Verbatim answer:
+  "I_ind contains the index image which is made out of the grayscale
+   image.
+   I_map contains the map which is made out of the grayscale image."
+
+[Why / context]
+Indexed representation is how the trees.tif file is stored natively.
+The two-step `gray2ind → ind2rgb` route is the manual equivalent of
+`subimage`.
+
+================================================================================
+2. TO DO  (Syllabus Q5.1–5.24, Q6.1–6.9, Q7.1–7.11)  — General Formula
+================================================================================
+Syllabus §5–§7 "TO DO" ranges, quoted from the syllabus schedule:
+    L3 .txt TO DO  →  Q 5.1–5.end, 6.1–6.end, 7.1–7.end
+
+Every question below is answered VERBATIM from the uploaded Answer PDFs:
+    - Answers to Questions 5.1-5.end.txt
+    - Answers to Questions 6.1-6.end.txt
+    - Answers to Questions 7.1-7.end.txt
+Each answer is prefixed with a GENERAL FORMULA line. Q-by-Q content is
+already reproduced above in Section 1 with the concept-before /
+verbatim-answer / concept-after framing. Section 2 repeats the same
+items in flat Q-then-answer form for the checklist track.
+
+--------------------------------------------------------------------------------
+2.A  SYLLABUS CHAPTER 5 — MATLAB BASICS  (Q 5.1 – 5.24)
+--------------------------------------------------------------------------------
+
+Q5-1  help / helpwin / doc.
+  General formula: help → Command Window; helpwin → new window;
+                   doc → help browser.
+  Answer: "help, opens all the help options in the command window.
+           helpwin, opens all the help options in a new windows.
+           doc, shows the help documentation in the help browser."
+
+Q5-2  realmin / realmax / flintmax / computer / ver / version / license.
+  General formula: value + one-line description + IEEE 754 context.
+  Answer:
+    realmin   = 2.2251e-308  (smallest positive NORMALISED double)
+    realmax   = 1.7977e+308  (largest finite double)
+    flintmax  = 9.0072e+15   (largest consecutive integer in double)
+    computer  = 'PCWIN64' | 'GLNXA64' | 'MACI64'
+    ver       = MATLAB version header + toolbox list
+    version   = MATLAB version string
+    license   = license number
+    IEEE = Institute of Electrical and Electronics Engineers — defines
+    floating-point standard.
+
+Q5-3  ans.
+  General formula: ans = most recent unassigned result.
+  Answer: "Proves the most recent answer."
+
+Q5-4  Semicolon at end.
+  General formula: suppresses Command Window output.
+  Answer: "The semicolon can be used to suppress output from a MATLAB
+           command."
+
+Q5-5  Case sensitivity.
+  General formula: identifiers yes; filenames platform-dependent.
+  Answer: "So yes, MATLAB is case sensitive with respect to variable
+           names. But ... case sensitivity is preserved on UNIX platforms
+           but not on Windows platforms."
+  [Why / context] `Fruit_per_box` vs `fruit_per_box` → Undefined function
+  or variable error.
+
+Q5-6  pi / eps / inf / i.
+  General formula: value → meaning; overwrite = yes; undo via clear all.
+  Answer: "pi = 3.1416; eps = 2.2204e-16; inf = Infinity;
+           i = basic imaginary unit (sqrt(-1)). 'Clear all' resets to
+           default values."
+
+Q5-7  Semicolon inside [ ].
+  General formula: row separator inside [ ].
+  Answer: "the semicolon is used as array row separator. ... creates a
+           new row in the array."
+
+Q5-8  0 to π in π/4 steps.
+  General formula: start:step:end.
+  Answer: 0:pi/4:pi.
+
+Q5-9  3×3 matrix via colon.
+  General formula: build rows from colon sequences; combine with [ ] and ;.
+  Answer: A = [1:3; 4:6; 7:9]  or  A = [colon(1,3); colon(4,6);
+          colon(7,9)].
+
+Q5-10  rand vs randn.
+  General formula: rand = uniform (0,1); randn = normal (mean 0, var 1).
+  Answer: "rand(), provides only positive number, in the interval (0,1).
+           randn(), generates a matrix of normal distributed numbers."
+
+Q5-11  size.
+  General formula: row vector of dimensions.
+  Answer: "size ... returns a row vector whose elements contain the
+           length of the corresponding dimension of A."
+
+Q5-12  disp.
+  General formula: displays value without printing variable name.
+  Answer: "disp ... displays the value of variable X without printing
+           the variable name."
+
+Q5-13  sum.
+  General formula: sum along first non-singleton dimension.
+  Answer: "sum ... returns the sum of the elements of A along the first
+           array dimension whose size does not equal 1."
+
+Q5-14  prod.
+  General formula: product along first non-singleton dimension.
+  Answer: "prod ... returns the product of the array elements of A."
+
+Q5-15  Y * X failure.
+  General formula: matrix multiply requires inner dimensions to match.
+  Answer: "Because the matrixes are not of the same size."
+  [Why / context] More precisely: inner dims do not match (2 vs 3).
+
+Q5-16  diag.
+  General formula: main diagonal as column vector.
+  Answer: "diag returns the diagonal values of the matrix."
+
+Q5-17  trace.
+  General formula: sum of main diagonal.
+  Answer: "trace ... is the sum of the diagonal elements of the matrix A."
+
+Q5-18  Alternative to trace.
+  General formula: sum(diag(Y)).
+  Answer: t = sum(diag(Y)).
+
+Q5-19  celldisp.
+  General formula: recursively displays the whole cell array.
+  Answer: "This function recursively displays the contents of a cell
+           array."
+
+Q5-20  % character.
+  General formula: comment marker (single line).
+  Answer: "Use this symbol to describe comments in your code."
+
+Q5-21  X(1) vs X{1}.
+  General formula: X(1) wrapper; X{1} content.
+  Answer: "X(1), gives the data format of the cell.
+           X{1}, gives the content of the cell."
+
+Q5-22  fieldnames.
+  General formula: cell array of field names.
+  Answer: "This MATLAB function returns a cell array of character
+           vectors containing the names of the fields in the structure."
+
+Q5-23  isstruct 1 vs 0.
+  General formula: 1 = struct; 0 = not struct.
+  Answer: "In case of 1, the array is a MATLAB structure.
+           In case of 0, the array is not a MATLAB structure."
+
+Q5-24  Delete a struct field.
+  General formula: rmfield.
+  Answer: "The rmfield function removes the specified field or fields
+           from a structure array."
+
+--------------------------------------------------------------------------------
+2.B  SYLLABUS CHAPTER 6 — PROGRAMMING IN MATLAB  (Q 6.1 – 6.9)
+--------------------------------------------------------------------------------
+
+Q6-1  % vs %{ %}.
+  General formula: % single line; %{ %} block.
+  Answer: "% is a line of comments. The same as // in C or C++.
+           %{ and %} is a block of comment. This is the same as using
+           /* and */ in C or C++."
+
+Q6-2  gamma value change.
+  General formula: +/− adds/removes the specified step.
+  Answer: "This variable either increases or decreases with 0.1
+           depending on whether plus or minus is pressed."
+
+Q6-3  side effects of + press.
+  General formula: histogram re-renders; repeated press keeps
+                   incrementing.
+  Answer: "The histogram modifies. If the variable gamma becomes larger,
+           it means the intensity of the color decreases until all colors
+           are black. When decrease gamma, the effects is the opposite."
+
+Q6-4  other cell-mode features.
+  General formula: code folding + evaluate section.
+  Answer: "When cell mode is active, is it possible to use code folding.
+           Cells can be expanded (Ctrl+Shift+.) and folded (Ctrl+.). To
+           evaluate the current section, Ctrl+Enter can be pressed."
+
+Q6-5  help text extraction.
+  General formula: first contiguous %-block after function definition
+                   line.
+  Answer: "MATLAB takes the first block of comments. This can also be
+           seen by the minus symbol."
+
+Q6-6  prealloc speedup.
+  General formula: t_noalloc / t_alloc.
+  Answer: "Not allocated: Elapsed time is 0.002904 seconds.
+           Allocated:     Elapsed time is 0.000373 seconds.
+           0.002904 / 0.000373 = 7.8 times faster."
+
+Q6-7  .^ vs ^.
+  General formula: .^ element-wise; ^ matrix power.
+  Answer: ".^ means element-wise power."
+
+Q6-8  vectorization speed.
+  General formula: t_noalloc / t_vectorized.
+  Answer: "Not allocated: 0.002937 s; Allocated: 0.000263 s;
+           Loop vectorization: 0.000185 s."
+
+Q6-9  Vectorized pseudocode.
+  General formula: t = start:step:end; x = sin(t).
+  Answer: t = 0:pi/4:2*pi;  x = sin(t).
+
+--------------------------------------------------------------------------------
+2.C  SYLLABUS CHAPTER 7 — IMAGE PROCESSING TOOLBOX  (Q 7.1 – 7.11)
+--------------------------------------------------------------------------------
+
+Q7-1  Type of coins.png.
+  General formula: PNG (lossless), intensity image.
+  Answer: "PNG image."
+  [Why / context] Class = uint8.
+
+Q7-2  Semicolon after imread.
+  General formula: suppresses printing of the pixel matrix.
+  Answer: "If we do not use the semi column, all pixel values will be
+           provided in the command windows."
+
+Q7-3  X_rgb size.
+  General formula: M × N × 3, class double.
+  Answer: "258×350×3 double."
+
+Q7-4  X_gray class.
+  General formula: "Intensity image" (uint8).
+  Answer: "Intensity image."
+
+Q7-5  Colon in max/min.
+  General formula: (:) flattens → global; without → per-column.
+  Answer: "Without the semi column, the function returns the minimum and
+           maximum values for each individual column."
+
+Q7-6  X_gray_dbl range.
+  General formula: double, [0,1].
+  Answer: "258×350 double."
+  [Why / context] im2double rescales to [0,1].
+
+Q7-7  Non-standard display range.
+  General formula: imshow(I, [0 99]).
+  Answer: h = imshow(I, [0 99]); impixelinfo(h).
+
+Q7-8  impixel r, c, p.
+  General formula: r = row (y); c = column (x); p = pixel value(s).
+  Answer: "r = row values of the selected pixels (x-values);
+           c = column values of the selected pixels (y-values);
+           p = RGB content of the pixel."
+
+Q7-9  pout / cameraman ranges.
+  General formula: min(I(:)) / max(I(:)).
+  Answer: "pout.tif min=74, max=224. cameraman.tif min=7, max=253."
+
+Q7-10  Coins colour after trees display.
+  General formula: last colormap wins; both subplots use trees map.
+  Answer: "The colour of the images becomes strange because the coins
+           map is overridden by the map corresponding to trees.tif."
+
+Q7-11  I_ind and I_map contents.
+  General formula: I_ind = index image; I_map = colormap.
+  Answer: "I_ind contains the index image which is made out of the
+           grayscale image. I_map contains the map which is made out of
+           the grayscale image."
+
+================================================================================
+END CHECKPOINT 2.x — rev.4 (content + concept-before/after + TO-DO)
+================================================================================
