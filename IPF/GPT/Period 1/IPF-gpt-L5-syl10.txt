@@ -1,0 +1,673 @@
+================================================================================
+CHECKPOINT 3.1 — L5: GEOMETRIC OPERATIONS
+     (Lesson slides + Syllabus §10 + Answers to Questions 10.1-10.end)
+     rev.1 — content + concept-before/after each question + TO-DO
+================================================================================
+Files: result-EVD2__Lesson_5_2021.txt  (L5 slides)
+       EVD2_Syllabus_2026_2027_v20260826.txt  §10
+       Answers to Questions 10.1-10.end.txt
+Sample-exam match: Q5 (imresize + nearest + Antialiasing,false → aliasing).
+       L5 §interpolation + §aliasing are the direct prerequisite; the
+       arithmetic and prediction logic come from L1 §2.4.
+Progress tick: [ ] 3.1
+
+================================================================================
+1. CONTENT & EXPLANATION
+================================================================================
+
+================================================================================
+L5 OVERVIEW — WHAT GEOMETRIC OPERATIONS DO
+================================================================================
+Geometric operations reposition pixels in a constrained way. They
+modify the SPATIAL relationship between pixel groups (features,
+objects), but not their intensity values. Two basic components
+(L5 slide 3, verbatim):
+
+  • a MAPPING FUNCTION, specified via spatial-transformation equations
+    (and a procedure to solve them), AND
+  • an INTERPOLATION METHOD, used to compute the new value of each
+    pixel in the spatially transformed image.
+
+Applications (L5 slide 2):
+  • Correction of geometric distortions introduced during acquisition
+    (lens distortion, perspective).
+  • Special effects (twirl, bulge, squeeze).
+  • Image registration — aligning two images of the same scene
+    (medical, satellite, panorama stitching).
+  • License-plate recognition: perspective rectification.
+
+--------------------------------------------------------------------------------
+AFFINE TRANSFORMATIONS  (L5 slide 6–8)
+--------------------------------------------------------------------------------
+An affine transform maps (x, y) to (x', y') via a 3×3 matrix with last
+column [0; 0; 1]:
+
+  [x']   [a0  a1  a2] [x]
+  [y'] = [b0  b1  b2] [y]
+  [1 ]   [0   0   1 ] [1]
+
+Or in coordinate form:
+  x' = a0·x + a1·y + a2
+  y' = b0·x + b1·y + b2
+
+Table of the six parameters (L5 slide 8, verbatim):
+
+  Transformation          a0       a1      a2   b0       b1      b2
+  Translation (Δx, Δy)     1        0      Δx    0        1      Δy
+  Scaling (sx, sy)         sx       0       0    0        sy      0
+  Rotation (θ, CCW)        cos θ   sin θ    0   -sin θ   cos θ    0
+  Shear (shx, shy)         1      shy       0    shx      1       0
+
+  Identity: [[1,0,0],[0,1,0],[0,0,1]].
+
+  Properties of affine (as a family):
+    • Straight lines stay straight.
+    • Parallel lines stay parallel.
+    • Ratios of distances along a line are preserved.
+    • NOT preserved: angles, lengths, areas (unless pure rotation/
+      translation).
+
+  Perspective (projective) transformation is a superset that also
+  preserves straight lines but allows parallel lines to converge — the
+  last row of the 3×3 matrix is then NOT [0, 0, 1]. This is what
+  corrects the license-plate trapezoid.
+
+--------------------------------------------------------------------------------
+INTERPOLATION  (L5 slides 9–14)
+--------------------------------------------------------------------------------
+Interpolation estimates the value of f at a NON-integer coordinate
+from the known values at nearby integer coordinates. Necessary because
+geometric transforms (scale, rotate, shear, translate) place output
+pixels at coordinates that fall between input pixels.
+
+Three methods, from cheapest to best:
+
+  NEAREST NEIGHBOUR
+    Output pixel = value of the input pixel whose coordinate the
+    interpolated point falls INTO. Ignores other pixels. Fastest. Makes
+    each pixel a bigger block. No new values created — aliases easily
+    when downsampling.
+
+  BILINEAR
+    Output pixel = weighted average of the 2×2 = 4 nearest input
+    pixels. Weights are proportional to inverse distance from the
+    interpolated point to each of the 4. Much smoother than nearest.
+    Can slightly blur (averages across edges).
+
+  BICUBIC
+    Output pixel = weighted average of the 4×4 = 16 nearest input
+    pixels. Uses cubic weighting → sharper than bilinear (preserves
+    edge sharpness better while smoothing noise). Medium cost.
+
+Time / quality ladder (empirical):
+  time(nearest) < time(bilinear) < time(bicubic)
+  quality(nearest) < quality(bilinear) < quality(bicubic)
+
+  imresize defaults to BICUBIC (unless specified).
+
+--------------------------------------------------------------------------------
+ALIASING  (L5 slide 15)
+--------------------------------------------------------------------------------
+L5 slide 15 shows:
+  Original          Down-sampled, no pre-filtering      Down-sampled,
+                                                          after pre-filtering
+
+  Mechanism: when shrinking by factor M without pre-filtering, the
+  high-frequency content of the original folds into low frequencies
+  (L1 §2.4 Nyquist). Result: jagged edges, moiré on periodic patterns.
+  Pre-filtering (Gaussian at cutoff f_s/2) removes the high frequencies
+  before sampling — imresize does this automatically for bilinear and
+  bicubic (internal 11×11 low-pass when shrinking) but NOT for nearest.
+
+  This is the exam trap of sample Q5: nearest + Antialiasing,false
+  disables both the internal pre-filter and the antialiasing step, so
+  downsampling produces aliasing.
+
+--------------------------------------------------------------------------------
+IMAGE REGISTRATION  (L5 slide 16–17)
+--------------------------------------------------------------------------------
+Registration = align two or more images of the same scene (taken from
+different sensors, times, or viewpoints). Standard workflow:
+
+  1. Select control points in both images (cpselect or interactive).
+  2. Compute the spatial transformation (cp2tform / fitgeotrans).
+  3. Warp the unregistered image into the base image's frame
+     (imwarp).
+  4. Display the registered image over the base (imshowpair or overlay
+     with AlphaData).
+
+  L5 slide 17 shows [Pts1, Pts2] = cpselect(I1, I2, 'Wait', true) as
+  the MATLAB entry point. The syllabus §10.2 exercises go through the
+  full chain.
+
+--------------------------------------------------------------------------------
+CALIBRATION  (L5 slide 18–22)
+--------------------------------------------------------------------------------
+Camera calibration determines the mapping between a 3-D world
+coordinate system, the camera's rigid position, and the 2-D pixel
+array.
+
+  INTRINSIC parameters describe the camera itself:
+    • focal length
+    • lens distortion (radial, tangential)
+    • image sensor format
+    • principal point (image centre offset)
+
+  EXTRINSIC parameters describe the camera's pose in the world:
+    • position (translation from world origin)
+    • orientation (rotation)
+
+  The full transform chain (L5 slide 22):
+    [world coords (X,Y,Z)]
+      →  [camera rigid coords]   (extrinsic parameters)
+      →  [image plane coords]    (intrinsic parameters)
+      →  [pixel coordinates]
+
+  Corrects for:
+    • Lens distortion (so straight world lines become straight again).
+    • Scale (so world-unit measurements can be reported in real units
+      from pixel counts).
+    • 3-D reconstruction (so a point in the scene can be located in
+      world coordinates).
+
+================================================================================
+§10  GEOMETRIC OPERATIONS  (syllabus)
+================================================================================
+Syllabus introduction (§10 preamble, verbatim):
+  "Geometric transformations modify the spatial relationship between
+   pixels in an image. They are often called rubber-sheet
+   transformations because they may be viewed as printing an image on
+   a sheet of rubber and then stretching this sheet according to a
+   predefined set of rules. Geometric transformations are used
+   frequently to perform image registration, a process that takes two
+   images of the same scan and aligns them so they can be merged for
+   visualization, or for quantitative comparison."
+
+  Mathematical formulation:
+    image f in (w, z) coordinates  →  image g in (x, y) coordinates
+    (x, y) = T{ (w, z) }
+    Example: (x, y) = (w/2, z/2) shrinks image by 2 in both dimensions.
+
+--------------------------------------------------------------------------------
+§10.1  IMAGE CROPPING, RESIZING, FLIPPING, AND ROTATION
+--------------------------------------------------------------------------------
+
+[Concept before — imtool crop coordinates]
+`imtool(I)` opens the Image Tool. The Crop Image option lets you draw
+a rectangle over the image; the info bar shows the top-left and
+bottom-right corners of that rectangle in spatial coordinates. IPT
+uses x = column, y = row — the "spatial coordinate" convention
+(inconsistent with matrix indexing, which is row-first). Recording
+both corners lets you pass them to `imcrop` later as a four-element
+vector [xmin ymin width height].
+
+Question 10.1  Which numbers did you record for the top left and bottom
+               right coordinates and what do they mean?
+
+General formula:
+  top-left    = (x_left, y_top)  = (column_left, row_top)
+  bottom-right= (x_right, y_bot) = (column_right, row_bot)
+  crop_rect   = [x_left, y_top, x_right−x_left, y_bot−y_top]
+
+Verbatim answer:
+  "Top left: 185, 100
+   Bottom right: 213, 160
+   Those are the pixel coordinates of the top left and bottom right
+   corner respectively. 0,0 is the top left corner of the original
+   image."
+
+[Why / context]
+(185, 100) = column 185, row 100. (213, 160) = column 213, row 160.
+So the crop rectangle is 213 − 185 = 28 columns wide, 160 − 100 = 60
+rows tall, starting at column 185, row 100.
+
+--------------------------------------------------------------------------------
+
+[Concept before — interpolation for upscaling]
+When ENLARGING (imresize with scale > 1), the output has more pixels
+than the input, so each output pixel falls at a fractional input
+coordinate. Three interpolation rules produce three different
+qualities:
+  nearest   — block replication (pixelated, no smoothing).
+  bilinear  — 2×2 weighted average (smooth).
+  bicubic   — 4×4 weighted average (sharpest edge-preserving).
+The syllabus Q10-2 is a visual comparison of these three on the same
+cameraman image.
+
+Question 10.2  Visually compare the three resized images. How do they
+               differ?
+
+General formula:
+  answer = nearest → blocky, jagged edges; bilinear → smoother
+           but slightly blurred; bicubic → smoothest with sharper
+           edges than bilinear.
+
+Verbatim answer:
+  "The image resized with bicubic and bilear interpolation are better
+   at preserving smooth contours in the image."
+
+[Why / context]
+The PDF groups bilinear and bicubic together as "better at preserving
+smooth contours". The finer point — bicubic preserves edges slightly
+better than bilinear — is implicit; if the exam asks, state both
+smoothness AND edge fidelity.
+
+--------------------------------------------------------------------------------
+
+[Concept before — shrinking by row/column deletion]
+A quick way to shrink an image by factor 2 is to KEEP every other row
+and every other column, discarding the rest: `I(1:2:end, 1:2:end)`.
+This is computationally trivial (no interpolation). It is also
+mathematically correct only if the discarded pixels carry no unique
+information — which is rarely the case for real images.
+
+Question 10.3  How did we scale the image?
+
+General formula:
+  I_small = I(1:2:end, 1:2:end)   →  drop every odd-indexed row & column
+  (General: I(1:M:end, 1:M:end) drops M−1 of every M rows/columns.)
+
+Verbatim answer:
+  "Lines are taken at uneven line numbers.
+   Rows are taken at uneven row numbers."
+
+[Why / context]
+"Uneven" = odd-indexed. The result is a mosaic-looking subsample.
+
+Question 10.4  What are the limitations of this technique?
+
+General formula:
+  limitations = lost information (no use of discarded pixels)
+              + aliasing (no pre-filter)
+              + mosaic/blocky appearance (jagged edges).
+
+Verbatim answer:
+  "75% of the data is not used in scaling. Unsmooth contours. Mosaic
+   like image with saw to tooth appearance."
+
+[Why / context]
+For factor-2 shrink, 3 of every 4 pixels (75 %) are thrown away.
+Using imresize with pre-filter would use all pixels (via averaging)
+and avoid aliasing.
+
+--------------------------------------------------------------------------------
+
+[Concept before — rotation and image size]
+`imrotate(I, θ)` rotates counter-clockwise by default. The result is
+saved into a rectangular canvas just large enough to hold the rotated
+image, so the output is LARGER than the input (unless 'crop' is
+specified). Rotation by any angle other than multiples of 90° places
+output corners outside the original bounding box; the extra canvas is
+filled with 0 (black).
+
+Question 10.5  Inspect the size (number of rows and columns) of I_rot
+               and compare it with the size of I. Why are they different?
+
+General formula:
+  size(I_rot) = size(I) + borders  (unless 'crop' specified)
+  For a square image of side n rotated by θ:
+    new side  =  ceil( n·(|cos θ| + |sin θ|) )
+  For non-square M×N rotated by θ:
+    new_rows = ceil( M·|cos θ| + N·|sin θ| )
+    new_cols = ceil( M·|sin θ| + N·|cos θ| )
+
+Verbatim answer:
+  "I: 242 × 308
+   I_rot: 375 × 392
+   Difference because images are saved as a rectangle with horizontal
+   and vertical borders. These borders enlarge after rotating an
+   image."
+
+[Why / context]
+242×308 is the eight.tif original size. After 35° rotation, the
+bounding box expands to 375×392. The extra pixels are zero-padding
+(black). Use `imrotate(I, 35, 'bilinear', 'crop')` to keep the
+original size (pixel values outside the input frame are dropped).
+
+Question 10.6  The previous step rotated the image counterclockwise.
+               How would you rotate the image 35° clockwise?
+
+General formula:
+  imrotate(I, -35)   → clockwise
+  imrotate(I, +35)   → counter-clockwise (default)
+
+Verbatim answer:
+  "I_rot = imrotate(I, -35)"
+
+[Why / context]
+Same function, negate the angle. No separate "clockwise" option.
+
+--------------------------------------------------------------------------------
+
+[Concept before — interpolation on rotation]
+Rotating by 35° creates fractional pixel coordinates in the output.
+Interpolation decides what value each output pixel gets. Nearest →
+stair-stepped edges. Bilinear/bicubic → smooth.
+
+Question 10.7  How did bilinear interpolation affect the output of the
+               rotation?
+
+General formula:
+  bilinear → smooth contours, no sawtooth on edges, slight blur.
+
+Verbatim answer:
+  "The bilinear interpolation resulted in smoothed contours with less
+   saw to tooth appearance."
+
+[Why / context]
+The difference is most visible at the edges of the rotated image
+(where nearest shows a staircase of 1-pixel jumps) and around the
+coins (circular contours become jagged under nearest, smooth under
+bilinear).
+
+--------------------------------------------------------------------------------
+
+[Concept before — 'crop' vs full canvas]
+By default, imrotate produces the enlarged bounding box. Adding the
+string 'crop' as the last argument tells imrotate to keep the output
+the same size as the input by cropping the extra canvas, cutting off
+the rotated corners. Useful when the output must match the input
+dimensions for further processing.
+
+Question 10.8  How did the crop setting change the size of our output?
+
+General formula:
+  with 'crop':  size(I_rot) = size(I)
+
+Verbatim answer:
+  "The size of the rotated image equals the size of the original image."
+
+[Why / context]
+Trade-off: you lose the corners that would have extended outside the
+original canvas (they get dropped), but the output aligns pixel-for-
+pixel with the input — which matters for overlay / difference / mask
+operations.
+
+--------------------------------------------------------------------------------
+
+[Concept before — §10.2 Spatial transformations and image registration]
+An affine transformation is defined by a 3×3 matrix, built in MATLAB
+with `affine2d(M)` (or in older syntax `maketform('affine', M)`).
+`imwarp(I, tform)` applies it. The 3×3 matrix has the SAME parameter
+layout as L5 slide 8's table:
+    [a0  a1  a2]
+    [b0  b1  b2]
+    [0   0   1 ]
+
+[Concept before — affine scale vs imresize]
+`imwarp` with an affine scale matrix is the GENERAL transform path.
+`imresize` is a SPECIALISED path for scaling only, with an optimised
+interpolation implementation, and it pre-filters on shrink. Same
+result for pure scaling (up to internal rounding), but different code
+paths and different default behaviour on shrink (imresize pre-filters,
+imwarp does not).
+
+Question 10.9  Compare the two resulting images (I2 and I3). Inspect
+               size, graylevel range, and visual quality. How are they
+               different? Why?
+
+General formula:
+  size difference: imwarp grid depends on tform output bounds;
+                   imresize fixed to M·s × N·s.
+  graylevel difference: imwarp may introduce sub-LSB values
+                        (double-precision interpolation), imresize
+                        returns the input class.
+  quality: imresize's shrink path applies a pre-filter; imwarp does
+           not, so imwarp on shrink aliases more.
+
+Verbatim answer:
+  "Size:  I2 = 511×511,  I3 = 512×512
+   Range: I2 = 246,      I3 = 255
+   Visual quality: no obvious effect"
+
+[Why / context]
+The 1-pixel size difference: affine2d works on continuous coordinates;
+the identity point lands at (0,0) or (1,1), giving 511 or 512 points
+inside the resulting grid. Rounding choices determine the exact
+number. The "range" difference: imwarp's bilinear interpolation
+generates fractional values which, on a uint8 image, undergo internal
+rounding differently from imresize. Visually indistinguishable on a
+2× upscale — the size/gray range differences are the answer's point.
+
+--------------------------------------------------------------------------------
+
+[Concept before — affine rotate vs imrotate]
+Rotating via affine2d + imwarp is the general-purpose path; imrotate
+is the specialised path. Both produce a rotated image. Differences:
+imwarp's default output canvas is sized to contain the entire rotated
+image including corners; imrotate's default also expands but with
+slightly different padding/rounding conventions. Interpolation
+defaults: imwarp uses bilinear, imrotate uses nearest.
+
+Question 10.10 Compare the two resulting images (I4 and I5). Inspect
+               size, graylevel range, and visual quality. How are they
+               different? Why?
+
+General formula:
+  size:     imwarp's grid is computed from the transform's output
+            limits — often 1 pixel smaller or larger than imrotate's.
+  range:    imwarp interpolates in double → can produce fractional
+            values that get rounded; imrotate (default nearest) uses
+            integer values directly.
+  quality:  imwarp (bilinear default) → smoother contours;
+            imrotate (nearest default) → jagged contours.
+
+Verbatim answer:
+  "Range: I4: 246, I5: 255
+   Size:  I4: 357×357, I5: 357×357
+   The affine transformed image shows more smoothed contour lines
+   (Figure 1)."
+
+[Why / context]
+Both images are 357×357 (the same rotation angle produces the same
+bounding box). But I4 is smoother because imwarp uses bilinear
+interpolation while imrotate default is nearest. To make imrotate
+match imwarp, call imrotate(I, θ, 'bilinear').
+
+--------------------------------------------------------------------------------
+
+[Concept before — affine translation]
+Translation shifts every pixel by (Δx, Δy) without rotation or
+scaling. The affine matrix is [[1,0,Δx],[0,1,Δy],[0,0,1]]. `imwarp`
+can apply a raw displacement field (`D(:,:,1) = −Δx` for x shift,
+`D(:,:,2) = Δy` for y shift) instead of a tform. The 'FillValues'
+option specifies what value the vacated region gets (0 = black by
+default, 200 = mid-grey in the exercise).
+
+Question 10.11 Compare the two images (I1 and I6). Inspect size,
+               graylevel range, and visual quality. How are they
+               different? Why?
+
+General formula:
+  size:      same (translation moves content; canvas stays the same
+             in imwarp with displacement field).
+  range:     same (no interpolation needed for integer shifts).
+  content:   I6 has shifted pixels and 'FillValues' padding
+             (200 = mid-grey) in the vacated region; I1 does not.
+
+Verbatim answer:
+  "I1: size 256×256
+   I6: size 356×356
+   Range: I1: 246, I6: 246
+   No obvious effect regarding smoothing."
+
+[Why / context]
+[note] The PDF's sizes differ (256 vs 356) because imwarp with a
+displacement field adds the displacement's magnitude to the canvas.
+If the displacement were applied inside the original frame, sizes
+would match. The "no obvious smoothing" answer is because integer
+translation does not need interpolation. The visual effect the exam
+wants: the 200-valued fill in the padded region is clearly visible;
+the shifted content is identical elsewhere.
+
+--------------------------------------------------------------------------------
+
+[Concept before — registration quality]
+Registration accuracy depends on: (a) how well the control points are
+distributed across the image (wide coverage = better); (b) how many
+points are used; (c) the transformation model chosen (rigid, similarity,
+affine, projective); (d) how precisely each point was placed. Small
+point-separation → noisy estimate of the transform.
+
+Question 10.12 Are you happy with the results? If you had to do it
+               again, what would you do differently?
+
+General formula:
+  improvement = wider control-point spacing
+              + more points
+              + finer zoom during point selection
+              + better transform model
+              + use cpcorr to refine the point placement.
+
+Verbatim answer:
+  "Pick points wider spaced to improve the transformation."
+
+[Why / context]
+Wide spacing → long baselines → less sensitivity to per-point
+localisation error. A 10-pixel point error at 100-pixel spacing is
+10 % error; the same error at 500-pixel spacing is 2 % error.
+
+================================================================================
+2. TO DO  (Syllabus Q10.1–10.end) — General Formula per exercise
+================================================================================
+Syllabus §10 "TO DO" range, quoted from the syllabus schedule:
+    L5 .txt TO DO  →  Q 10.1 – 10.end
+All twelve exercises are answered verbatim above in Section 1. This
+section provides the flat Q-then-answer form for the checklist track.
+
+--------------------------------------------------------------------------------
+2.A  GENERAL FORMULA QUICK-REFERENCE  (all exercises in one block)
+--------------------------------------------------------------------------------
+Crop rectangle from imtool corners:
+    [xmin  ymin  width  height]  =  [x_left  y_top
+                                     x_right − x_left  y_bot − y_top]
+
+imresize upscaling interpolation:
+    nearest  →  blocky; no pre-filter; fastest
+    bilinear →  2×2 weighted average; smooth
+    bicubic  →  4×4 weighted average; sharper than bilinear
+    Time/quality: nearest < bilinear < bicubic (both axes)
+
+Shrink by row/column deletion:
+    I_small  =  I(1:M:end, 1:M:end)
+    Information loss ≈ (1 − 1/M²) fraction.
+
+imrotate default vs 'crop':
+    default   →  bounding box expands; corners black
+    'crop'    →  output size = input size; corners dropped
+
+Clockwise vs CCW rotation:
+    imrotate(I, +θ)  →  CCW
+    imrotate(I, −θ)  →  CW
+
+Affine 3×3 matrix by transformation:
+    translation (Δx, Δy):    [1  0  Δx;  0  1  Δy;  0  0  1]
+    scaling (sx, sy):        [sx 0  0;   0  sy 0;   0  0  1]
+    rotation θ (CCW):        [cos θ  sin θ  0;
+                             -sin θ  cos θ  0;
+                              0      0      1]
+    shear (shx, shy):        [1   shy  0;  shx  1  0;  0  0  1]
+
+Apply affine:
+    tform = affine2d(M);
+    I_out = imwarp(I_in, tform);
+
+imwarp vs imresize / imrotate:
+    imwarp   →  general affine; bilinear default; no shrink pre-filter.
+    imresize →  scaling only; bicubic default; pre-filters on shrink.
+    imrotate →  rotation only; nearest default; expands canvas.
+
+Translation with displacement field:
+    D(:,:,1) = −Δx;   D(:,:,2) = Δy;
+    I_out = imwarp(I_in, D, 'FillValues', 200);
+
+Registration workflow:
+    [pts_moving, pts_fixed] = cpselect(moving, base, 'Wait', true);
+    tform = fitgeotrans(pts_moving, pts_fixed, 'nonreflectivesimilarity');
+    registered = imwarp(moving, tform, ...
+                        'XData',[1 W], 'YData',[1 H]);
+    imshowpair(registered, base);
+
+Control-point quality:
+    wide spacing → longer baseline → less sensitive to point-localisation
+                   error;
+    more points → better least-squares fit;
+    cpcorr → refine localisation to sub-pixel.
+
+--------------------------------------------------------------------------------
+2.B  PER-QUESTION QUICK-REFERENCE  (verbatim answers, one line each)
+--------------------------------------------------------------------------------
+
+Q10.1  Top-left / bottom-right coordinates
+    Top-left (185, 100); bottom-right (213, 160). (x = column, y = row;
+    origin at top-left of image.)
+
+Q10.2  Visual comparison of three resizes
+    Bicubic and bilinear better at preserving smooth contours.
+
+Q10.3  How scaled
+    Every other row & column kept (odd-indexed rows/columns). 75 % of
+    data discarded.
+
+Q10.4  Limitations of that technique
+    75 % data unused; unsmooth contours; mosaic look with sawtooth
+    appearance.
+
+Q10.5  Size of I_rot vs I
+    I: 242×308; I_rot: 375×392. Rectangular bounding box expands after
+    rotation.
+
+Q10.6  Rotate 35° clockwise
+    imrotate(I, -35).
+
+Q10.7  Bilinear on rotation
+    Smooths contours; less sawtooth than nearest.
+
+Q10.8  'crop' effect on rotation
+    Output size = input size.
+
+Q10.9  I2 (affine) vs I3 (imresize)
+    Size 511 vs 512; range 246 vs 255; visual quality similar
+    (interpolation & grid rounding).
+
+Q10.10 I4 (affine) vs I5 (imrotate)
+    Size 357×357 both; range 246 vs 255; affine smoother contours
+    (bilinear default vs nearest default).
+
+Q10.11 I1 vs I6 (translation)
+    Sizes 256 vs 356 (displacement field enlarged canvas); range 246
+    both; no obvious smoothing (integer shift; 200-valued fill visible
+    in vacated region).
+
+Q10.12 Improvement to registration
+    Pick points wider spaced to improve the transformation.
+
+--------------------------------------------------------------------------------
+2.C  TO-DO CHECKLIST  (ticked = verified against official Answer PDF)
+--------------------------------------------------------------------------------
+[ ] Q10.1  vs PDF 10.1-10.end.  ✓ (185,100 / 213,160)
+[ ] Q10.2  vs PDF.              ✓ (bicubic & bilinear smoother)
+[ ] Q10.3  vs PDF.              ✓ (uneven rows/cols)
+[ ] Q10.4  vs PDF.              ✓ (75 % unused; mosaic; sawtooth)
+[ ] Q10.5  vs PDF.              ✓ (242×308 → 375×392)
+[ ] Q10.6  vs PDF.              ✓ (imrotate(I, -35))
+[ ] Q10.7  vs PDF.              ✓ (smoothed contours)
+[ ] Q10.8  vs PDF.              ✓ (output size = input size)
+[ ] Q10.9  vs PDF.              ✓ (511 vs 512; 246 vs 255)
+[ ] Q10.10 vs PDF.              ✓ (357×357 both; affine smoother)
+[ ] Q10.11 vs PDF.              ✓ (256 vs 356; 246 both; no smoothing)
+[ ] Q10.12 vs PDF.              ✓ (pick wider spaced points)
+
+================================================================================
+REVISION LOG
+================================================================================
+rev.1  Initial pass for L5 + §10. Interleaves L5 slide concepts (affine
+       parameters, three interpolants, aliasing, registration,
+       calibration) with §10.1 (cropping / resizing / flipping /
+       rotation) and §10.2 (spatial transformations / image registration).
+       Each Q10.n framed concept-before / verbatim answer / concept-after
+       (rev.4 pattern). Six-parameter affine table and interpolation
+       trade-off reproduced verbatim from L5 slide 8 and 9–14.
+================================================================================
+END CHECKPOINT 3.1 — rev.1 (content + concept-before/after + TO-DO)
+================================================================================

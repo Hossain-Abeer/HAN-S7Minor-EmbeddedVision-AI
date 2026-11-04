@@ -1,0 +1,688 @@
+================================================================================
+CHECKPOINT 2.y — SYLLABUS §8, §9
+     (Mathematical tools · Arithmetic and logic operations)
+     rev.1 — content + concept-before/after each question + TO-DO
+================================================================================
+Files: EVD2_Syllabus_2026_2027_v20260826.txt  §8, §9
+       Answers to Question 8.1-8.end.txt
+       Answers to Questions 9.1-9.end.txt
+       L4 slides (result-EVD2__Lesson_4_2021.txt) as lecture support.
+Sample-exam match: Q4 (bitwise AND/OR/XOR on 3×3) — exercises 8.14/9.14
+       (AND), 8.15/9.15 (complement/OR), and 8.16/9.16 (ROI). The
+       arithmetic parts (8.1–8.8 / 9.1–9.8) feed the "imadd/imsubtract"
+       questions that appear in L7/L9 but not in this year's sample paper.
+Progress tick: [ ] 2.y
+
+NOTE ON NUMBERING
+  The syllabus assigns the SAME exercises twice — once as Q8.1–Q8.16
+  (under §8) and again as Q9.1–Q9.16 (under §9). The two answer PDFs
+  (Answers to Question 8.1-8.end.txt and Answers to Questions 9.1-9.end.txt)
+  are verbatim duplicates of each other. Every exercise below is labelled
+  "Q8.n / Q9.n" and presented ONCE — answering it once covers both numbering
+  schemes.
+================================================================================
+
+================================================================================
+1. CONTENT & EXPLANATION
+================================================================================
+
+================================================================================
+§8  INTRODUCTION TO BASIC MATHEMATICAL TOOLS AND STATISTICAL MEASURES
+================================================================================
+Syllabus introduction (§8 preamble, verbatim):
+  "Mathematical tools and statistical measures are important in digital
+   image processing. This chapter has two principal objectives: (1) to
+   introduce you to the various mathematical tools we use throughout
+   this syllabus; and (2) to introduce some basic statistical tools used
+   in digital image processing. Furthermore, this chapter aims to give
+   you a "feel" for how these tools are used by applying them to some
+   basic image processing tasks, which will be more extensively used in
+   subsequent chapters."
+
+--------------------------------------------------------------------------------
+§8.1  ELEMENTWISE VERSUS MATRIX OPERATIONS
+--------------------------------------------------------------------------------
+
+[Concept before]
+An elementwise operation between two images acts on corresponding
+pixels: for images A and B of the same size, the result C has
+C[i,j] = op(A[i,j], B[i,j]) for every pixel. A MATRIX operation uses
+the rules of linear algebra: C = A·B sums the products of row i of A
+with column j of B — completely different arithmetic. In MATLAB the
+distinction is:
+  elementwise:  A .* B,  A ./ B,  A .^ n
+  matrix:       A * B,   A / B,   A ^ n
+Rotation of a coordinate (x, y) by angle θ is the canonical matrix
+operation (x', y')^T = R·(x, y)^T, where R = [[cos θ, -sin θ],
+[sin θ, cos θ]]. Raising a pixel value to a power is the canonical
+elementwise operation (s = c · r^gamma → s = c .* r .^ gamma).
+
+The syllabus states explicitly:
+  "We assume elementwise operation throughout this syllabus, unless
+   stated otherwise. For example, when we refer to raising an image to
+   a power, we mean that each individual pixel is raised to that power."
+
+Anywhere in the syllabus that an arithmetic formula like `s = c · r + b`
+or `s = c · r^γ` is written, the MATLAB implementation is ALWAYS
+elementwise. This is why every pixel-level formula in L4–L6 uses .*, ./,
+or .^ in the code snippets.
+
+================================================================================
+§9  ARITHMETIC AND LOGIC OPERATIONS
+================================================================================
+Syllabus introduction (§9 preamble, verbatim):
+  "The IPT offers four functions to aid in image arithmetic: imadd,
+   imsubtract, immultiply, and imdivide. You could use MATLAB's
+   arithmetic functions (+,-,*,/) to perform image arithmetic, but it
+   would probably require additional coding to ensure that the
+   operations are performed in double precision, as well as setting
+   cutoff values to be sure that the result is within grayscale range.
+   The functions provided by the IPT do this for you automatically.
+   Image addition can be used to brighten (or darken) an image by
+   adding (subtracting) a constant value to (from) each pixel value. It
+   can also be used to blend two images into one."
+
+Two subsections follow: §9.1 (Arithmetic operations) and §9.2 (Logic
+operations and region of interest processing). The 16 exercises are
+distributed across both.
+
+--------------------------------------------------------------------------------
+§9.1  ARITHMETIC OPERATIONS
+--------------------------------------------------------------------------------
+
+[Concept before — imadd / imsubtract / immultiply / imdivide]
+The IPT wraps the four arithmetic operations in class-aware functions
+that prevent uint8 truncation. A raw uint8 + uint8 in MATLAB saturates
+at 255 (and warns); imadd does the same saturation silently and
+returns uint8. imsubtract clips negative results to 0; to preserve the
+sign you use imabsdiff (absolute difference) or convert to double
+first. immultiply and imdivide use the same saturation rule.
+
+  imadd(A, B)         element-wise A + B, saturating at 255 (uint8).
+  imsubtract(A, B)    element-wise A − B, clipped at 0 (uint8).
+  imabsdiff(A, B)     elementwise |A − B| — preserves both signs.
+  immultiply(A, k)    element-wise A · k, saturating.
+  imdivide(A, k)      element-wise A / k.
+
+Brighten: imadd(I, c) for constant c. Darken: imsubtract or imdivide.
+Blend two images: (I1 + I2)/2 — but imadd's saturation prevents
+overflow, so imadd(imdivide(I1,2), imdivide(I2,2)) is the safe form.
+
+Dynamic scaling: immultiply(I, 1.2) brightens proportionally (dark
+regions scale up by 1.2×, bright regions saturate). Normal brightening:
+imadd(I, c) shifts every pixel up by c, so dark regions rise by c but
+bright regions also cap at 255. This is why imadd is a "constant
+brightening" and immultiply is "dynamic brightening".
+
+When imsubtract gives a dull image and imabsdiff gives a detailed one,
+the difference is that negative values (present in A−B) are preserved
+by the abs operation but clipped to 0 by imsubtract. That is why
+"subtracted image" often looks dim while "abs diff image" reveals
+differences on both sides of the mean.
+
+Background extraction (division-based): if you have a "background-only"
+image (b) and the same scene WITH a feature (f), imdivide(f, b)
+cancels the background gradient and leaves the feature. This works
+because most of the scene is background; the division amplifies
+divergent pixels.
+
+Overflow handling: without IPT functions, uint8 arithmetic wraps or
+saturates unpredictably. The safe formula (syllabus Q8.1 context) is
+to compute in double, then rescale:
+    g = (f − fmin) * 255 / (fmax − fmin)
+which maps [fmin, fmax] → [0, 255] and stores as uint8.
+
+--------------------------------------------------------------------------------
+§9.2  LOGIC OPERATIONS AND REGION OF INTEREST PROCESSING
+--------------------------------------------------------------------------------
+
+[Concept before — bitand / bitor / bitxor / bitcmp / imcomplement / roipoly]
+Logic operations act at the bit level of each pixel, so both operands
+must share the same unsigned integer class (usually uint8). The
+conceptual readings:
+  bitand — result bright only where BOTH inputs are bright → darkens.
+  bitor  — result bright where EITHER is bright → brightens.
+  bitxor — result bright where the inputs DIFFER → highlights changes.
+
+The syllabus states: "Logic functions operate at the bit level; that
+is, the bits of each image pixel are compared individually, and the new
+bit is calculated based on the operator we are using (AND, OR, XOR).
+This means that we can compare only two images that have the same
+number of bits per pixel as well as equivalent dimensions."
+
+Complement (NOT): bitcmp reverses every bit of a uint8 pixel, giving
+255 − v. imcomplement does the same across binary / grayscale / RGB.
+Needed when you want to invert a mask.
+
+ROI processing uses roipoly to draw a polygon interactively and return
+a logical mask (class logical; 1 inside, 0 outside). Combine with the
+image via:
+    bitand(I, uint8(bw))       % I only inside ROI
+    bitor(I_adj, uint8(~bw))   % I_adj outside ROI (mask complemented)
+    new = bitand(roi, not_roi) % dark within ROI, original elsewhere
+The mask must be cast to the image's class (uint8) — logical is a
+different class; bitand refuses mixed types.
+
+================================================================================
+2. EXERCISES — Q8.n / Q9.n (each numbered question has two labels; the
+   content is identical, so each is presented once)
+================================================================================
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.1 / Q9.1. What are the maximum and minimum values of the
+original and the adjusted image? Explain your results.
+--------------------------------------------------------------------------------
+[Concept before]
+The "adjusted" image in the syllabus exercise is `imadd(I, 75)` on a
+uint8 image. imadd saturates at 255, so any pixel that started above
+180 will cap at 255 (180 + 75 = 255). Any pixel below 180 rises by
+75. The original minimum is preserved as a shifted-up minimum (0 → 75
+in the example). This is the fundamental arithmetic of saturation
+arithmetic.
+
+General formula:
+  max(adjusted) = min( max(original) + c, 255 )    for imadd(I, c)
+  min(adjusted) = min(original) + c                (no lower clipping for
+                                                    c > 0; c < 0 clips at 0)
+
+Verbatim answer (from PDF 8.1-8.end):
+  "Original:  max = 255
+              min = 0
+   Adjusted:  max = 255
+              min = 75"
+
+[Why / context]
+The adjusted min is exactly original_min + 75 = 0 + 75 = 75. The
+adjusted max is still 255 because imadd saturates — pixels at 200
+would become 275, but uint8 caps at 255. The PDF's number 75 for the
+min confirms the constant c = 75 used in the tutorial.
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.2 / Q9.2. How many pixels had a value of 255 in the original
+image and how many have a value of 255 in the resulting image.
+--------------------------------------------------------------------------------
+[Concept before]
+Adding a constant shifts the histogram right; when the shift pushes
+values past 255, they pile up at 255 (saturation). So the count of 255
+pixels grows. The increase equals the number of original pixels whose
+value was > (255 − c). Here c = 75, so every pixel originally above
+180 ends up at 255.
+
+General formula:
+  new_255_count  =  old_255_count
+                  +  count( original pixels with value > 255 − c )
+
+Verbatim answer:
+  "Original:  301
+   Resulting: 2614"
+
+[Why / context]
+The increase is 2614 − 301 = 2313 pixels that were between 181 and 254
+in the original; after the +75 shift they saturate at 255.
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.3 / Q9.3. How did we scale the image output?
+--------------------------------------------------------------------------------
+[Concept before]
+When an image's numeric range exceeds [0,255] or falls inside [0,1]
+after arithmetic, `imshow(I, [])` rescales the visible output so that
+the min maps to black and the max to white. It does NOT modify the
+image data — only the display mapping.
+
+General formula:
+  display_mapping( v ) = ( v − min(I(:)) ) / ( max(I(:)) − min(I(:)) )
+
+Verbatim answer:
+  "The minimum value in the image is displayed as black, and the
+   maximum value is displayed as white."
+
+[Why / context]
+`imshow(I,[])` uses this exact linear normalisation. Same effect
+achieved by `imagesc(I)`.
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.4 / Q9.4. What happened when we scaled the difference
+images?
+--------------------------------------------------------------------------------
+[Concept before]
+The two difference images are imsubtract(I,J) and imabsdiff(I,J). Both
+have very small absolute values (differences between nearly-identical
+cameras), so without scaling they look black. `imshow(diff, [])`
+expands the tiny numeric range [0, small_max] to [0, 255], revealing
+the pixel-level differences.
+
+General formula:
+  after imshow(d, []), the smallest difference is black,
+  the largest difference is white, and any visible grey reveals a
+  distinct amount of change.
+
+Verbatim answer:
+  "The difference became more obvious."
+
+[Why / context]
+Scaling is a display trick, not an enhancement of the data. The numbers
+are unchanged; the eye now sees them because they fill the full grey
+ramp.
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.5 / Q9.5. When dynamically scaling the moon image, why did
+the dark regions around the moon not become brighter as in the normally
+adjusted image?
+--------------------------------------------------------------------------------
+[Concept before]
+Two brightening strategies:
+  • imadd(I, c)        — shifts every pixel up by c. Dark regions gain c.
+                          Bright regions gain c but cap at 255.
+  • immultiply(I, k)   — multiplies every pixel by k. Dark regions
+                          (small values) gain k·small = still small.
+                          Bright regions gain k·large.
+On a dark image with k = 1.2:
+  original 10 → 12 (barely visible change)
+  original 200 → 240 (very visible change)
+Multiplication scales proportionally, so dark pixels stay dark.
+
+General formula:
+  imadd(I, c):        new = min(I + c, 255)      — dark boosted by c
+  immultiply(I, k):   new = min(I · k, 255)      — dark boosted by
+                                                   (k−1)·I, proportional
+
+Verbatim answer:
+  "Because multiplication of relatively small number (dark regions)
+   does not produce large numbers and thus prevents brightening."
+
+[Why / context]
+The magic of dynamic scaling is exactly this: dark areas stay dark
+(preserving contrast and gradient information) while bright areas get
+bright. imadd flattens the dynamic range by lifting everything equally.
+That is why "normal brightening" (imadd) loses contrast, while "dynamic
+scaling" (immultiply) is used for gamma-like enhancement.
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.6 / Q9.6. Why did the multiplication procedure produce the
+same results as division?
+--------------------------------------------------------------------------------
+[Concept before]
+Multiplying by 0.5 is algebraically identical to dividing by 2. In
+fixed precision, both saturate the same way:
+  uint8 · 0.5 → lower half of the histogram (halved).
+  uint8 / 2   → same values, same class, same saturation.
+
+General formula:
+  A · (1/k)   ≡   A / k          (mathematically)
+  In IPT:  immultiply(I, 0.5)  ≡  imdivide(I, 2)
+  (Rounding can differ by 1 LSB — immultiply uses round, imdivide uses
+   floor for integer classes.)
+
+Verbatim answer:
+  "Multiplication by 0.5 is same as dividing by 2."
+
+[Why / context]
+This is the inverse of dynamic scaling: to darken an image by factor k,
+either multiply by 1/k or divide by k. Same effect, two notations.
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.7 / Q9.7. Write a small script that will verify that the
+images produced from division and multiplication are equivalent.
+--------------------------------------------------------------------------------
+[Concept before]
+Two images are compared pixel-by-pixel. `I2 == I3` returns a matrix of
+logicals; `all(I2(:) == I3(:))` reduces to a single boolean. Wrap in an
+if/else to print the verdict.
+
+General formula:
+  if all(A(:) == B(:))
+      disp('equal')
+  else
+      disp('not equal')
+  end
+
+Verbatim answer:
+  if I3==I2
+      disp('I3 is equal to I2');
+  else
+      disp('I3 and I2 are not the same');
+  end
+
+[Why / context]
+Note: in MATLAB `if matrix` treats the condition as true only when
+EVERY element is non-zero. So `if I3==I2` works because equality
+produces a logical matrix and the if requires all-true. For stricter
+intent, `if all(I3(:)==I2(:))` is clearer.
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.8 / Q9.8. Would this technique still work if we were unable
+to obtain the background image?
+--------------------------------------------------------------------------------
+[Concept before]
+Background-division requires a background-only reference image. Without
+it, you cannot divide out the gradient — the technique fails. The
+alternatives (thresholding, imflatfield, adaptive thresholding)
+require extra work.
+
+General formula:
+  background_div(f, b) → only works when b is available.
+
+Verbatim answer:
+  "No."
+
+[Why / context]
+An implicit "why": without knowing the background, we have no reference
+to divide by. Thresholding fails on uneven illumination (as the
+syllabus later shows with gradient_with_text.tif in §18); the whole
+reason to take a background image first is to preserve this option.
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.9 / Q9.9. How do we add points to the polygon?
+--------------------------------------------------------------------------------
+[Concept before]
+`roipoly(I)` opens an interactive polygon-drawing tool on the image.
+Left-clicking places a vertex; the polygon updates as you click.
+
+General formula:
+  roipoly(I) → interactive polygon drawing.
+
+Verbatim answer:
+  "Left mouse click"
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.10 / Q9.10. How do we delete points from the polygon?
+--------------------------------------------------------------------------------
+[Concept before]
+Right-clicking near an existing vertex opens a context menu that
+includes "Delete vertex". This is roipoly's correction mechanism.
+
+General formula:
+  right-click on a vertex → context menu → Delete vertex.
+
+Verbatim answer:
+  "Right mouse click -> Delete vertex"
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.11 / Q9.11. How do we end the process of creating a
+polygon?
+--------------------------------------------------------------------------------
+[Concept before]
+The polygon is closed by clicking on the FIRST vertex — roipoly
+interprets that as "connect back to start, finished". Alternatively,
+double-click anywhere.
+
+General formula:
+  left-click on first vertex  OR  double-click to close.
+
+Verbatim answer:
+  "Left click on first point"
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.12 / Q9.12. What class is the variable bw?
+--------------------------------------------------------------------------------
+[Concept before]
+roipoly returns a LOGICAL mask, not a uint8 one. 1 = inside the
+polygon, 0 = outside. This is the class required by `bitand` when the
+image is logical, but NOT when the image is uint8 (see Q8.14 / Q9.14 —
+the mask must be cast).
+
+General formula:
+  class( roipoly(I) )  =  'logical'
+
+Verbatim answer:
+  "Logical"
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.13 / Q9.13. What does the variable bw represent?
+--------------------------------------------------------------------------------
+[Concept before]
+The logical mask is a 1-bit image where each pixel is either inside (1)
+or outside (0) the polygon. It is used as a stencil for region-based
+processing.
+
+General formula:
+  bw(i,j) = 1 if (i,j) is inside polygon, else 0.
+
+Verbatim answer:
+  "In the matrix bw, '1' represents pixels which are part of the
+   polygon, '0' represents pixels which are not part of the polygon"
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.14 / Q9.14. What happens when we logically AND the two
+images?
+--------------------------------------------------------------------------------
+[Concept before]
+`bitand(I, uint8(bw))` multiplies each pixel of I by the mask (after
+casting bw to uint8 so its 0/1 becomes 0/255). Where the mask is 0,
+the result is 0 (black). Where the mask is 255, the result is the
+original I. So the operation PRESERVES pixels inside the polygon and
+ZEROS them outside.
+
+General formula:
+  bitand(I, uint8(bw))[i,j]  =  I[i,j]  if bw[i,j] = 1
+                             =  0       if bw[i,j] = 0
+
+Verbatim answer:
+  "I2 will contain the pixel values of the original image I, but only
+   where values are 1 in the mask image (inside of the polygon)."
+
+[Why / context]
+This is the canonical "extract ROI" operation. The complement is
+`bitand(I, uint8(~bw))` which keeps pixels OUTSIDE the polygon.
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.15 / Q9.15. Why did we need to complement the mask? What
+would have happened if we use the original mask to perform the OR
+operation?
+--------------------------------------------------------------------------------
+[Concept before]
+`bitor(I, mask)` sets a pixel to the "all bits on" value wherever mask
+is 255 — that flattens the ROI to white. To keep the ORIGINAL image
+in the NON-ROI area while showing a processed image inside the ROI,
+you OR the processed image with the complement of the mask, and OR the
+original image with the mask. Then bitand the two results:
+  roi_part     = bitor(I_adj, mask_complement)   % I_adj inside, 255 outside
+  not_roi_part = bitor(I, mask)                  % I inside, 255 outside
+  new          = bitand(roi_part, not_roi_part)  % I_adj inside, I outside
+Without the complement, the OR would saturate the OUTSIDE area to
+white, and the AND would then leave only the inside processed — but
+you would lose the outside altogether.
+
+General formula:
+  bitor(I, mask)             →  saturates the ROI to 255 (wrong).
+  bitor(I, ~mask)            →  preserves I everywhere except ROI = 255.
+  bitor(I_adj, ~mask)        →  processed image everywhere, but ROI = 255.
+
+Verbatim answer (Q8.15/9.15 merged):
+  "We needed to complement the mask [so that the OR leaves the ROI
+   area set to 255 while preserving the image elsewhere]. If we used
+   the original mask to perform the OR, the ROI itself would saturate
+   to 255 (all-bits-on) and we would lose the original pixel values
+   inside the polygon."
+
+[Why / context]
+This is exactly the mechanism behind the "modify code to display the
+original image within the ROI and the darker image elsewhere" exercise
+(Q8.16 / Q9.16). The full chain is:
+  bw_cmp  = bitcmp(bw)                    % 0 inside, 255 outside
+  roi     = bitor(I_adj, bw_cmp)          % processed inside, 255 outside
+  not_roi = bitor(I, bw)                  % original outside, 255 inside
+  new_img = bitand(roi, not_roi)          % processed inside, original outside
+                                               (bit-wise AND collapses
+                                                the 255 padding).
+
+--------------------------------------------------------------------------------
+EXERCISE Q8.16 / Q9.16. How could we modify the code to display the
+original image within the region of interest and the darker image
+elsewhere?
+--------------------------------------------------------------------------------
+[Concept before]
+The original code shows the DARKER image inside the ROI. To swap the
+roles:
+  1. Do NOT complement the mask when ORing the darker image.
+  2. DO complement the mask when ORing the original image.
+Result: darker image outside the ROI, original inside.
+
+General formula:
+  swap_inside_outside(A_processed, A_original, mask):
+      roi     = bitor(A_original, bitcmp(mask))
+      not_roi = bitor(A_processed, mask)
+      return bitand(roi, not_roi)
+
+Verbatim answer (from PDF):
+  I_adj = imdivide(I,1.5);                 % darker image
+  bw = im2uint8(roipoly(I));               % create mask
+  bw_cmp = bitcmp(bw);                     % mask complement
+  roi     = bitor(I_adj, bw);              % darker image inside
+  not_roi = bitor(I, bw_cmp);              % original image outside
+  new_img = bitand(roi, not_roi);          % combine
+  imshow(new_img)
+
+[Why / context]
+The PDF's own code uses `bw` (not `bw_cmp`) on the ROI branch — that is
+the swap. `roi` holds the darker image inside the polygon because the
+mask is uncomplemented; `not_roi` holds the original outside because
+the mask is complemented. `bitand` collides them back:
+  new_img[i,j] = I_adj[i,j]  inside   (roi non-255 AND not_roi 255)
+  new_img[i,j] = I[i,j]      outside  (roi 255 AND not_roi non-255)
+
+================================================================================
+3. TO DO  (Syllabus Q8.1–8.end and Q9.1–9.end) — General Formula per exercise
+================================================================================
+Syllabus §8–§9 "TO DO" ranges, quoted from the syllabus schedule:
+    L4 .txt TO DO  →  Q 8.1–8.end, 9.1–9.end
+Both ranges are verbatim duplicates of each other — answering one
+answers the other. Every exercise above is presented once, labelled
+"Q8.n / Q9.n".
+
+--------------------------------------------------------------------------------
+3.A  GENERAL FORMULA QUICK-REFERENCE  (all exercises in one block)
+--------------------------------------------------------------------------------
+Saturation arithmetic:
+    imadd(I, c):        new = min(I + c, 255)       (uint8)
+    imsubtract(I, c):   new = max(I − c, 0)         (uint8)
+    immultiply(I, k):   new = min(I · k, 255)       (uint8)
+    imdivide(I, k):     new = floor(I / k)          (uint8)
+
+Count of saturated pixels after imadd:
+    count(I == 255 after) = count(I == 255 before)
+                          + count(180 < I ≤ 254)    for c = 75
+
+Scaling for display:
+    imshow(I, [])  →  display ramp = (v − min)/(max − min)
+
+Multiply vs divide:
+    immultiply(I, 1/k)  ≡  imdivide(I, k)
+
+Comparison of two images:
+    if all(A(:) == B(:))  → equal
+    else                  → not equal
+
+ROI mask:
+    class(roipoly(I)) = logical
+    bw[i,j] = 1 inside, 0 outside
+
+Logic operations:
+    bitand(A, B)[i,j] = bitwise AND  → bright only where both bright.
+    bitor(A, B)[i,j]  = bitwise OR   → bright if either bright.
+    bitxor(A, B)[i,j] = bitwise XOR  → bright where they differ.
+    bitcmp(uint8(v))  = 255 − v      (NOT at the byte level).
+    imcomplement(v)   = class-aware NOT (works on binary/grayscale/RGB).
+
+ROI compositing (show A_processed inside, A_original outside):
+    roi     = bitor(A_processed, bitcmp(mask))
+    not_roi = bitor(A_original,  mask)
+    new     = bitand(roi, not_roi)
+
+ROI compositing (show A_original inside, A_processed outside):
+    roi     = bitor(A_original,  bitcmp(mask))
+    not_roi = bitor(A_processed, mask)
+    new     = bitand(roi, not_roi)
+
+--------------------------------------------------------------------------------
+3.B  PER-QUESTION QUICK-REFERENCE  (verbatim answers, one line each)
+--------------------------------------------------------------------------------
+
+Q8.1/Q9.1   max/min after imadd
+    Original 255/0; adjusted 255/75.  c = 75; low end shifts by 75,
+    high end saturates at 255.
+
+Q8.2/Q9.2   count of 255 pixels
+    Original 301; after imadd → 2614.  Increase = count(181..254)
+    in the original.
+
+Q8.3/Q9.3   how scaled
+    Min → black, max → white.  (imshow(I, []) linear normalisation.)
+
+Q8.4/Q9.4   effect of scaling differences
+    Difference became more obvious.  (Tiny numeric range expanded to
+    visible [0,255].)
+
+Q8.5/Q9.5   why dark regions unaffected by multiplication
+    Multiplication of small numbers stays small — proportional scaling
+    preserves contrast.
+
+Q8.6/Q9.6   multiplication vs division equivalence
+    ×0.5 ≡ ÷2.
+
+Q8.7/Q9.7   script to verify equivalence
+    if I3==I2; disp('equal'); else disp('not equal'); end
+    (Or: if all(I3(:)==I2(:)) ...)
+
+Q8.8/Q9.8   would background-div work without background?
+    No.
+
+Q8.9/Q9.9   add point to polygon
+    Left mouse click.
+
+Q8.10/Q9.10 delete point from polygon
+    Right click → Delete vertex.
+
+Q8.11/Q9.11 end polygon creation
+    Left click on first point (or double-click).
+
+Q8.12/Q9.12 class of bw
+    Logical.
+
+Q8.13/Q9.13 bw represents
+    1 = part of polygon; 0 = not part.
+
+Q8.14/Q9.14 logical AND result
+    Original pixel values preserved inside the mask; zeros outside.
+
+Q8.15/Q9.15 why complement the mask
+    Without complement, OR saturates the ROI to 255; complement keeps
+    the original values inside the ROI available for the final AND.
+
+Q8.16/Q9.16 swap processed/original roles
+    Do NOT complement the mask on the processed-image branch; DO
+    complement it on the original-image branch. Then bitand.
+
+--------------------------------------------------------------------------------
+3.C  TO-DO CHECKLIST  (ticked = verified against official Answer PDF)
+--------------------------------------------------------------------------------
+[ ] Q8.1  vs PDF 8.1-8.end.  ✓ (255/0 → 255/75)
+[ ] Q8.2  vs PDF.            ✓ (301 → 2614)
+[ ] Q8.3  vs PDF.            ✓ (min black / max white)
+[ ] Q8.4  vs PDF.            ✓ (difference more obvious)
+[ ] Q8.5  vs PDF.            ✓ (small × small = small)
+[ ] Q8.6  vs PDF.            ✓ (×0.5 = ÷2)
+[ ] Q8.7  vs PDF.            ✓ (if/else equality check)
+[ ] Q8.8  vs PDF.            ✓ (no)
+[ ] Q8.9  vs PDF.            ✓ (left click)
+[ ] Q8.10 vs PDF.            ✓ (right-click → Delete vertex)
+[ ] Q8.11 vs PDF.            ✓ (left click on first point)
+[ ] Q8.12 vs PDF.            ✓ (logical)
+[ ] Q8.13 vs PDF.            ✓ (1 inside / 0 outside)
+[ ] Q8.14 vs PDF.            ✓ (preserves ROI, zeros outside)
+[ ] Q8.15 vs PDF.            ✓ (complement needed for OR)
+[ ] Q8.16 vs PDF.            ✓ (swap branches in compositing code)
+
+[ ] Q9.1–Q9.16  vs PDF 9.1-9.end.  ✓ — every question is verbatim
+    identical to Q8.1–Q8.16; one cross-check covers both.
+
+================================================================================
+REVISION LOG
+================================================================================
+rev.1  Initial pass for §8 and §9. Content-first framing with concept-before
+       and concept-after each exercise (rev.4 pattern). Noted that Q8.n
+       and Q9.n are duplicates, so each exercise is presented once with
+       both labels.
+================================================================================
+END CHECKPOINT 2.y — rev.1 (content + concept-before/after + TO-DO)
+================================================================================

@@ -1,0 +1,999 @@
+================================================================================
+CHECKPOINT 3.2 — L6: INTENSITY TRANSFORMATIONS AND HISTOGRAM PROCESSING
+     (Lesson slides + Syllabus §11, §12 + Answers to Questions 11.1-11.end,
+      12.1-12.end)
+     rev.1 — content + concept-before/after each question + TO-DO
+================================================================================
+Files: result-EVD2__Lesson_6_2021.txt  (L6 slides)
+       EVD2_Syllabus_2026_2027_v20260826.txt  §11, §12
+       Answers to Questions 11.1-11.end.txt
+       Answers to Questions 12.1-12.end.txt
+Sample-exam match: Q7a (draw histograms of 2×2 and 10×10 checkerboards).
+       L6 §histogram definition + §12.1 is the direct prerequisite.
+       Interpolation / binning / frequency-counting from §12 feeds Q7c and
+       Q7d.
+Progress tick: [ ] 3.2
+
+NUMBERING NOTE
+  §12 Answer PDF uses "Question 11 13" and "Question 11 14" for what are
+  actually Q12.13 and Q12.14 — the "11" prefix is a typo in the source.
+  They are reproduced below as Q12.13 and Q12.14 with a [note].
+================================================================================
+
+================================================================================
+1. CONTENT & EXPLANATION
+================================================================================
+
+================================================================================
+L6 OVERVIEW — IMAGE ENHANCEMENT
+================================================================================
+Goals (L6 slide 4, verbatim):
+  • Improve the SUBJECTIVE quality of an image for human viewing.
+  • Modify the image in such a way as to make it more suitable for
+    further ANALYSIS and automatic extraction of its contents.
+
+Properties:
+  • Usually goal-specific.
+  • Usually interactive.
+  • Usually subjective.
+
+Block model:
+  Input image f(x,y)  →  Enhancement  →  Output g(x,y)
+                            ↑
+                     application-specific feedback
+
+  The "feedback" arrow is the syllabus's way of saying: the enhancement
+  you apply depends on what you are trying to see or measure. Two
+  enhancers can produce two "correct" images for two different purposes.
+
+Categories of enhancement:
+  • Point / gray-level transformations — T operates on f(x,y) alone.
+  • Histogram processing — T operates on the pixel histogram.
+  • Neighbourhood processing (L7) — T operates on N8(x,y).
+  • Frequency-domain (L8) — T operates on the Fourier transform.
+L6 covers the first two.
+
+================================================================================
+§1.  GRAY-LEVEL (POINT) TRANSFORMATIONS
+================================================================================
+Defining equation (L6 slide 6, verbatim):
+  g(x, y)  =  T[ f(x, y) ]
+Every output pixel depends only on the corresponding input pixel's
+value. No neighbourhood, no spatial context.
+
+Three canonical families:
+
+  LINEAR POINT TRANSFORMATIONS
+      s  =  c · r  +  b      (r = input, s = output, c = gain, b = offset)
+      s = r (identity)
+      s = L − 1 − r          (negative; L = 2^b = 256 for uint8)
+      s = (L − 1)·(r − r_min)/(r_max − r_min)   (auto-contrast/stretch)
+
+  LOG TRANSFORMATION
+      s  =  c · log(1 + r)
+      c is chosen so the output spans [0, 255] or [0, 1]:
+      c = 255 / log(256)  (uint8)  or  1 / log(256)  (double).
+
+  POWER-LAW (GAMMA) TRANSFORMATION
+      s  =  c · r^γ
+      c = 1 for normalised double input; c = 255^(1−γ) for uint8.
+      γ < 1  →  brightens (dark region expands up).
+      γ > 1  →  darkens  (dark region compresses down).
+      γ = 1  →  identity.
+      "Gamma correction" = choosing γ to undo a display / sensor
+      nonlinearity.
+
+Each of these is implemented in MATLAB as a vector mapping
+(LUT) or directly on the image:
+
+  img_neg      = imcomplement(img_gr);             % negative
+  gamma_out    = c .* (im2double(img_gr)).^gamma;  % power-law
+  log_out      = c * log(1 + double(img_gr));      % log
+  log_out_adj  = im2uint8(mat2gray(log_out));
+
+Which to use (rule of thumb):
+  • Negative       — for white-on-black ↔ black-on-white or medical
+                     X-ray viewing.
+  • Log            — compress a very wide dynamic range (Fourier
+                     spectra, astronomical, radiographic).
+  • Gamma          — correct display nonlinearity, or target a specific
+                     intensity band.
+  • Auto-contrast  — when actual pixel range is much narrower than the
+                     theoretical [0, 255] (e.g. pout.tif at [74, 224]).
+
+PIECEWISE-LINEAR TRANSFORMATION
+  Constructed from a small number of breakpoints. Between breakpoints
+  the mapping is linear. A canonical example is GRAY-LEVEL SLICING:
+  a narrow band of intensities is enhanced (or isolated to white)
+  while the rest of the range is suppressed or left unchanged.
+  L6 slide 13 example (transformation function):
+      r in [0, 64]   →  s = 2·r
+      r in (64, 128] →  s = 128
+      r in (128, 255]→  s = r − 1
+  This is what `glsdemo` lets you draw interactively (L6 slides 22–23).
+
+LOOK-UP TABLE (LUT)
+  For uint8 images, every point transformation is a 256-element 1-D
+  array indexed by pixel value:
+
+      LUT = uint8(zeros(1, 256));
+      LUT(1:256) = round(c · (0:255).^γ);
+      output    = intlut(input, LUT);
+
+  What the LUT buys: a single 256-element lookup replaces a per-pixel
+  exp / log / pow computation. L6 slide 20 measures this:
+
+      Without LUT:  tic ; J = 5*sqrt(I2) ; O = uint8(J) ; toc
+                    Elapsed time ≈ 0.1655 s
+      With LUT:     tic ; LUT = ... ; O = intlut(I, LUT) ; toc
+                    Elapsed time ≈ 0.0334 s
+                    → ≈ 5× faster (machine-dependent).
+
+  The speedup is why hardware image pipelines are built around LUTs.
+
+================================================================================
+§2.  HISTOGRAM PROCESSING
+================================================================================
+
+WHAT IS A HISTOGRAM (L6 slide 25–28, verbatim)
+  "The histogram of a monochrome image is a graphical representation
+   of the frequency of occurrence of each gray level in the image. The
+   data structure that stores the frequency values is a 1D array of
+   numerical values, h, whose individual elements store the number (or
+   percentage) of image pixels that correspond to each possible gray
+   level."
+
+Formal definitions:
+  h(k)  =  n_k  =  card{ (x, y) | f(x, y) = k }
+  k = 0, 1, …, L−1
+  L = number of gray levels (256 for uint8).
+  card{…} = cardinality of a set = count of elements satisfying the
+  condition.
+
+Normalized histogram:
+  p(r_k)  =  n_k / n
+  n = total pixel count.
+  ∑_k p(r_k) = 1.
+  Interpretation: p(r_k) is the probability that a randomly chosen
+  pixel has intensity r_k.
+
+What the histogram SHOWS:
+  • Min, max, mean, median (roughly), spread (contrast).
+  • Dominance of dark vs bright pixels.
+  • Bimodality (two peaks → thresholdable image, e.g. coins).
+  • Where equalisation / matching / stretching would help.
+
+What it does NOT show:
+  • Spatial distribution — where pixels are located.
+  • Presence or absence of noise (two images with identical histograms
+    can look completely different).
+  This is a classic exam distinction.
+
+HISTOGRAM EQUALIZATION
+  Goal: transform intensities so the OUTPUT histogram is as close to
+  UNIFORM as possible — every gray level roughly equally populated.
+  Effect: low-contrast images get their useful range expanded;
+  global contrast increases.
+
+  Transformation function = the normalised CUMULATIVE distribution
+  function (cdf) of the original image:
+
+      s_k  =  (L − 1) · ∑_{j=0}^{k} p(r_j)     for k = 0..L−1
+
+  In MATLAB: I_eq = histeq(I, 256).
+
+  Failures of equalization:
+  • Bimodal images (coins, eight, tire): the gap between the two peaks
+    gets stretched across the whole range, so the histogram becomes
+    jagged and image quality drops.
+  • Already-uniform images: no change.
+
+HISTOGRAM MATCHING (SPECIFICATION)
+  Goal: transform intensities so the OUTPUT histogram approximates a
+  SPECIFIED shape (the "desired histogram"), not just a flat one.
+  Useful when equalisation over-sharpens or produces unwanted look.
+
+  Algorithm (classic):
+    1. Equalise the input using its cdf → s.
+    2. Equalise the desired target using its cdf → v.
+    3. Map s → v via the inverse of step 2.
+  In MATLAB: I_matched = histeq(I, hgram) where hgram is the desired
+  histogram vector (length = number of bins).
+
+  The syllabus demo `ihmdemo` lets you draw the desired histogram
+  interactively and see the matched result in real time.
+
+HISTOGRAM STRETCHING
+  A linear mapping from the OCCUPIED range to the FULL range:
+
+      s  =  (L − 1) · (r − r_min) / (r_max − r_min)
+
+  If r_min = 0 and r_max = L − 1 (the image already fills the range),
+  stretching does nothing. Otherwise it boosts contrast linearly.
+
+HISTOGRAM SHRINKING
+  A linear mapping from the full range to a NARROWER band:
+
+      s  =  (s_max − s_min) · (r − r_min) / (r_max − r_min)  +  s_min
+
+  Used to compress the output into a low-amplitude band — e.g. before
+  overlaying on a high-amplitude image, or before unsharp masking
+  (L7 §13.4 uses shrinking to control sharpening strength).
+
+LOCAL HISTOGRAM EQUALIZATION (CLAHE)
+  Global equalisation adjusts the whole image using one histogram.
+  LOCAL equalisation (Contrast-Limited Adaptive Histogram Equalization)
+  operates on small TILES of the image, each tile equalised with a
+  clip-limited histogram. Better for images with non-uniform
+  illumination.
+
+  MATLAB: I_leq = adapthisteq(I, 'ClipLimit', 0.1);
+  ClipLimit ∈ [0, 1] limits contrast amplification (higher = more
+  contrast).
+  Default tile grid: 8 × 8 (tiles, not pixels).
+
+INTERACTIVE TOOLS
+  • glsdemo(I)   — draw a piecewise-linear transformation function
+                    interactively; the adjusted image updates live.
+  • ihmdemo(I)   — draw a desired histogram shape interactively;
+                    histeq matches the image to it.
+  • imcontrast   — in imtool, adjusts the display window (does NOT
+                    modify the data).
+  Both demos use the interpolation mode selector (spline / linear /
+  nearest) to build the transformation curve from your control points.
+
+================================================================================
+2. EXERCISES — §11 (Gray-Level Transformations), Q11.1–Q11.7
+================================================================================
+
+--------------------------------------------------------------------------------
+EXERCISE Q11.1  Why are we required to use I+1 when performing the
+                transformation instead of just I?
+--------------------------------------------------------------------------------
+[Concept before]
+MATLAB arrays are 1-based. A uint8 image's pixel VALUES span 0..255,
+but to index a 256-element LUT with those values you need to shift the
+index by 1 (0 → index 1, 255 → index 256). Hence `y(I+1)`.
+
+General formula:
+  LUT index for pixel value v  =  v + 1
+  transformed image          =  LUT(v + 1)          for v = 0..255
+
+Verbatim answer (PDF 11.1-11.end):
+  "The transformation runs from 0 tot 255 (x = uint8(0:255)) while the
+   pixel indices runs from 1 till the index value of the last pixel."
+
+  The PDF illustrates with a 3×3 image:
+
+      11  22  33          pixel values
+      44  55  66
+      77  88  99
+
+      1   4   7           pixel indices
+      2   5   8
+      3   6   9
+
+      "So: img(4) = 22"
+
+[Why / context]
+Pixel VALUE 22 sits at INDEX 4 (third element in row-major order for
+this specific 3×3 layout). The +1 shift is exactly what makes a LUT
+of 256 entries addressable by pixel values 0..255.
+
+--------------------------------------------------------------------------------
+EXERCISE Q11.2  How can we show that the adjusted image and the
+                original image are equivalent?
+--------------------------------------------------------------------------------
+[Concept before]
+Two approaches: (a) element-wise comparison of every pixel, or (b)
+verification that the difference image is all zeros. Both reduce to
+"are they identical matrices?".
+
+General formula:
+  if I == I_adj          →  if treats true only when every element
+                              satisfies the condition
+  if all(I(:) == I_adj(:))  →  explicit (clearer)
+  max(abs(double(I(:)) − double(I_adj(:))))  →  should be 0
+
+Verbatim answer:
+  if I==I_adj
+      disp('I is equal to I_adj');
+  else
+      disp('I and I_adj are not the same');
+  end
+
+[Why / context]
+The identity transformation `y = uint8(0:255)` maps every pixel to
+itself, so I_adj should be exactly I. Any mismatch indicates
+arithmetic-class overflow (e.g. uint8 saturation) or a rounding
+mismatch.
+
+--------------------------------------------------------------------------------
+EXERCISE Q11.3  How did we create the negative transformation function?
+--------------------------------------------------------------------------------
+[Concept before]
+The negative transform is `s = L − 1 − r` (255 − r for uint8). As a
+256-element LUT that means a descending array from 255 to 0.
+In MATLAB, `uint8(255:-1:0)` creates exactly that.
+
+General formula:
+  LUT_negative  =  uint8( (L−1):-1:0 )       for uint8 (L = 256)
+  I_neg         =  LUT_negative( I + 1 )
+
+Verbatim answer:
+  "To obtain the negative transformation function, the variable y was
+   created using 255 as starting value, and 0 as ending value, the step
+   size was -1.
+       y = uint8(255:-1:0);
+       plot(y)"
+
+[Why / context]
+The plot of y is a straight descending line from (0, 255) to (255, 0).
+Any linear transform with negative slope and b = 255 is the same
+operation; the LUT form is just the tabular implementation.
+
+--------------------------------------------------------------------------------
+EXERCISE Q11.4  Why does the log-transformed image display the hidden
+                detail in the radio image, but the brightened image does
+                not?
+--------------------------------------------------------------------------------
+[Concept before]
+The radio image has a very small number of very bright pixels (the
+radio's core) and a very large number of very dark pixels (the
+surrounding detail). On a linear scale, dark pixels are all within a
+narrow band near 0, so their differences are invisible even after
+`imadd(I, 100)`.
+
+Logarithmic transform s = c·log(1 + r) compresses the high end and
+EXPANDS the low end: differences among dark pixels get amplified onto
+a much wider output range.
+
+General formula:
+  Dynamic range  =  max(I(:)) − min(I(:))
+  After log: dynamic range of the OUTPUT (in intensity units) is
+  larger because log's slope is highest near r = 0.
+
+Verbatim answer:
+  "Because the dynamic range of gray-values increases after the
+   transformation.
+       >> range(I(:))         ans = 224
+       >> range(I_log(:))     ans = 249"
+
+[Why / context]
+range(I_log) = 249 > range(I) = 224 → the log transform expanded the
+range. imadd(I, 100) doesn't change the RANGE (max−min is invariant
+under addition) — it only shifts values, and any dark-region detail
+that was below the display quantisation stays hidden.
+
+--------------------------------------------------------------------------------
+EXERCISE Q11.5  How does the shape of the curve change if we were to
+                use a different value for n?
+--------------------------------------------------------------------------------
+[Concept before]
+The "n-th root" family is a special case of power-law with γ = 1/n.
+For n = 2 (γ = 0.5) the curve is concave and brightens; for n = 4
+(γ = 0.25) the curve is even more concave and brightens aggressively.
+As n → ∞, the output saturates near white for almost all inputs.
+As n → 1, the curve approaches the identity.
+
+General formula:
+  root(x, n)  =  x^(1/n)
+  Shape     concave (γ < 1)  → brightens
+            identity (γ = 1)
+            convex (γ > 1)   → darkens
+
+Verbatim answer:
+  "This can be seen in Figure 1."
+  The figure in the PDF shows two curves: for n = 2 (left) and n = 4
+  (right). The n = 4 curve is bent more aggressively toward high output
+  values at low input values.
+
+[Why / context]
+Compare the two curves: at input x = 50/255 ≈ 0.20, the n = 2 curve
+gives output ≈ sqrt(0.20) ≈ 0.45; the n = 4 curve gives output ≈
+0.20^0.25 ≈ 0.67. Higher n → more aggressive brightening.
+
+--------------------------------------------------------------------------------
+EXERCISE Q11.6  Show that the I_power image and the original image I
+                are (almost) identical.
+--------------------------------------------------------------------------------
+[Concept before]
+Applying the n-th root followed by the n-th power undoes the
+transformation: (r^(1/n))^n = r. Round-off from integer conversion
+may produce ±1 differences at some pixels, so "almost" identical.
+
+General formula:
+  power(root(x, n), n)  =  x            (up to rounding)
+  max( |I(:) − I_power(:)| )  ≈  0 or 1
+
+Verbatim answer (PDF includes figure):
+  Figure 2 in the PDF shows a visual comparison (left = original and
+  I_power side by side) and the result of
+       imshow(imsubtract(I, I_power), [])
+  which shows "few differences — even when scaled to the full range of
+  intensities using []."
+
+[Why / context]
+The transformation pair is mathematically inverse. The visible
+differences are due to uint8 rounding at each step: root produces a
+fractional value, gets stored as uint8; power then operates on the
+rounded value, so the final result differs by at most 1 in each pixel.
+
+--------------------------------------------------------------------------------
+EXERCISE Q11.7  Based on the previous step, what do you expect to be
+                the visual effect of applying this transformation
+                function to the original image?
+--------------------------------------------------------------------------------
+[Concept before]
+The piecewise-linear transformation used in the exercise boosts a
+narrow band (say 176–200) to 255 while leaving 0–175 untouched (or
+compressing) and 201–255 unchanged. Visually, the pixels whose value
+falls inside that band become pure white; everything else retains its
+original tone.
+
+General formula:
+  band-boost transformation:
+      s = r          for r < band_lo
+      s = 255        for band_lo ≤ r ≤ band_hi
+      s = r          for r > band_hi
+
+Verbatim answer:
+  "The light parts with high grayscale values will be enhanced
+   (Figure 3). Effect of gray-level slicing, a process by which a
+   particular range of gray scale value is enhanced."
+
+[Why / context]
+This is GRAY-LEVEL SLICING in its simplest form. The PDF's Figure 3
+shows the micro.tif image with a specific intensity band turned to
+pure white. The variant used in the tutorial (setting non-band
+pixels to 50) makes the isolated band even more obvious by dropping
+the background to a fixed gray.
+
+================================================================================
+3. EXERCISES — §12 (Histogram Processing), Q12.1–Q12.14
+================================================================================
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.1  Explain the drastic change of the Y-axis values when
+                the histogram is displayed with fewer bins.
+--------------------------------------------------------------------------------
+[Concept before]
+A histogram with B bins groups the intensity range into B equal
+intervals; each bin's height is the count of pixels whose value falls
+in that interval. Fewer bins → each bin is WIDER → it collects MORE
+pixels → y-values grow proportionally.
+
+General formula:
+  bin_width  =  256 / B               (in intensity units)
+  E[count_bin]  ≈  n · bin_width / 256
+  For B1 = 256 → B2 = 64:  y grows × 4 (roughly).
+
+Verbatim answer:
+  "Fewer bins means larger bin size which results in more pixels per
+   bin."
+
+[Why / context]
+From 256 bins (1 unit each) to 64 (4 units) to 32 (8 units): the
+y-axis peak count grows ∝ 256/B. Total pixel count (sum of all bins)
+is unchanged.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.2  What does the function numel do?
+--------------------------------------------------------------------------------
+[Concept before]
+numel(A) returns the total number of elements in array A, i.e.
+rows × cols × pages. For a 2-D image of M×N, numel(I) = M·N = total
+pixel count n used in the normalised histogram p(r_k) = n_k / n.
+
+General formula:
+  numel(A)  =  prod(size(A))
+
+Verbatim answer:
+  "This MATLAB function returns the number of elements, n, in array A,
+   equivalent to prod(size(A))."
+
+[Why / context]
+For a 256×256 image, numel = 65 536; that is exactly the denominator
+in the histogram-normalisation formula p(r_k) = n_k / 65536.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.3  Write a one line MATLAB statement that will verify that
+                the sum of the normalized values add to 1.
+--------------------------------------------------------------------------------
+[Concept before]
+The normalised histogram p(r_k) = n_k / n satisfies ∑ p(r_k) = 1
+exactly (up to floating-point rounding). To verify:
+  compute the sum of the normalised vector and check ≈ 1.
+
+General formula:
+  sum( p )  ≈  1.0      (within eps tolerance)
+
+Verbatim answer:
+  "c_sum = sum(c_norm)"
+
+[Why / context]
+[note] The PDF's answer is the statement, not a boolean check. If a
+strict test is needed: `abs(sum(c_norm) − 1) < 1e-10`.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.4  How would we change the width of the bars in a bar
+                chart?
+--------------------------------------------------------------------------------
+[Concept before]
+Bar objects in MATLAB have a `BarWidth` property. `set(handle,
+'BarWidth', value)` changes it. Values > 1 widen (bars overlap); values
+< 1 narrow.
+
+General formula:
+  set(bar_handle, 'BarWidth', factor)   % factor ∈ (0, 1] typical
+
+Verbatim answer:
+  "set(bar_1,'barWidth', 2)"
+
+[Why / context]
+The exercise uses factor 2 to widen bars (an unusual choice — factor 2
+makes them overlap slightly). The typical use is factor < 1 to
+separate bars.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.5  Why must we include the second parameter (256) in the
+                histeq function call?
+--------------------------------------------------------------------------------
+[Concept before]
+`histeq(I, n)` produces an output whose histogram approximately
+matches n bins uniformly. Without n, histeq uses as many bins as the
+input class allows (256 for uint8). Specifying n = 256 ensures the
+equalisation spans the full intensity range — the output is pushed to
+use all 256 discrete levels.
+
+General formula:
+  histeq(I, N)  →  output histogram has ≤ N non-empty bins,
+                    targetting N evenly populated bins.
+
+Verbatim answer:
+  "Zodat over de volledige range van intesiteiten de histogram
+   equalization plaatsvindt.
+   Help histeq:
+       J = histeq(I,hgram)
+   This MATLAB function transforms the intensity image I so that the
+   histogram of the output intensity image J with length(hgram) bins
+   approximately matches hgram."
+
+[Why / context]
+"Zodat over de volledige range van intensiteiten de histogram
+equalization plaatsvindt" — English: "so that histogram equalisation
+takes place over the full range of intensities." Without the second
+argument, the default n is `max(256, numel(...))` for typical images —
+but explicitly stating 256 guarantees the intent.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.6  What is the effect of histogram equalization on images
+                with low contrast?
+--------------------------------------------------------------------------------
+[Concept before]
+Low contrast = histogram is compressed into a narrow band of
+intensities. Equalisation stretches the cdf so the same pixels now
+occupy the FULL [0, 255] range → contrast improves. The transformation
+is monotonic, so relative ordering (brightest stays brightest, darkest
+stays darkest) is preserved.
+
+General formula:
+  contrast_before  =  max(I) − min(I)
+  contrast_after   =  ≈ L − 1  (best case, cdf nearly linear)
+  For a compressed histogram: post-equalisation range ≈ full.
+
+Verbatim answer:
+  "Contrast improves. Histogram equalization is a technique by which
+   the gray-level distribution of an image is changed in such a way as
+   to obtain a uniform (flat) resulting histogram, in which the
+   percentage of pixels of every gray level is the same. So the dynamic
+   range increases."
+
+[Why / context]
+"Dynamic range increases" is the key phrase. For a pout.tif-type image
+(occupying only 74–224), equalisation spreads those same pixels across
+the entire 0–255 range, so previously-similar greys become distinctly
+different.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.7  Based on the tire image's original histogram, what can
+                be said about its overall brightness?
+--------------------------------------------------------------------------------
+[Concept before]
+The histogram plots pixel counts vs intensity. If the mass is
+concentrated toward the LOW end (near 0), the image is overall dark.
+If toward the HIGH end (near 255), overall bright. If bimodal, the
+image has two dominant brightness regions (e.g. dark background +
+bright subject).
+
+General formula:
+  brightness_proxy  =  mean(I(:))  =  ∑ r_k · p(r_k)
+  < 128  →  overall dark
+  > 128  →  overall bright
+
+Verbatim answer:
+  "The overall brightness will be low (Figure 2)."
+
+[Why / context]
+tire.tif's histogram has its mass concentrated around intensity 30–60
+on a 0–255 scale (the tire's dark rubber dominates; only a few
+highlights). Mean ≈ 50–70. Equalisation pushes those pixel values up
+toward the middle of the range.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.8  How did histogram equalization affect the overall image
+                brightness in this case?
+--------------------------------------------------------------------------------
+[Concept before]
+Equalisation is not a brightness shift per se — it redistributes
+pixel counts. But because tire.tif's compressed histogram gets
+stretched toward the upper range (a large gap existed above the mass),
+the mean intensity rises. Visually the image brightens.
+
+General formula:
+  mean_before  =  ∑ r_k · p(r_k)
+  mean_after   =  ∑ r_k · p_eq(r_k)
+  For a dark compressed histogram: mean_after > mean_before.
+
+Verbatim answer:
+  "The overall image brightness increased (Figure 2)."
+
+[Why / context]
+The "because" — equalisation maps the darkest pixels (below the mass
+mode) further up, and the mass mode itself is pulled toward mid-grey.
+The peak is no longer at 30–60 but around 100–140, so the eye
+perceives a brighter overall image.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.9  Why was there such a loss in image quality after
+                histogram equalization?
+--------------------------------------------------------------------------------
+[Concept before]
+When the input histogram is dominated by a small number of discrete
+intensities (as in eight.tif or tire.tif with quantised levels), the
+cdf is a step function with large jumps. The equalisation mapping
+compresses large intensity intervals into single output values — the
+inverse mapping becomes many-to-one — so several distinct input
+intensities collapse into the same output intensity. Detail within
+those intervals is destroyed.
+
+General formula:
+  Effect on entropy:      fewer distinct output levels → lower H
+  Effect on quantisation: 8-bit input, 256 levels
+                          → many inputs map to same output
+                          → the cdf jumps over big gaps.
+
+Verbatim answer:
+  "Because the image is dominated by two groups of grayscale values
+   (Figure 3). Histogram equalization of images with limited number of
+   grayscale values widely spaced apart [produces quality loss]."
+
+[Why / context]
+eight.tif has only a few distinct intensities (background black,
+coins white, antialiased edges in between). Equalisation forces those
+few levels to span the whole range, and the gaps between them get
+"filled" with whatever the cdf mandates — flattening details and
+producing a harsh look.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.10  What does the cumsum function do in the previous step?
+--------------------------------------------------------------------------------
+[Concept before]
+cumsum(x) returns the running cumulative sum:
+  y(1) = x(1)
+  y(k) = y(k−1) + x(k)
+For the histogram I_hist = imhist(I), cumsum(I_hist) is the
+unnormalised cdf. Dividing by max(cumsum) normalises it to [0, 1].
+
+General formula:
+  tf_norm  =  cumsum(imhist(I)) / max(cumsum(imhist(I)))
+  This is the transformation function for histogram equalisation.
+
+Verbatim answer:
+  "This function returns the cumulative sum of histogram values."
+
+[Why / context]
+The cdf is the key to equalisation: because the cdf is monotonic and
+saturates at 1, applying it as a transformation flattens the histogram
+— that is the mathematical heart of histeq.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.11  What does the continuous update checkbox do?
+--------------------------------------------------------------------------------
+[Concept before]
+In `ihmdemo`, the checkbox controls whether the matched image and
+matched histogram are recomputed on EVERY MOUSE MOVE while dragging a
+control point, or only when the point is released. It is a responsiveness
+vs CPU-load trade-off.
+
+General formula:
+  unchecked  →  update on point release (batch)
+  checked    →  update on every drag event (continuous)
+
+Verbatim answer:
+  "Not working; work in progress ;)"
+
+[Why / context]
+The PDF records this as "not working" in the reference version. For
+exam purposes: it should continuously update the matched image while
+you drag; if the exam asks, say "controls whether the image updates
+while dragging or only on release" — and note the source says the
+feature is a work in progress.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.12  How do the different interpolation methods change the
+                 shape of the desired histogram curve?
+--------------------------------------------------------------------------------
+[Concept before]
+`ihmdemo` builds the desired-histogram curve by interpolating between
+your control points. Three methods (from the dropdown):
+  Nearest  — step function between points (jagged, blocky).
+  Linear   — piecewise linear (polyline).
+  Spline   — smooth cubic curve through all points.
+The smoother the interpolation, the smoother the target histogram — and
+therefore the smoother the histogram after matching.
+
+General formula:
+  nearest  →  staircase curve
+  linear   →  polyline
+  spline   →  smooth spline
+
+Verbatim answer:
+  "Not working; work in progress ;)"
+
+[Why / context]
+Same "not working" note as Q12.11. For exam purposes: describe the
+three interpolation modes from the dropdown and their curve shapes;
+flag the source states the feature is a work in progress.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.13  How can the demo be loaded with a different image?
+--------------------------------------------------------------------------------
+[Concept before]
+Both glsdemo and ihmdemo accept an image filename (or path) as their
+first argument. With no argument they load a default image (circuit.tif
+for glsdemo, pout.tif for ihmdemo). Passing an image loads it as the
+working image.
+
+General formula:
+  ihmdemo('path/to/image.tif')
+  glsdemo('path/to/image.tif')
+
+Verbatim answer:
+  "ihmdemo('C:\Surfdrive\Education\Minor\EVD2\Images\Standard_test_images\pout.tif');"
+
+[Why / context]
+Colour images get converted to grayscale internally (`rgb2gray`) with
+a warning message. Any format imread supports (PNG, JPG, TIF, BMP)
+works.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.14a [PDF labels "Question 11 13"]  What does the ClipLimit
+                 setting do in the adapthisteq function?
+--------------------------------------------------------------------------------
+[Concept before]
+adapthisteq performs Contrast-Limited Adaptive Histogram Equalisation
+(CLAHE). Plain adaptive equalisation amplifies noise in flat regions
+(any small fluctuation gets stretched). ClipLimit caps the contrast
+amplification: before equalising each tile, the histogram is CLIPPED
+at a ceiling derived from ClipLimit, and the excess is redistributed.
+Higher ClipLimit → more contrast (but more noise amplification); lower
+→ smoother, less noise.
+
+General formula:
+  ClipLimit ∈ [0, 1]; default 0.01
+  Higher ClipLimit  →  more contrast, more noise
+  Lower  ClipLimit  →  smoother, flatter look
+
+Verbatim answer (from PDF, mislabelled "Question 11 13"):
+  "ClipLimit is a Real scalar in the range [0 1] that specifies a
+   contrast enhancement limit. Higher numbers result in more contrast.
+   Default: 0.01"
+
+[Why / context]
+The distinction from global histeq: histeq applies one cdf to the
+whole image; adapthisteq applies a per-tile cdf and merges tiles with
+bilinear interpolation. ClipLimit is what makes CLAHE more robust to
+noise than plain AHE.
+
+--------------------------------------------------------------------------------
+EXERCISE Q12.14b [PDF labels "Question 11 14"]  What is the default tile
+                 size when using adapthisteq?
+--------------------------------------------------------------------------------
+[Concept before]
+adapthisteq divides the image into a GRID OF TILES. The tile SIZE
+depends on the image dimensions divided by the number of tiles. The
+default is a grid, not a pixel size.
+
+General formula:
+  default NumTiles = [8 8]  (8 columns × 8 rows of tiles)
+  tile_size = ceil( size(I) ./ NumTiles )
+
+Verbatim answer (from PDF, mislabelled "Question 11 14"):
+  "There is no default tile size, there is a default number of tiles
+   which default is 8 x 8"
+
+[Why / context]
+This is a subtle but exam-relevant distinction: the default is a TILE
+COUNT (8 × 8), not a TILE SIZE. Tile size scales with image dimensions
+— a 256×256 image with 8×8 tiles has 32×32-pixel tiles; a 1024×1024
+image with 8×8 tiles has 128×128-pixel tiles.
+
+================================================================================
+4. TO DO  (Syllabus Q11.1–11.end, Q12.1–12.end)
+================================================================================
+Syllabus §11–§12 "TO DO" range, quoted from the syllabus schedule:
+    L6 .txt TO DO  →  Q 11.1–11.end, 12.1–12.end
+All exercises are answered verbatim above in Sections 2 and 3. This
+section provides the flat Q-then-answer form for the checklist track.
+
+--------------------------------------------------------------------------------
+4.A  GENERAL FORMULA QUICK-REFERENCE  (all exercises in one block)
+--------------------------------------------------------------------------------
+Point transformations (all apply to every pixel independently):
+    negative:      s = (L−1) − r
+    log:           s = c · log(1 + r)         c = (L−1)/log(L)
+    gamma:         s = c · r^γ                γ < 1 brighten, γ > 1 darken
+    auto-contrast: s = (L−1)(r − r_min)/(r_max − r_min)
+    gamma is the generalisation of root/power transforms.
+
+LUT indexing:
+    LUT index for pixel value v  =  v + 1
+    transformed image           =  LUT( v + 1 )
+
+Histogram:
+    h(k)  =  n_k  =  card{ (x,y) | f(x,y) = k }
+    p(r_k)  =  n_k / n
+    numel(I)  =  n
+    ∑ p(r_k)  =  1
+
+Histogram equalisation:
+    s_k = (L−1) · ∑_{j=0}^{k} p(r_j)
+    MATLAB: histeq(I, L)  (typically L = 256)
+
+Histogram matching:
+    histeq(I, hgram)  where hgram = desired histogram (length = #bins)
+
+Histogram stretching:
+    s  =  (L−1)(r − r_min)/(r_max − r_min)
+
+Histogram shrinking:
+    s  =  (s_max − s_min)(r − r_min)/(r_max − r_min)  +  s_min
+
+Local equalisation (CLAHE):
+    adapthisteq(I, 'ClipLimit', 0.01)         % default ClipLimit 0.01
+    default tile grid: 8 × 8
+    ClipLimit high → more contrast, more noise
+
+Loading demos with a custom image:
+    glsdemo('path/to/image')
+    ihmdemo('path/to/image')
+
+Binning in histograms:
+    bin_width (in intensities)  =  256 / B
+    y-axis peak scales as  B^{-1}  (fewer bins → taller bars)
+
+numel / cdf:
+    numel(A)  =  prod(size(A))
+    cdf       =  cumsum(imhist(I)) / numel(I)
+
+--------------------------------------------------------------------------------
+4.B  PER-QUESTION QUICK-REFERENCE  (verbatim answers, one line each)
+--------------------------------------------------------------------------------
+
+Q11.1  Why I+1 in transformation
+    Pixel values run 0..255, MATLAB indices run 1..256. Offset by 1
+    so the LUT is addressable.
+
+Q11.2  Show adjusted ≡ original
+    if I == I_adj → disp('equal') else disp('not equal').
+
+Q11.3  Negative transformation function
+    y = uint8(255:-1:0);  LUT gives descending 255→0.
+
+Q11.4  Why log shows hidden detail but imadd does not
+    Log increases dynamic range: range(I) = 224 → range(I_log) = 249.
+    imadd only shifts values without changing the range.
+
+Q11.5  Curve shape for different n
+    root(x, n) = x^(1/n); higher n → more concave → brighter.
+    See Figure 1 in PDF.
+
+Q11.6  Power vs original (almost identical)
+    power(root(x, n), n) = x up to ±1 rounding.
+    Visual diff via imshow(imsubtract(I, I_power), []).
+
+Q11.7  Visual effect of the transformation
+    High-gray-value pixels (in the boosted band) enhanced → gray-level
+    slicing; band becomes white, rest unchanged.
+
+Q12.1  Y-axis change with fewer bins
+    Fewer bins → larger bins → more pixels per bin → taller bars.
+
+Q12.2  numel
+    Returns total number of elements = prod(size(A)).
+
+Q12.3  Sum of normalized values = 1
+    c_sum = sum(c_norm)
+
+Q12.4  Bar width
+    set(bar_1, 'BarWidth', 2)
+
+Q12.5  Why 256 in histeq
+    "So that histogram equalisation takes place over the full range of
+     intensities."
+
+Q12.6  Equalisation on low contrast
+    Contrast improves; dynamic range increases.
+
+Q12.7  Tire image brightness
+    Overall brightness is low.
+
+Q12.8  Equalisation effect on brightness
+    Overall image brightness increased.
+
+Q12.9  Why quality loss after equalisation
+    Image dominated by two widely-spaced gray groups; equalisation
+    forces the cdf to span the whole range, destroying detail.
+
+Q12.10 What cumsum does
+    Returns cumulative sum (unnormalised cdf) of the histogram.
+
+Q12.11 Continuous-update checkbox
+    Should update image/histogram live while dragging. PDF: "not
+    working; work in progress".
+
+Q12.12 Interpolation effect on target histogram
+    Spline/linear/nearest determine curve smoothness. PDF: "not
+    working; work in progress".
+
+Q12.13 Load demo with a different image
+    ihmdemo('C:\...\pout.tif');  glsdemo('path/to/image.tif') for the
+    slicing demo.
+
+Q12.14a ClipLimit in adapthisteq
+    Real in [0,1]; higher = more contrast. Default 0.01.
+
+Q12.14b Default tile size in adapthisteq
+    No default SIZE; default NUMBER of tiles is 8 × 8.
+
+--------------------------------------------------------------------------------
+4.C  TO-DO CHECKLIST  (ticked = verified against official Answer PDF)
+--------------------------------------------------------------------------------
+[ ] Q11.1  vs PDF 11.1-11.end.  ✓ (I+1 indexing)
+[ ] Q11.2  vs PDF.              ✓ (if I==I_adj)
+[ ] Q11.3  vs PDF.              ✓ (uint8(255:-1:0))
+[ ] Q11.4  vs PDF.              ✓ (range 224 → 249)
+[ ] Q11.5  vs PDF.              ✓ (Figure 1 reference)
+[ ] Q11.6  vs PDF.              ✓ (imsubtract near-zero)
+[ ] Q11.7  vs PDF.              ✓ (band enhanced → white)
+
+[ ] Q12.1  vs PDF 12.1-12.end.  ✓ (larger bins, more pixels)
+[ ] Q12.2  vs PDF.              ✓ (numel = prod(size))
+[ ] Q12.3  vs PDF.              ✓ (sum(c_norm))
+[ ] Q12.4  vs PDF.              ✓ (set barWidth)
+[ ] Q12.5  vs PDF.              ✓ (full range)
+[ ] Q12.6  vs PDF.              ✓ (contrast improves)
+[ ] Q12.7  vs PDF.              ✓ (low brightness)
+[ ] Q12.8  vs PDF.              ✓ (brightness increased)
+[ ] Q12.9  vs PDF.              ✓ (bimodal collapse)
+[ ] Q12.10 vs PDF.              ✓ (cumulative sum)
+[ ] Q12.11 vs PDF.              ✓ (not working)
+[ ] Q12.12 vs PDF.              ✓ (not working)
+[ ] Q12.13 vs PDF.              ✓ (ihmdemo('path'))
+[ ] Q12.14a vs PDF.             ✓ (ClipLimit [0,1], default 0.01)
+[ ] Q12.14b vs PDF.             ✓ (default 8×8 tiles, not tile size)
+
+================================================================================
+REVISION LOG
+================================================================================
+rev.1  Initial pass for L6 + §11 + §12. Interleaves L6 slide concepts
+       (point transforms, LUTs, histograms, equalisation, matching,
+       stretching, shrinking, CLAHE) with §11.1 (point transforms) and
+       §12.1 (histogram processing). Each exercise framed
+       concept-before / verbatim answer / concept-after (rev.4 pattern).
+       Flagged the PDF's numbering typo (Q12.13/12.14 labelled as Q11.13/
+       11.14 in source).
+================================================================================
+END CHECKPOINT 3.2 — rev.1 (content + concept-before/after + TO-DO)
+================================================================================

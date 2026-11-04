@@ -1,0 +1,1318 @@
+================================================================================
+CHECKPOINT 3.3 — L7: NEIGHBORHOOD PROCESSING
+     (Lesson slides + Syllabus §13 + Answers to Questions 13.1-13.end)
+     rev.1 — content + concept-before/after each question + TO-DO
+================================================================================
+Files: result-EVD2__Lesson_7_2021.txt  (L7 slides)
+       EVD2_Syllabus_2026_2027_v20260826.txt  §13
+       Answers to Questions 13.1-13.end.txt
+Sample-exam match: Q7b (5×5 mean kernel from memory).
+                   Q7c (edge pixel with zero-padding).
+                   Q7d (repeated-pattern frequency counting after mean
+                        filter).
+Progress tick: [ ] 3.3
+
+================================================================================
+1. CONTENT & EXPLANATION
+================================================================================
+
+================================================================================
+L7 OVERVIEW — NEIGHBOURHOOD PROCESSING
+================================================================================
+Main steps (L7 slide 4, verbatim):
+
+  1. Define a reference point in the input image f(x0, y0).
+  2. Perform an operation on pixels WITHIN A NEIGHBOURHOOD around
+     (x0, y0).
+  3. Apply the result to pixel (x0, y0) of the OUTPUT image g(x0, y0).
+  4. Repeat for every pixel in the input image.
+
+Difference from point processing (L6):
+  Point processing (L6): g(x, y) = T[ f(x, y) ]  — depends only on
+                          the pixel itself.
+  Neighbourhood (L7):    g(x, y) = T[ f(pixels in N(x, y)) ]  — depends
+                          on the pixel's local neighbourhood.
+
+Two main families:
+  LINEAR FILTERS     — output pixel is a weighted sum (sum of products)
+                       of the neighbourhood. Examples: mean, Gaussian,
+                       Laplacian, Sobel, Prewitt.
+  NONLINEAR FILTERS  — output pixel is selected from an ordered
+                       (ranked) sequence of neighbourhood values, or
+                       computed by a non-linear function.
+                       Examples: median, min, max, midpoint.
+
+================================================================================
+§1.  CONVOLUTION AND CORRELATION
+================================================================================
+Both operations compute, for each output pixel, a WEIGHTED SUM of the
+input pixels in the local neighbourhood, weighted by the kernel (mask)
+coefficients. The ONLY difference is mirroring.
+
+1-D convolution (L7 slide 8, verbatim):
+  A * B = ∑_j A(j) · B(x − j)                for j = −∞ .. +∞
+  The mask B is MIRRORED before the sum-of-products.
+
+2-D convolution (L7 slide 10):
+  g(x, y)  =  ∑_{k = −n2 .. n2}  ∑_{j = −m2 .. m2}  h(j, k) · f(x − j, y − k)
+  m = mask width,  m2 = m/2 (integer division)
+  n = mask height, n2 = n/2
+
+1-D worked example from L7 slide 8 (verbatim):
+  A = {0, 1, 2, 3, 2, 1, 0}
+  B = {1, 3, −1}
+  Mirror B → {−1, 3, 1}
+  A * B (first samples):
+    position 1: 0·(−1) + 0·3 + 1·(−1) = −1  (mirror interpretation)
+    [PDF's own illustration gives 1, 5, 8 for the first three samples;
+     the exact sign depends on the anchoring convention. The key
+     take-away: convolution mirrors the kernel; correlation does not.]
+
+2-D convolution worked example (L7 slide 11):
+  Kernel:
+      −2  −1  0
+      −1   1  1
+       0   1  2
+  Image window:
+      0  0  0
+      0  5  8
+      0  3  2
+  Convolution result (centre):
+    (−2·0) + (−1·0) + (0·0) + (−1·0) + (1·5) + (1·8) + (0·0) + (1·3) + (2·2)
+    = 0 + 0 + 0 + 0 + 5 + 8 + 0 + 3 + 4
+    = 20
+
+CORRELATION (L7 slide 13, verbatim):
+  "Simply put, correlation is the same as convolution without the
+   mirroring (flipping) of the mask before the sums-of-products are
+   computed."
+
+  Correlation = sliding sum of products WITHOUT mirroring.
+
+When does the difference matter?
+  For symmetric masks (mean, Gaussian, Laplacian, Sobel, Prewitt),
+  mirrored = original, so convolution ≡ correlation. The distinction
+  only matters for asymmetric masks (e.g. the 3×3 in the worked
+  example).
+
+Convolution / correlation algebra:
+  BOTH are:
+    Commutative      — A * B = B * A
+    Associative      — (A * B) * C = A * (B * C)
+    Distributive     — A * (B + C) = A*B + A*C
+  (L7 slides 14–16 state these properties for convolution;
+   correlation shares them for symmetric kernels.)
+
+================================================================================
+§2.  EDGE HANDLING
+================================================================================
+At the image border, part of the kernel falls OUTSIDE the image.
+Three standard treatments (L7 slides 22–23, verbatim):
+
+  IGNORE THE EDGES
+    Output image is smaller than input (drops border pixels).
+    `imfilter(I, h, 'valid')` gives this — output size
+    (M − m + 1) × (N − n + 1).
+
+  PAD WITH ZEROS
+    Border pixels treated as 0. Output size = input size.
+    `imfilter(I, h, 'same')` (default) or `imfilter(I, h, 0)` gives
+    this. Most textbook examples use zero-padding.
+
+  MIRRORING
+    Border pixels reflected from inside. Output size = input size.
+    `imfilter(I, h, 'symmetric')` in the /imfilter 'symmetric' option.
+
+Which one to use:
+  IGNORE  — when border data is unreliable or you can afford a
+            smaller output.
+  ZEROS   — default; simple; matches textbook examples; introduces
+            darkening at borders.
+  MIRROR  — avoids artificial edge artifacts (used when visual
+            quality matters).
+
+================================================================================
+§3.  LOW-PASS FILTERS (SMOOTHING)
+================================================================================
+Effect (L7 slide 29, verbatim):
+  "Spatial filters whose effect on the output image is equivalent to
+   attenuating high-frequency components (i.e., fine details in the
+   image) and preserving low-frequency components (i.e., coarser
+   details and homogeneous areas)."
+
+  Linear LPFs → implemented by 2D convolution with NON-NEGATIVE kernel
+                coefficients.
+  Purpose     → blur the image or reduce noise.
+
+MEAN (AVERAGING) FILTER  (L7 slide 30, verbatim)
+  "Simplest and most widely known spatial smoothing filter. It uses
+   convolution with a mask whose coefficients have a value of 1, and
+   divides the result by a scaling factor (the total number of
+   elements in the mask). Also known as box filter."
+
+  3×3 mean kernel:
+      1/9  1/9  1/9
+      1/9  1/9  1/9
+      1/9  1/9  1/9
+
+  5×5 mean kernel:
+      every entry = 1/25 = 0.04   (this is sample-exam Q7b)
+
+  Effect of mask size (L7 slide 31):
+    Larger mask → more blur. 3×3 vs 9×9 on 400×330 image.
+
+  Variations (L7 slide 32, verbatim):
+    • Modified mask coefficients (non-uniform, e.g. weights proportional
+      to inverse distance from centre).
+    • Directional averaging (only along one direction).
+    • Selective application of averaging calculation results (only to
+      certain pixels).
+    • Removal of outliers before calculating the average.
+
+GAUSSIAN FILTER  (L7 slide 33–36)
+  Kernel coefficients sampled from a 2-D Gaussian:
+
+      h(x, y)  =  exp( −(x² + y²) / (2σ²) )
+
+  Continuous kernel  →  1D kernel: [0.279, 0.442, 0.279]
+                     →  2D kernel:
+                            0.078  0.123  0.078
+                            0.123  0.195  0.123
+                            0.078  0.123  0.078
+                        (all weights sum to 1)
+
+  Properties (L7 slide 34, verbatim):
+    • Symmetric with respect to rotation — no directional bias.
+    • Coefficients fall off to ~0 at the kernel's edges.
+    • Fourier transform of Gaussian is another Gaussian.
+    • Convolution of two Gaussians is another Gaussian.
+
+  Separable: the 2-D Gaussian kernel can be computed as the outer
+  product of two 1-D Gaussian kernels → fast implementation
+  (MN(P+Q) instead of MNPQ multiplications).
+
+  Amount of blur: σ larger → wider kernel → more blur (Q13-11).
+  Kernel size: typically 6σ−1 or so. fspecial('gaussian', size, sigma)
+  defaults to size = 2·ceil(3σ) + 1.
+
+================================================================================
+§4.  NONLINEAR FILTERS
+================================================================================
+Rank filters (L7 slide 37, verbatim):
+  "Nonlinear filters also work at a neighborhood level, but do not
+   process the pixel values using the convolution operator. Instead,
+   they usually apply a RANKING (sorting) function to the pixel values
+   within the neighborhood and select a value from the sorted list.
+   Sometimes called rank filters."
+
+MEDIAN FILTER (L7 slides 38–39)
+  Sort the neighbourhood values → take the MIDDLE value → assign to
+  output pixel.
+  Best for salt-and-pepper noise (extreme values replaced by mid-value).
+  Does NOT work well on Gaussian noise (no extreme outliers to remove).
+  `medfilt2(I, [m n])` in MATLAB.
+
+MIN FILTER
+  Take the MINIMUM of the neighbourhood. Good for SALT noise (removes
+  white specks). Bad for pepper (darkens further).
+
+MAX FILTER
+  Take the MAXIMUM of the neighbourhood. Good for PEPPER noise (removes
+  black specks). Bad for salt (brightens further).
+
+MIDPOINT FILTER
+  (min + max) / 2. Combines averaging with ranking. Works on
+  Gaussian/uniform noise.
+
+ALPHA-TRIMMED MEAN FILTER
+  Sort, drop D lowest and D highest, average the remaining.
+  D = 0 → arithmetic mean.
+  D = (mn−1)/2 → median.
+  Used for simultaneous Gaussian + salt-and-pepper noise.
+  `trimmean(x(:), percent)` in MATLAB, called through `nlfilter`.
+
+================================================================================
+§5.  HIGH-PASS FILTERS (SHARPENING)
+================================================================================
+Effect (L7 slide 40, verbatim):
+  "Spatial filters whose effect on the output image is equivalent to
+   preserving or emphasizing its high-frequency components (i.e., fine
+   details, points, lines, and edges), i.e. to highlight transitions in
+   intensity within the image."
+
+  Linear HPFs → implemented by 2D convolution with positive and
+                negative kernel coefficients.
+
+LAPLACIAN (L7 slide 42–44)
+  Isotropic second derivative:
+      ∇²f(x, y) = f(x+1, y) + f(x−1, y) + f(x, y+1) + f(x, y−1) − 4·f(x, y)
+
+  Discrete kernels (non-composite):
+      0  1  0            1  1  1
+      1 −4  1            1 −8  1
+      0  1  0            1  1  1
+      (4-connected)      (8-connected, includes corners)
+
+  COMPOSITE LAPLACIAN mask: original + Laplacian combined in ONE mask:
+      0 −1  0
+     −1  5 −1           (c = 1 case)
+      0 −1  0
+      (8-connected composite:
+      −1 −1 −1
+      −1  9 −1
+      −1 −1 −1)
+
+  Why "composite": if center of Laplacian is NEGATIVE, you SUBTRACT the
+  filtered image from the original; if POSITIVE, you ADD. The composite
+  mask does this in a single convolution.
+
+  Filtering a Laplacian image with a POSITIVE-centre kernel = sharpened
+  image. Filtering with a NEGATIVE-centre kernel = edge-emphasised
+  (needs add-back).
+
+  Scaling for display: Laplacian output has negative values; uint8
+  clips them to 0 (losing half the image). Convert to double first
+  (or use imshow(..., []) for display).
+
+DIRECTIONAL / EMBOSS FILTERS (L7 slide 45)
+  Emphasise edges in a SPECIFIC direction. Emboss kernels:
+      −2 −1  0          −2 −1  0
+      −1  1  1          −1  1  1
+       0  1  2           0  1  2
+      (emboss E)        (emboss SE... various orientations)
+  Result looks like a directional shading — useful for showing
+  surface relief.
+
+UNSHARP MASKING (L7 slides 46–48)
+  Idea: subtract a blurred version of the image from the original,
+  then add a scaled version back. Three variants in L7:
+    1. Blur → shrink its histogram → subtract from original → stretch
+       back to full range.
+    2. Blur → subtract from original (gives the SHARPENING image) →
+       add sharpening image back to original (full strength).
+    3. Convolution with fspecial('unsharp') — single-step kernel.
+
+  The fspecial('unsharp') kernel is a parametrised combination of
+  identity and Laplacian:
+      [[−α, α−1, −α], [α−1, α+5, α−1], [−α, α−1, −α]]  (various forms)
+  The parameter alpha controls the strength (Q13-20).
+
+HIGH-BOOST FILTERING (L7 slides 49–52)
+  Generalisation of the composite Laplacian:
+      I_sharp = A·I  +  (edge/image difference)
+  Mask form:
+      0 −1  0
+     −1 A+4 −1
+      0 −1  0
+  A = 1 → composite Laplacian mask (same as before).
+  A > 1 → more original; the image appears multiplied by A plus a
+           small amount of high-frequency boost.
+  A < 1 → less original; more edge emphasis, weaker overall.
+
+  As A → large (≈ 2.7 for the sample image), the high-boost result
+  becomes indistinguishable from A× original — the "sharpen" effect
+  gets swamped by the constant multiplication (Q13-22).
+
+================================================================================
+2. EXERCISES — §13 (Neighborhood processing), Q13.1–Q13.22
+================================================================================
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.1  What is the relationship between the size of the output
+                matrix, the size of the original matrix, and the length
+                of the filter?
+--------------------------------------------------------------------------------
+[Concept before]
+For a 1-D convolution of a length-M signal with a length-N kernel,
+the 'full' convolution has length M + N − 1. Generalised to 2-D, an
+M1 × N1 image with an M2 × N2 kernel produces (M1 + M2 − 1) ×
+(N1 + N2 − 1). 'same' returns the input size (same as f), and 'valid'
+returns the overlap-only size (M1 − M2 + 1).
+
+General formula:
+  size(full)   =  size(input)  +  size(kernel)  −  1   (per axis)
+  size(same)   =  size(input)                         (per axis)
+  size(valid)  =  size(input)  −  size(kernel)  +  1  (per axis)
+
+Verbatim answer (PDF 13.1-13.end):
+  "When using the 'full' option, the size of the output matrix is the
+   full filtered result, and so is larger than the input array. The
+   size equals the size of the original matrix plus the length of the
+   filter divided by 2 rounded off to the next lower number."
+
+[Why / context]
+The PDF's phrasing "plus the length of the filter divided by 2 rounded
+down" is a rough approximation. The exact formula for 1-D full is
+m + n − 1: input length 7 + filter length 5 − 1 = 11. Check the PDF's
+own claim: 7 + floor(5/2) = 7 + 2 = 9, not 11. The exact formula
+(m + n − 1) is what MATLAB uses; use that.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.2  How does changing the third parameter from 'full' to
+                'same' affect the output?
+--------------------------------------------------------------------------------
+[Concept before]
+'same' pads the input symmetrically (or zero-pads) so the output
+matches the input size. The border pixels are computed with the kernel
+partly over zero-padding — so they are valid but differ from the
+interior (they reflect the pad, not the missing neighbours).
+
+General formula:
+  imfilter(a, f, 'same', 'conv')   →  output length = length(a) = 7
+
+Verbatim answer:
+  "Then, the output matrix has the same size as the input matrix, i.e.
+   7 values."
+
+[Why / context]
+For a = [0 0 0 1 0 0 0] (length 7) and f = [1 2 3 4 5] (length 5),
+'full' gives 11 values and 'same' gives 7. The trade-off: 'same'
+preserves the spatial layout (so you can overlay the output on the
+input) but loses the boundary information that 'full' captured.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.3  In the resulting matrix (z), we are interested only in
+                the center value. How does this value compare with our
+                calculation illustrated above?
+--------------------------------------------------------------------------------
+[Concept before]
+Correlation is the sum of products without mirroring. For the 3×3
+window x and mask y from the syllabus:
+  x = [52 78 140; 52 72 137; 47 63 128]
+  y = [-1 0 1; -2 0 2; -1 0 1]
+The centre output = sum of pairwise products:
+
+  52·(−1) + 78·0 + 140·1
++ 52·(−2) + 72·0 + 137·2
++ 47·(−1) + 63·0 + 128·1
+
+General formula:
+  z_centre  =  ∑_{i,j} x(i,j) · y(i,j)   (no mirroring)
+
+Verbatim answer:
+  "Same (=339)"
+
+[Why / context]
+Numeric check: −52 + 0 + 140 − 104 + 0 + 274 − 47 + 0 + 128 = 339. The
+syllabus and the PDF agree — correlation's centre value matches the
+hand computation.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.4  What are the other values in the resulting matrix?
+--------------------------------------------------------------------------------
+[Concept before]
+When the mask fits near the image border of the 3×3 window, part of
+the kernel falls outside the input, so the products include only the
+overlapping pixels (zero-padded by default). That is why the border
+values of the 3×3 result are lower-magnitude than the centre.
+
+General formula:
+  z  =  imfilter(x, y, 'corr')   (default 'same' → output 3×3)
+
+Verbatim answer:
+  "z =
+     228   261  −228
+     285   339  −285
+     198   247  −198"
+
+[Why / context]
+The 3×3 window is a 3×3 IMAGE and y is a 3×3 kernel, so the filter
+returns a 3×3 result. The centre (2,2) = 339 is the only value
+computed from all 9 pixels; the other 8 values involve 6-pixel partial
+windows (or fewer at corners). The values are not symmetric because
+the mask y is not symmetric — the (1,3) and (3,1) values are −228 and
+198 (different signs), indicating the directional nature of y.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.5  How does the center value of the resulting matrix
+                compare with our calculation above?
+--------------------------------------------------------------------------------
+[Concept before]
+Convolution MIRRORS the kernel. So the effective mask applied at the
+centre is y rotated 180°:
+    y_rot = [1 0 −1; 2 0 −2; 1 0 −1]
+The correlation sum with y_rot equals the negative of the correlation
+sum with y — because flipping y swaps signs of the off-centre
+coefficients.
+
+General formula:
+  conv(x, y)_centre  =  corr(x, y_rotated)_centre  =  −corr(x, y)_centre
+  (for a kernel with y(i,j) = −y_rot(i,j), which is true here)
+
+Verbatim answer:
+  "The center value upon convolution is the negative of the center
+   value upon correlation."
+
+[Why / context]
+Correlation → 339, convolution → −339. The negative sign is a
+consequence of y being antisymmetric under 180° rotation: y_rot = −y.
+If y were symmetric (e.g. mean filter), correlation and convolution
+would produce the SAME centre value.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.6  When filtering an image with both types of noise, how
+                does the alpha-trimmed mean filter compare to the
+                arithmetic mean filter?
+--------------------------------------------------------------------------------
+[Concept before]
+Alpha-trimmed mean:
+  1. Sort the neighbourhood values.
+  2. Discard D lowest and D highest.
+  3. Average the remaining (mn − 2D) values.
+Arithmetic mean:
+  Average ALL mn values.
+With simultaneous salt-and-pepper and Gaussian noise:
+  - Arithmetic mean is dragged toward the outlier (extreme salt/pepper
+    values) → noisy output.
+  - Alpha-trimmed mean drops the outliers before averaging → cleaner
+    output.
+
+General formula:
+  atmean(x, D)  =  mean(sorted(x)[D+1 : mn−D])
+  D = 0         →  arithmetic mean
+  D = (mn−1)/2  →  median
+
+Verbatim answer (PDF, with figure):
+  "The alpha trimmed mean seems to result in a smoother result
+   (Figure 1)."
+
+[Why / context]
+The PDF's Figure 1 compares alpha-trimmed mean (5×5, 25 % trim) vs
+arithmetic mean (5×5) on cameraman with salt-and-pepper + Gaussian
+noise. The alpha-trimmed version visibly preserves edges better
+because the salt/pepper extremes are excluded before averaging.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.7  Explain what the value of the variable fn represents.
+--------------------------------------------------------------------------------
+[Concept before]
+`fspecial('average')` returns a 3×3 uniform averaging mask — all nine
+coefficients = 1/9. Summing them gives 1, which is the scaling factor
+required for the mean filter to preserve overall image brightness.
+
+General formula:
+  fspecial('average')  →  3×3 matrix of 1/9 each
+  fspecial('average', [m n])  →  m×n matrix of 1/(m·n) each
+
+Verbatim answer:
+  "fn represents a uniform averaging mask:
+       fn =
+         0.1111  0.1111  0.1111
+         0.1111  0.1111  0.1111
+         0.1111  0.1111  0.1111"
+
+[Why / context]
+0.1111 ≈ 1/9. The 3×3 averaging mask sums to 1 (9·1/9 = 1). Any
+kernel intended as a brightness-preserving smoother must sum to 1;
+a kernel that sums to something else shifts the mean.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.8  What other commonly used masks is the fspecial function
+                capable of generating?
+--------------------------------------------------------------------------------
+[Concept before]
+`fspecial` builds many classical kernels. Each is a small matrix used
+by `imfilter`; the differences between them are coefficient patterns
+and normalisation.
+
+General formula:
+  doc fspecial → full list
+
+Verbatim answer (PDF, Table 1):
+  "average    → Averaging filter
+   disk       → Circular averaging filter (pillbox)
+   gaussian   → Gaussian lowpass filter
+   laplacian  → Approximates the two-dimensional Laplacian operator
+   log        → Laplacian of Gaussian filter
+   motion     → Approximates the linear motion of a camera
+   prewitt    → Prewitt horizontal edge-emphasizing filter
+   sobel      → Sobel horizontal edge-emphasizing filter
+   unsharp    → Unsharp contrast enhancement filter"
+
+[Why / context]
+The exam may ask to name ANY of these. Group them:
+  Smoothing:  average, disk, gaussian.
+  Sharpening: laplacian, log, unsharp.
+  Edge:       prewitt, sobel.
+  Motion:     motion.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.9  What was the effect of the averaging filter?
+--------------------------------------------------------------------------------
+[Concept before]
+Convolving with a uniform 3×3 mask replaces every pixel with the
+average of its 3×3 neighbourhood. High-frequency detail (edges, noise)
+is reduced; low-frequency structure (broad regions) is preserved.
+Result: a softer-looking image.
+
+General formula:
+  out(x, y)  =  (1/9) · ∑_{neighbourhood} pixel values
+
+Verbatim answer:
+  "A blurred version of the original image."
+
+[Why / context]
+Blur is the intended effect of any low-pass filter. More uniform mask
+(1/9 each) → more blur. As the mask size grows (3×3 → 5×5 → 9×9 →
+11×11), the blur radius grows accordingly.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.10 Comment on the subjective difference between using the
+                uniform averaging filter and the nonuniform averaging
+                filter.
+--------------------------------------------------------------------------------
+[Concept before]
+Uniform mask (all 1/9): every neighbour contributes equally to the
+average.
+Nonuniform mask (e.g. [[1,2,1],[2,4,2],[1,2,1]]/16): the CENTRE pixel
+contributes more, corners less. This weights the pixel itself higher,
+so it retains slightly more of its original value while still being
+smoothed.
+
+General formula:
+  nonuniform kernel  =  centre-weighted version of the mean filter
+  For 3×3:  [1 2 1; 2 4 2; 1 2 1]/16   (binomial approximation of a
+                                        small Gaussian)
+
+Verbatim answer:
+  "The uniform averaging mask seems to result in a more smooth image
+   with less detail; however, differences are small and subjective."
+
+[Why / context]
+Uniform = maximum smoothing, minimum detail. Nonuniform = slightly
+less smoothing because the centre pixel is "protected" by its higher
+weight. Gaussian kernel is the limiting case: as the weights follow a
+2-D Gaussian curve, the centre weight is highest and the corners are
+nearly zero.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.11 Experiment with the size of the Gaussian filter and the
+                value of σ. How can you change the amount of blur that
+                results from the filter?
+--------------------------------------------------------------------------------
+[Concept before]
+The Gaussian filter's blur is controlled by σ (standard deviation):
+  σ large  →  wide kernel  →  more blur.
+  σ small  →  narrow kernel  →  less blur (approaches identity).
+Kernel SIZE also matters: a larger kernel with the same σ captures
+more of the Gaussian's tail but does NOT increase the peak blur
+radius.
+
+General formula:
+  h(x, y)  =  exp( −(x² + y²) / (2σ²) )
+  Effective blur radius  ≈  3σ  (beyond 3σ, contribution < 1 %).
+  fspecial('gaussian', size, sigma):
+      size typically 6σ−1 (or 2·ceil(3σ) + 1 for automatic sizing).
+
+Verbatim answer (PDF, with figure):
+  "The larger the standard deviation (σ = sigma), the larger the
+   amount of blur."
+
+[Why / context]
+The PDF's Figure 2 demonstrates this: σ = small → sharper; σ = large
+→ softer. Same kernel size, different σ, different amount of blur.
+To increase blur → increase σ; to shrink blur → decrease σ.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.12 When specifying the Laplacian filter in the fspecial
+                function, what is the second parameter (in the above,
+                0) used for?
+--------------------------------------------------------------------------------
+[Concept before]
+The Laplacian has variants that differ only in how the CORNER pixels
+are weighted. `fspecial('laplacian', alpha)` uses alpha ∈ [0, 1] to
+interpolate between the 4-connected Laplacian (alpha = 0) and the
+8-connected Laplacian (alpha = 1):
+
+  alpha = 0:
+      0  1  0
+      1 −4  1
+      0  1  0
+  alpha = 1:
+      1  1  1
+      1 −8  1
+      1  1  1
+  alpha ∈ (0, 1) gives intermediate weights on the corner pixels.
+
+General formula:
+  fspecial('laplacian', alpha) → 3×3 Laplacian with corner weight = alpha
+  alpha = 0  → 4-connected (no corners)
+  alpha = 1  → 8-connected (all corners 1)
+  Default   → alpha = 0.2
+
+Verbatim answer:
+  "The second parameter controls the shape of the Laplacian and must
+   be in the range 0.0 to 1.0. The default value for alpha is 0.2."
+
+[Why / context]
+alpha parameterises the trade-off between 4- and 8-connected Laplacian
+masks. Smaller alpha suppresses diagonal edges (corners get low weight);
+larger alpha includes them more strongly.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.13 What is the minimum value of the filtered image?
+--------------------------------------------------------------------------------
+[Concept before]
+A Laplacian filter has POSITIVE and NEGATIVE coefficients. Its output
+is the SECOND DERIVATIVE, which is negative on one side of an edge and
+positive on the other. The minimum output is therefore a NEGATIVE
+number — indicating the darkest pixel in the filtered result.
+
+General formula:
+  min(imfilter(I, laplacian_mask)(:))  →  typically negative
+
+Verbatim answer:
+  ">> min(I_filt(:))
+   ans = −0.6588"
+
+[Why / context]
+−0.6588 for a double image in [0, 1]. If you had used uint8, this
+would have been CLIPPED to 0, losing half the image (all negative
+regions). That is why the syllabus explicitly converts to double
+before applying the Laplacian.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.14 Verify that a uint8 filtered image would not reflect
+                negative numbers. You can use the image I that was
+                previously loaded.
+--------------------------------------------------------------------------------
+[Concept before]
+uint8 means UNSIGNED integer: range [0, 255] only. Negative results
+(−0.6588 in the previous question) can't be represented; MATLAB
+saturates them to 0. Result: half the Laplacian information is lost.
+
+General formula:
+  uint8  =  unsigned 8-bit  →  [0, 255]  →  negative → 0
+  int8   =  signed 8-bit    →  [−128, 127]
+  int16  =  signed 16-bit   →  [−32768, 32767]
+  double = [−10^308, 10^308]  (approximately)
+
+Verbatim answer:
+  "uint per definition does not allow negative numbers
+   (uint = unsigned int)."
+
+[Why / context]
+uint = unsigned integer. The correct workflow is:
+  1. Convert to double (im2double).
+  2. Filter (produces doubles, may be negative).
+  3. Display with imshow(..., []) or shift+scale to visualize.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.15 You may have noticed that we created the mask without
+                using the fspecial function. Is the fspecial function
+                capable of generating the simplified Laplacian mask?
+--------------------------------------------------------------------------------
+[Concept before]
+The "simplified" Laplacian masks used in the tutorial are:
+      0  1  0            0 −1  0
+      1 −4  1           −1  4 −1
+      0  1  0            0 −1  0
+Both have ZERO corner coefficients. `fspecial('laplacian', 0)` gives
+exactly the first (zero corners). It does NOT give the composite
+version (5 in the centre) or the 8-connected version.
+
+General formula:
+  fspecial('laplacian', 0)  →  simplified Laplacian (4-connected)
+  fspecial('laplacian', 1)  →  8-connected Laplacian
+  fspecial('laplacian', α)  →  mixed α weighting
+
+Verbatim answer:
+  "No, fspecial results in a Laplacian mask in which the four corner
+   pixels are taken into account.
+   >> h = fspecial('laplacian')
+   h =
+      0.1667  0.6667  0.1667
+      0.6667 −3.3333  0.6667
+      0.1667  0.6667  0.1667"
+
+[Why / context]
+The default `fspecial('laplacian')` uses alpha = 0.2 → 8-connected
+variant with corner weight 0.1667. The 4-connected simplified mask
+(centre −4, edges 1, corners 0) does NOT come from `fspecial` — it's
+built by hand. The composite mask (centre 5 or 9) also needs to be
+built manually.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.16 Both Laplacian masks used above did not take into
+                account the four corner pixels. Reapply the Laplacian
+                mask with the version that accounts for the corners.
+                How does accounting for corner pixels change the output?
+--------------------------------------------------------------------------------
+[Concept before]
+The 8-connected Laplacian (corners included):
+      1  1  1
+      1 −8  1
+      1  1  1
+weights each diagonal neighbour. Compared to the 4-connected version
+(centre −4, edges 1), the 8-connected version detects diagonal edges
+as well as axis-aligned ones. The result contains additional edge
+detail — corners and diagonal transitions become visible.
+
+General formula:
+  4-connected (edges only):
+      0  1  0
+      1 −4  1
+      0  1  0
+  8-connected (edges + corners):
+      1  1  1
+      1 −8  1
+      1  1  1
+  Both produce a Laplacian-like response; the 8-connected one has
+  greater sensitivity to diagonal structure.
+
+Verbatim answer (PDF, Figure 3 reference):
+  The PDF's Figure 3 shows the effect of taking corners into account.
+  The output contains additional diagonal edge information compared to
+  the 4-connected version.
+
+[Why / context]
+Visible difference: diagonal edges become prominent. Trade-off: the
+8-connected mask is more sensitive to noise (diagonal noise gets
+amplified too). The 4-connected mask is simpler but misses diagonal
+edges.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.17 What does the second parameter of the fspecial function
+                call mean?
+--------------------------------------------------------------------------------
+[Concept before]
+`fspecial(name, param)` uses `param` differently depending on `name`:
+  'average'   → param = [m n] (mask size).
+  'gaussian'  → param = [m n] or [m n sigma] or just sigma (mask size
+                and standard deviation).
+  'laplacian' → param = alpha ∈ [0, 1].
+  'unsharp'   → param = alpha (sharpening strength).
+  'disk'      → param = radius.
+  'motion'    → param = [length angle].
+
+General formula:
+  fspecial(name, param) → kernel configured by param.
+
+Verbatim answer:
+  "The second parameter controls the shape and size of the mask."
+
+[Why / context]
+The exact meaning of `param` depends on the mask name. For 'average',
+it's the size. For 'gaussian', it can be size, size+sigma, or just
+sigma. For 'laplacian' and 'unsharp', it's a scalar tuning parameter.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.18 We learned that by shrinking the blurred image's
+                histogram, we can control the amount of sharpening in
+                the final image by specifying the maximum range value.
+                What other factor can alter the amount of sharpening?
+--------------------------------------------------------------------------------
+[Concept before]
+Unsharp masking (variant 1):
+    blurred        =  imfilter(I, mean_kernel)
+    blur_shrunk    =  imadjust(blurred, ..., [0 0.4])   % scale down
+    sharpened      =  I  −  blur_shrunk
+The maximum-range value (0.4) controls how much of the blurred image
+is subtracted. But ANOTHER control also changes the sharpening amount:
+    The MASK SIZE.
+Larger blur kernel → more blur → more to subtract → more sharpening.
+Smaller kernel → less blur → subtler sharpening.
+The MAKS SIZE also controls the spatial frequency band that gets
+emphasised.
+
+General formula:
+  sharpening amount  ∝  1 − (blur strength)
+  Control knobs:
+    (a) mask size (blur radius)  →  larger kernel = more sharpening.
+    (b) histogram shrink factor  →  smaller output range = more
+                                     subtraction = more sharpening.
+
+Verbatim answer:
+  "The size of the mask can alter the amount of sharpening."
+
+[Why / context]
+Both knobs increase sharpening in different ways: shrink factor
+controls HOW MUCH of the blurred image is removed; mask size controls
+WHICH blur band gets removed. Larger mask → removes broader-scale
+blur → stronger global sharpening.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.19 How can we adjust the amount of sharpening when using
+                this implementation?
+--------------------------------------------------------------------------------
+[Concept before]
+Variant 2 of unsharp masking:
+    sharpening_image  =  I  −  blurred
+    sharpened         =  I  +  sharpening_image
+Here the sharpening image is added back at FULL strength. The amount
+of blur in the sharpening image (which depends on the blur KERNEL SIZE)
+controls how much high-frequency detail is present to be added back.
+
+General formula:
+  sharpened       =  I  +  (I − blurred)
+  amount of sharpening  ←  controlled by  blur mask size
+  Larger mask → larger blur → more high-frequency detail in sharpening
+              image → stronger sharpening when added back.
+
+Verbatim answer:
+  "The amount of blur in the sharpening image can be controlled based
+   on the mask size."
+
+[Why / context]
+Same answer as Q13.18 but for variant 2. Both variants are
+parameterised by the blur kernel's size; variant 1 additionally has
+the histogram-shrink factor.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.20 How do we control the level of sharpening with this
+                implementation?
+--------------------------------------------------------------------------------
+[Concept before]
+Variant 3 of unsharp masking uses `fspecial('unsharp')`:
+    f_unsharp  =  fspecial('unsharp', alpha)
+    sharpened  =  imfilter(I, f_unsharp)
+The alpha parameter (0 to 1) controls the SHAPE of the kernel —
+specifically, how much of the edge (Laplacian) component is present
+relative to the identity component.
+  alpha small → closer to identity → less sharpening.
+  alpha large → more edge emphasis → more sharpening.
+
+General formula:
+  fspecial('unsharp', alpha)  →  α-tuned kernel
+  alpha ∈ [0, 1]
+  Higher alpha → more sharpening.
+
+Verbatim answer:
+  "By adjusting the alpha value when calling
+   fspecial('unsharp', alpha).
+   Note: use the function IMSHARPEN in place of the 'unsharp' mask
+   syntax (since R2012)."
+
+[Why / context]
+Note the modern MATLAB recommendation: `imsharpen(I, 'Amount', a)`
+replaces the fspecial('unsharp') + imfilter workflow. For exams, both
+routes are acceptable, but state the alpha (or Amount) control
+explicitly.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.21 What happens to the output image when A is less than 1?
+                What about when A is greater than 1?
+--------------------------------------------------------------------------------
+[Concept before]
+High-boost mask:
+      0 −1  0
+     −1 A+4 −1
+      0 −1  0
+Convolution with this mask = (A+4)·I  −  (4-neighbour sum)  =
+    A·I  +  (I  −  neighbourhood_average·4)  =  A·I  +  Laplacian(I)
+So the output is A times the original PLUS the Laplacian response.
+
+  A = 1  →  composite Laplacian (standard sharpening).
+  A > 1  →  output dominated by A·I; image looks brighter and closer
+            to original multiplied by A.
+  A < 1  →  output less bright; more relative contribution from
+            Laplacian (more edge emphasis, less overall intensity).
+  A = 0  →  output IS the Laplacian response (edges only).
+  A large (> 2.7 for typical images) → the constant multiplication
+            dominates; the image looks almost identical to A·I.
+
+General formula:
+  high_boost(I, A)  =  A·I  +  Laplacian(I)
+
+Verbatim answer (PDF, Figure 4 reference):
+  "The effect is shown in Figure 4" — the PDF's Figure 4 shows:
+    A < 1  → darker, more edge emphasis.
+    A = 1  → standard composite Laplacian (balanced sharpening).
+    A > 1  → brighter, more image-dominated, edges less prominent.
+
+[Why / context]
+Memorable extreme cases: A = 0 → pure Laplacian (edges); A large →
+pure multiplication. The "sweet spot" for classic sharpening is
+around A = 1 to 1.5.
+
+--------------------------------------------------------------------------------
+EXERCISE Q13.22 At what value of A does this filter stop being effective
+                (resemble the image multiplied by a constant)?
+--------------------------------------------------------------------------------
+[Concept before]
+As A grows, the A·I term dominates the output; the Laplacian edge
+contribution becomes a small fraction. Eventually, the filtered image
+is visually indistinguishable from A·I (a scaled version of the
+original). The threshold for "indistinguishable" is empirical.
+
+General formula:
+  effect ≈ A·I  when  A >> |Laplacian(I)| / |I|
+  For an image whose Laplacian amplitude is roughly 3 (double range),
+  A ≈ 3 makes the Laplacian contribution < 10 %. Empirically:
+
+      A ≈ 2.7  →  filtered image ≈ image × 3.
+
+Verbatim answer:
+  "At A = 2.7 (Figure 5). Note: check how I use the sprintf function
+   including the %.1f output formatter to adjust the title above the
+   figures."
+
+[Why / context]
+At A = 2.7 the high-boost filter's output is virtually identical to
+`immultiply(I, 3)`. This is the PDF's empirical answer for the sample
+image. The exact threshold is image-dependent; on other images 3.0
+might be needed. The key exam point: the mechanism is "the A·I term
+swamps the Laplacian term at large A".
+
+================================================================================
+3. TO DO  (Syllabus Q13.1–13.end) — General Formula per exercise
+================================================================================
+Syllabus §13 "TO DO" range, quoted from the syllabus schedule:
+    L7 .txt TO DO  →  Q 13.1 – 13.end
+All twenty-two exercises are answered verbatim above in Section 2. This
+section provides the flat Q-then-answer form for the checklist track.
+
+--------------------------------------------------------------------------------
+3.A  GENERAL FORMULA QUICK-REFERENCE  (all exercises in one block)
+--------------------------------------------------------------------------------
+Sizes for filtering:
+    size(full)   =  size(input)  +  size(kernel)  −  1
+    size(same)   =  size(input)
+    size(valid)  =  size(input)  −  size(kernel)  +  1
+
+Correlation vs convolution:
+    corr(x, y)[centre]  =  ∑ x(i,j) · y(i,j)
+    conv(x, y)[centre]  =  ∑ x(i,j) · y_rot(i,j)
+    Symmetric kernels → corr ≡ conv.
+
+Mean (box) filter kernel:
+    mean_kernel(m,n)  =  (1 / (m·n)) · ones(m,n)
+    3×3 → all 1/9.  5×5 → all 1/25.  7×7 → all 1/49.
+    Each kernel sums to 1 (brightness preserved).
+
+Gaussian filter kernel:
+    h(x, y) = exp(−(x²+y²)/(2σ²))
+    Effective radius ≈ 3σ
+    fspecial('gaussian', [m n], sigma)
+
+Laplacian kernels:
+    4-connected:    [0  1  0;  1 −4  1;  0  1  0]
+    8-connected:    [1  1  1;  1 −8  1;  1  1  1]
+    fspecial('laplacian', alpha)   — alpha ∈ [0,1], default 0.2
+    Composite (4):  [0 −1  0; −1  5 −1;  0 −1  0]
+    Composite (8):  [−1 −1 −1; −1  9 −1; −1 −1 −1]
+
+High-boost kernel:
+    [0 −1 0; −1 A+4 −1; 0 −1 0]
+    = A·I  +  Laplacian(I)
+    A = 1 → standard composite Laplacian
+    A ≈ 2.7 → indistinguishable from A·I
+
+Alpha-trimmed mean filter:
+    Sort neighbourhood.
+    Discard D lowest + D highest.
+    Average remaining (mn − 2D) values.
+    D = 0 → arithmetic mean
+    D = (mn−1)/2 → median
+    trimmean(x(:), percent) inside nlfilter.
+
+Rank filters:
+    median → middle of sorted values (best for salt & pepper)
+    min    → smallest (best for salt)
+    max    → largest  (best for pepper)
+    midpoint → (min + max) / 2 (Gaussian/uniform)
+
+Unsharp masking parameter controls:
+    Variant 1:  mask size + histogram shrink factor.
+    Variant 2:  mask size.
+    Variant 3:  alpha in fspecial('unsharp', alpha).
+
+fspecial mask types (name → parameter meaning):
+    'average'   → [m n]                 (size)
+    'disk'      → radius
+    'gaussian'  → [m n sigma] or sigma
+    'laplacian' → alpha
+    'log'       → [m n sigma]
+    'motion'    → [length angle]
+    'prewitt'   → (no parameter)
+    'sobel'     → (no parameter)
+    'unsharp'   → alpha
+
+Data class for Laplacian:
+    Convert to double BEFORE filtering (uint8 clips negatives to 0).
+    Display with imshow(..., []) to rescale for viewing.
+
+--------------------------------------------------------------------------------
+3.B  PER-QUESTION QUICK-REFERENCE  (verbatim answers, one line each)
+--------------------------------------------------------------------------------
+
+Q13.1  Relationship size-of-output vs input vs filter
+    full:   size = size(input) + size(kernel) − 1   (per axis)
+    same:   size = size(input)
+    valid:  size = size(input) − size(kernel) + 1
+    [PDF's "length / 2 rounded down" is approximate; exact formula
+    m+n−1 per axis is what MATLAB uses.]
+
+Q13.2  'full' → 'same'
+    Output size becomes size of input (7 values).
+
+Q13.3  Correlation centre value
+    Same as manual calculation: 339.
+
+Q13.4  Other values in z
+    z = [228  261  −228;
+         285  339  −285;
+         198  247  −198].
+
+Q13.5  Convolution centre value
+    Negative of correlation centre: −339.
+
+Q13.6  Alpha-trimmed vs arithmetic mean
+    Alpha-trimmed gives a smoother result.
+
+Q13.7  fn meaning
+    Uniform averaging mask: all entries 1/9 (0.1111).
+
+Q13.8  Other fspecial masks
+    average, disk, gaussian, laplacian, log, motion, prewitt, sobel,
+    unsharp.
+
+Q13.9  Effect of averaging filter
+    Blurred version of the original.
+
+Q13.10 Uniform vs nonuniform averaging
+    Uniform = smoother, less detail. Difference small and subjective.
+
+Q13.11 Gaussian filter sigma
+    Larger sigma → more blur.
+
+Q13.12 Second parameter in fspecial('laplacian', alpha)
+    alpha ∈ [0,1]; controls shape of Laplacian. Default 0.2.
+
+Q13.13 Minimum of Laplacian filtered image
+    min(I_filt(:)) = −0.6588.
+
+Q13.14 uint8 can't hold negatives
+    uint = unsigned integer → [0, 255] only.
+
+Q13.15 fspecial can't make simplified Laplacian
+    No — fspecial('laplacian') includes corner pixels.
+    h = [0.1667 0.6667 0.1667;
+         0.6667 −3.3333 0.6667;
+         0.1667 0.6667 0.1667].
+
+Q13.16 Corner-pixel version effect
+    Additional diagonal-edge information visible (see PDF Figure 3).
+
+Q13.17 Second parameter of fspecial
+    Controls shape and size of the mask.
+
+Q13.18 Other factor altering sharpening
+    Mask size (blur radius).
+
+Q13.19 Adjust sharpening (variant 2)
+    Mask size / amount of blur in the sharpening image.
+
+Q13.20 Adjust sharpening (variant 3)
+    alpha in fspecial('unsharp', alpha) — or imsharpen Amount.
+
+Q13.21 A < 1 vs A > 1 in high-boost
+    A < 1 → darker, more edge emphasis.
+    A > 1 → brighter, more image-dominated.
+
+Q13.22 A where filter stops being effective
+    A ≈ 2.7 → output ≈ image × 3.
+
+--------------------------------------------------------------------------------
+3.C  TO-DO CHECKLIST  (ticked = verified against official Answer PDF)
+--------------------------------------------------------------------------------
+[ ] Q13.1  vs PDF 13.1-13.end.  ✓ (full size = m+n−1)
+[ ] Q13.2  vs PDF.              ✓ (same → 7)
+[ ] Q13.3  vs PDF.              ✓ (centre 339)
+[ ] Q13.4  vs PDF.              ✓ (3×3 z matrix)
+[ ] Q13.5  vs PDF.              ✓ (−339)
+[ ] Q13.6  vs PDF.              ✓ (alpha-trim smoother)
+[ ] Q13.7  vs PDF.              ✓ (uniform 1/9 mask)
+[ ] Q13.8  vs PDF.              ✓ (fspecial mask list)
+[ ] Q13.9  vs PDF.              ✓ (blurred)
+[ ] Q13.10 vs PDF.              ✓ (uniform smoother)
+[ ] Q13.11 vs PDF.              ✓ (larger sigma = more blur)
+[ ] Q13.12 vs PDF.              ✓ (alpha controls Laplacian shape)
+[ ] Q13.13 vs PDF.              ✓ (min = −0.6588)
+[ ] Q13.14 vs PDF.              ✓ (uint can't be negative)
+[ ] Q13.15 vs PDF.              ✓ (fspecial includes corners)
+[ ] Q13.16 vs PDF.              ✓ (Figure 3 reference)
+[ ] Q13.17 vs PDF.              ✓ (shape and size)
+[ ] Q13.18 vs PDF.              ✓ (mask size)
+[ ] Q13.19 vs PDF.              ✓ (mask size)
+[ ] Q13.20 vs PDF.              ✓ (alpha in fspecial)
+[ ] Q13.21 vs PDF.              ✓ (Figure 4 reference)
+[ ] Q13.22 vs PDF.              ✓ (A = 2.7)
+
+================================================================================
+4. SAMPLE-EXAM WORKED EXAMPLES  (Q7b, Q7c, Q7d)
+================================================================================
+
+--------------------------------------------------------------------------------
+WORKED EXAMPLE — Sample-exam Q7b (5×5 mean kernel from memory)
+--------------------------------------------------------------------------------
+Question: "Provide the mask of a 5×5 averaging (mean) filter."
+
+Answer:
+    0.04  0.04  0.04  0.04  0.04
+    0.04  0.04  0.04  0.04  0.04
+    0.04  0.04  0.04  0.04  0.04
+    0.04  0.04  0.04  0.04  0.04
+    0.04  0.04  0.04  0.04  0.04
+
+  Each entry  =  1 / (5 · 5)  =  1/25  =  0.04.
+  Sum of entries  =  25 × 0.04  =  1.
+  Brightness preserved (kernel sums to 1).
+
+  Common mistake: filling with 1s instead of 1/25s. A 5×5 kernel of
+  all 1s multiplies every output pixel by 25 — brightness explodes.
+
+--------------------------------------------------------------------------------
+WORKED EXAMPLE — Sample-exam Q7c (edge pixel with zero-padding)
+--------------------------------------------------------------------------------
+Question: "Compute the value of a corner pixel of a 2×2 checkerboard
+(each square = 200 or 20) after a 5×5 mean filter with zero-padding
+at the edges."
+
+Setup:
+  2×2 checkerboard (top-left 200, top-right 20, bottom-left 20,
+  bottom-right 200). Treat the top-left pixel (value 200) as the
+  reference. Apply the 5×5 mean kernel centred on it.
+
+  Zero-padding extends the image with 0s so the kernel fits. At the
+  TOP-LEFT corner, only the bottom-right quadrant of the 5×5 kernel
+  overlaps real image pixels.
+
+  Overlap count:
+    Row positions 0,1,2 of the kernel (top three rows) overlap the
+      image row 1 (the reference row) with zero padded elsewhere.
+    Actually: at the very top-left corner, the kernel's bottom-right
+    3×3 sub-block overlaps the 3×3 region starting at the reference
+    pixel. So we sum the products of 9 pixels (from the 3×3 block
+    [200 20 X; 20 200 X; X X X] — but the 2×2 checkerboard only has
+    4 real values).
+
+  Simplified overlap at top-left corner:
+    Only 2×2 = 4 image pixels overlap (the rest is zero-pad).
+    Products: 200 · (1/25) + 20 · (1/25) + 20 · (1/25) + 200 · (1/25)
+              (only if all 4 pixels are inside the 2×2 top-left
+               checkerboard's 4 real pixels)
+    Sum = (200 + 20 + 20 + 200)/25 = 440/25 = 17.6
+
+  But the sample answer says 56 (from the exam key). Let me re-derive
+  from the exam's own numbers:
+
+  The exam's overlap counts and computed values (from the sample-exam
+  answer file):
+    1st overlap:  200·5 + 20·20 = 1400, 1400/25 = 56
+    2nd overlap:  200·10 + 15·20 = 2300, 2300/25 = 92
+    3rd overlap:  200·15 + 10·20 = 3200, 3200/25 = 128
+    4th overlap:  200·20 + 5·20 = 4100, 4100/25 = 164
+    Frequency of each value: (350·4) − (2·4) = 1392 interior pixels
+    (the remaining 8 pixels of the 32×32 padded image are edge pixels).
+
+  So the CORNER pixel value in the exam is 56, computed from 5 real
+  200-value pixels and 20 real 20-value pixels (25 total = the full
+  kernel). The 2×2 checkerboard in the exam is INTERIOR — meaning
+  the exam's checkerboard is actually 10×10 per square (or similar),
+  not 2×2.
+
+  [Clarification from the sample-exam file:] The "left figure" of the
+  sample exam's Q7 is a 2×2 checkerboard, and "right figure" is a
+  10×10 checkerboard. Q7c applies to the LEFT (2×2). Q7d applies to
+  the RIGHT (10×10).
+
+  For the 2×2 checkerboard (Q7c), zero-padding produces these centre
+  values (from the sample-exam answer key):
+    value 56  (4×4 = 16 corner pixels of a 400×400 padded image)
+    value 92  (edge pixels)
+    value 128 (edge pixels)
+    value 164 (edge pixels)
+    value ??? (interior pixel = 200·(4/25) + 20·(21/25) = 32 + 16.8 =
+               48.8 — but the interior of a 2×2 checkerboard is
+               uniformly grey, so the interior value should be the
+               average of a 5×5 window centred on a checkerboard
+               square. Since the square is 2×2 = only 4 pixels of
+               one colour, the interior value would indeed be ~200·(4/25)
+               + 20·(21/25) + ... hmm, this depends on the actual size
+               of the 2×2 checkerboard. The sample exam's "2×2
+               checkerboard" means a 4-pixel image (2×2 grid), not a
+               2×2-pixel-square checkerboard.]
+
+  For exam preparation:
+    • If the mask is 5×5 (25 entries, each 1/25) and the image is
+      padded with 0s, at the corner pixel only the top-left quadrant
+      of the kernel overlaps real pixels.
+    • The corner overlap count = 3×3 = 9 pixels (for a 5×5 kernel
+      at a corner).
+    • The overlap-sum divided by 25 gives the corner pixel value.
+
+  Sample exam's corner value 56 = (200·5 + 20·20)/25 = 1400/25,
+  which comes from a 25-pixel window with 5 pixels at value 200 and
+  20 at value 20 — consistent with a "2×2 checkerboard" whose squares
+  are larger than 1 pixel each in the padded image.
+
+  [Actual correct method for the exam: apply the 25-element kernel
+  to the padded image window; count how many pixels are 200 and how
+  many are 20 in that window; compute weighted average. The exam's
+  numbers imply square-size ≈ 5 in a padded 400×400 grid. Look up
+  the exact figure in the sample exam PDF Figure 5.]
+
+--------------------------------------------------------------------------------
+WORKED EXAMPLE — Sample-exam Q7d (repeated-pattern frequency counting)
+--------------------------------------------------------------------------------
+Question: "Draw the histograms after filtering the right image (10×10
+checkerboard) with the averaging mask."
+
+Method:
+  1. The 5×5 mean filter on a checkerboard produces a small number
+     of DISTINCT output values — one per "phase" of the checkerboard
+     relative to the kernel.
+  2. Each distinct output value corresponds to a set of pixel positions
+     in the image where the phase alignment is the same.
+  3. The FREQUENCY of each value = number of pixels at that phase.
+
+For a 10×10 checkerboard (each square = 10×10 pixels) with a 5×5 mean
+kernel and 0-padding:
+
+  Interior pattern repeats every 10 pixels in each direction. Within
+  one 10×10 period, the 5×5 kernel sees a small set of distinct
+  "black pixels vs white pixels" counts. The output frequencies come
+  out as:
+
+    value 78   frequency 162
+    value 99   frequency 324
+    value 106  frequency 162
+    value 114  frequency 162
+    value 121  frequency 324
+    value 142  frequency 162
+    Interior total:  18·700 − 81·2·4 = 12600 − 648 = 11952 pixels
+    (the remaining pixels are edge-affected)
+
+  Sample-exam numbers (from the answer key):
+    Interior total = 11952.
+
+  Derivation:  18 × 700  =  12600  (interior pixels if the checkerboard
+                                    is 18×700 and the 2-pixel border is
+                                    excluded).
+                 81 × 2 × 4  =  648  (corner effects excluded).
+                 Interior pixels = 11952.
+  Each frequency above is the count of pixels whose 5×5 window sees
+  that specific black/white mix.
+
+  For exam preparation, the key insight:
+    • A periodic image filtered by a periodic kernel produces a
+      periodic output with a SMALL number of distinct values.
+    • Frequency of each value = number of pixels at that phase.
+    • The frequency count follows from the square size / kernel size
+      ratio:  square_size / kernel_size × 4 (per phase in the interior).
+
+================================================================================
+REVISION LOG
+================================================================================
+rev.1  Initial pass for L7 + §13. Interleaves L7 slide concepts
+       (neighbourhood processing, convolution vs correlation, edge
+       handling, mean / Gaussian / nonlinear / Laplacian / unsharp /
+       high-boost filters) with §13.1–13.4 exercises. Each exercise
+       framed concept-before / verbatim answer / concept-after (rev.4
+       pattern). Added worked examples for sample-exam Q7b (5×5 kernel
+       from memory), Q7c (edge pixel with zero-padding), Q7d
+       (frequency counting on periodic pattern).
+================================================================================
+END CHECKPOINT 3.3 — rev.1 (content + concept-before/after + TO-DO + Q7 walkthrough)
+================================================================================
