@@ -1,0 +1,108 @@
+================================================================================
+0.1 TOOLCHAIN — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: confirm toolchain + OpenCV (with contrib) discovery before any
+         project scaffolding. 0.1 is a VERIFICATION gate, not a build step.
+
+--------------------------------------------------------------------------------
+A. WHAT 0.1 MUST PROVE
+--------------------------------------------------------------------------------
+  1. MinGW g++ executable works.
+  2. CMake executable works.
+  3. OpenCV install on disk includes core + contrib libraries.
+  4. VS Code has CMake Tools + C/C++ extensions.
+  5. CMake successfully DISCOVERS OpenCV from a real project
+     (i.e. "Found OpenCV ... Configuring done / Generating done").
+
+  Items 1-4 are pre-flight. Item 5 is the actual gate.
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  g++        : C:/msys64/ucrt64/bin/g++.exe  -> 16.2.0 (MSYS2 Rev3)
+  CMake      : cmake version 4.4.3
+  OpenCV     : C:/dev/opencv-build/opencv-install
+               version 4.12.0
+               lib path: x64/mingw/lib
+               core lib : libopencv_core*.dll.a          -> present
+               contrib  : libopencv_xfeatures2d*.dll.a   -> present
+  VS Code    : ms-vscode.cmake-tools
+               ms-vscode.cpptools
+               ms-vscode.cpptools-extension-pack
+               ms-vscode.cpptools-themes
+
+  Generator used by VS Code CMake Tools in this environment: NINJA
+  (NOT "MinGW Makefiles"). CMakeLists must therefore remain
+  generator-agnostic and rely only on find_package(OpenCV REQUIRED).
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  C1. g++ --version
+      -> g++.exe (Rev3, Built by MSYS2 project) 16.2.0
+
+  C2. cmake --version
+      -> cmake version 4.4.3
+
+  C3. Test-Path core + contrib libs
+      -> True (both)
+
+  C4. code --list-extensions | Select-String "cmake|ms-vscode.cpptools"
+      -> cmake-tools, cpptools, cpptools-extension-pack, cpptools-themes
+
+  C5. OpenCV version probe
+      Select-String version.hpp -Pattern CV_VERSION_*
+      -> CV_VERSION_MAJOR 4 / MINOR 12 / REVISION 0
+
+  C6. Real-project build via VS Code CMake Tools (Ex2_1)
+      [build] ninja: no work to do.
+      [build] Build finished with exit code 0
+      Shell: .\Ex2_1.exe executed
+      -> Proves CMake discovered OpenCV 4.12.0 in this workspace.
+
+--------------------------------------------------------------------------------
+D. FAILED ATTEMPTS / PITFALLS RECORDED
+--------------------------------------------------------------------------------
+  D1. Running "cmake -G \"MinGW Makefiles\"" from raw PowerShell failed with:
+        "CMAKE_MAKE_PROGRAM is not set"
+      Cause  : mingw32-make not on PATH in bare PowerShell shell.
+      Lesson : do NOT try to replicate VS Code's build from raw PowerShell
+               for this project. Use VS Code CMake Tools for configure/build.
+               If a CLI build is ever needed, use Ninja (matching VS Code),
+               not "MinGW Makefiles".
+
+  D2. Attempt to "cd $repo/IPO/BilliardClassifier" failed because:
+      - $repo was not set in the shell session, AND
+      - IPO/BilliardClassifier/ does not exist yet (created in 0.2).
+      Lesson : 0.1 does not create the project folder. 0.2 does.
+
+  D3. Deleting build/CMakeCache.txt manually removes evidence of OpenCV
+      discovery; always reconfigure + capture the CMake output panel
+      before declaring 0.1 complete.
+
+--------------------------------------------------------------------------------
+E. DECISIONS LOCKED BY 0.1
+--------------------------------------------------------------------------------
+  E1. Toolchain is fixed:
+        compiler : C:/msys64/ucrt64/bin/g++.exe (16.2.0)
+        cmake    : system cmake 4.4.3
+        opencv   : 4.12.0 (with contrib), from C:/dev/opencv-build/
+  E2. Build orchestration happens through VS Code CMake Tools only.
+  E3. Generator = Ninja (observed). Any CLI script must use Ninja.
+  E4. CMakeLists will use:
+        set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
+        find_package(OpenCV REQUIRED)
+      No generator-specific flags in the file.
+
+--------------------------------------------------------------------------------
+F. STATUS
+--------------------------------------------------------------------------------
+  [x] 0.1 TOOLCHAIN — VERIFIED
+      g++      : pass
+      cmake    : pass
+      opencv   : pass (4.12.0 + contrib)
+      vs code  : pass
+      discovery: pass (Ex2_1 built + ran, exit 0)
+
+  Next : 0.2 GIT + LAYOUT (do NOT start until user approves).
+================================================================================

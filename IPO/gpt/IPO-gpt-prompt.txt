@@ -1,0 +1,16 @@
+We need two roadmap notes: 
+1. IPO-gpt-roadmap-designTracker
+2. IPO-gpt-roadmap-devTracker
+
+An example of such method of approach is the IAI's notes (attached).  You need to understand that the designTracker is followed by devTracker. designTracker is where we decide, design & discuss expectations. devTracker is where we implement, develop scripts & produce outputs.
+
+As previously mentioned, IAI's assignment is different from IPO's assignment. But the approach is the same. 
+
+Express your understanding first. I need to validate it before proceeding
+
+
+
+
+
+
+I go through the roadmap-designTracker first. but it needs revision. Phase 0. it should involve verify environment, git repo, data locations, setting up directories relevant only to final assignment.

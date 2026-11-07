@@ -1,0 +1,153 @@
+================================================================================
+IPO (EVD1) FINAL ASSIGNMENT — DESIGN TRACKER (v2, concise)
+================================================================================
+Purpose: decide WHAT/WHY/PARAMS. devTracker implements.
+Pipeline: VideoCapture -> Blur -> HSV -> ClothMask(inRange) -> Invert ->
+          Morph -> Contours -> Filters -> BBox -> WhiteRatio + EdgeDensity ->
+          Rules -> Overlay.
+Classes: CUE, SOLID, STRIPE (+ UNCERTAIN). 8-ball = SOLID. No OCR.
+Repo: <workspace>/IPO/BilliardClassifier
+
+================================================================================
+PHASE 0 — SETUP, SCOPE, ENVIRONMENT
+================================================================================
+[ ] 0.1 TOOLCHAIN
+    OpenCV + opencv_contrib SAME version, MinGW-w64 build at
+    C:/dev/opencv-build/opencv-install/x64/mingw/lib
+    CMake>=3.10, g++ C:/msys64/ucrt64/bin/g++.exe, VS Code + CMake+C/C++ ext.
+    Verify: CMake Configure -> "Found OpenCV ... Generating done".
+
+[ ] 0.2 GIT + LAYOUT
+    repo: CMakeLists.txt, src/main.cpp, src/config.h, assets/, outputs/,
+    docs/, .gitignore(build/,*.exe,outputs/*.mp4), README.md.
+    Verify: git status clean after init.
+
+[ ] 0.3 DATA LOCATIONS
+    assets/clips/game1..5.mp4 (existing 5x1080p)
+    assets/reference_frame.png (for HSV sampling)
+    outputs/screenshots/ , outputs/logs/run_YYYYMMDD.txt ,
+    outputs/recording/ (optional VideoWriter)
+    Verify: folders exist, ref frame is real cloth frame.
+
+[ ] 0.4 SCOPE LOCK
+    3 classes fixed. 8-ball->SOLID. OCR OUT (IAI owns). Camera OUT (files OK
+    per rubric). VideoWriter OPTIONAL.
+    Verify: no code path references 4th class or OCR.
+
+[ ] 0.5 CONSTANTS (Python config -> src/config.h, constexpr only)
+    CLOTH_H_LO/HI, CLOTH_S_LO/HI, CLOTH_V_LO/HI
+    WHITE_S_MAX, WHITE_V_MIN
+    MIN_BALL_AREA, MAX_BALL_AREA, MIN_CIRCULARITY
+    MORPH_KERNEL_SIZE, MORPH_ITER
+    BLUR_KSIZE, BLUR_SIGMA
+    RATIO_CUE, RATIO_STRIPE_LO/HI, UNCERTAIN_WHITE_LO/HI
+    EDGE_SOLID_MIN, EDGE_CUE_MAX
+    Canny_LO/HI, PROCESS_WIDTH
+    Verify: no magic numbers in main.cpp.
+
+[ ] 0.6 COMPLEXITY CLAIM (for defense)
+    Three handled failures: F1 glare, F2 overlap, F3 lighting.
+    Each -> mitigation in Phases 2-4 + evidence in docs/robustness.md.
+
+================================================================================
+PHASE 1 — ACQUISITION
+================================================================================
+[ ] 1.1 cv::VideoCapture on assets/clips/gameN.mp4 (files, not webcam).
+        Verify: cap.isOpened()==true for all 5.
+[ ] 1.2 Demo clip = game1.mp4 (has glare + overlap + all 3 classes).
+[ ] 1.3 PROCESS_WIDTH=960 (1280 if FPS>15). No stride. cvtColor HSV after resize.
+        Verify: FPS>15 on demo laptop.
+
+================================================================================
+PHASE 2 — ENHANCEMENT
+================================================================================
+[ ] 2.1 GaussianBlur(BGR, ksize=5, sigma=0). No hist-eq. No bg-subtract.
+        Verify: visible denoise, glare shrinks, edges intact.
+[ ] 2.2 Glare F1: white_ratio on masked ROI; UNCERTAIN if ratio>0.95 or <0.05.
+        Verify: glinted ball -> "?" not wrong class.
+[ ] 2.3 Order: BGR->Blur->HSV. Never blur HSV channels.
+        Verify: no hue wrap artefacts.
+
+================================================================================
+PHASE 3 — SEGMENTATION
+================================================================================
+[ ] 3.1 cloth_mask = inRange(hsv, CLOTH_LO, CLOTH_HI)
+        ball_mask  = bitwise_not(cloth_mask)
+        Widen +/-5 H, +/-10 S,V for F3.
+        Verify: cloth black, balls/rails/pockets white.
+[ ] 3.2 OPEN(k=3,iter=1) then CLOSE(k=3,iter=1). Do not use k=5.
+        Verify: one solid contour per non-overlapping ball.
+[ ] 3.3 findContours(RETR_EXTERNAL, CHAIN_APPROX_SIMPLE).
+        Verify: one contour per visible ball (overlaps merge -> filtered 3.4).
+[ ] 3.4 Accept if: area in [1500,60000] AND circularity>=0.75 AND
+        aspect in [0.7,1.4]. Else reject.
+        Verify: rails/pockets dropped; merged blobs dropped (F2).
+[ ] 3.5 BallCandidate{Rect bbox; Point2f center; int area}.
+        Verify: one per accepted ball.
+
+================================================================================
+PHASE 4 — FEATURE EXTRACTION (>=2 required)
+================================================================================
+[ ] 4.1 F1 WHITE RATIO on bbox inset 2px:
+        white_mask = inRange(roi_hsv,[0,0,200],[179,40,255])
+        white_ratio = white/roi.area
+        Expected: CUE~1.0, STRIPE 0.2-0.5, SOLID~0, 8-ball 0.0.
+[ ] 4.2 F2 EDGE DENSITY:
+        Canny(gray,50,150); edge_density = countNonZero/roi.area
+        Expected: CUE<0.04, STRIPE 0.04-0.10, SOLID>0.10.
+[ ] 4.3 F3 SURFACE COLOUR -> NOT implemented (documented future work).
+[ ] 4.4 BallCandidate += {float white_ratio; float edge_density;}.
+        Feature calc pure, no mutation.
+
+================================================================================
+PHASE 5 — CLASSIFICATION
+================================================================================
+[ ] 5.1 Rule-based if/else (not SimpleBlobDetector; not template-matching).
+[ ] 5.2 Rules (evaluate in order):
+        if  wr > 0.80                        -> CUE
+        elif wr > 0.60                       -> UNCERTAIN
+        elif wr >= 0.15                      -> STRIPE
+        elif wr >= 0.05 && ed > 0.10         -> SOLID
+        elif wr < 0.05  && ed < 0.04         -> UNCERTAIN
+        else                                 -> SOLID
+[ ] 5.3 UNCERTAIN = first-class: yellow "?", separate counter, not in class totals.
+[ ] 5.4 Temporal voting -> NOT implemented (mention in defense only).
+
+================================================================================
+PHASE 6 — OUTPUT
+================================================================================
+[ ] 6.1 Overlay: rectangle+putText per ball.
+        CUE=white, SOLID=red, STRIPE=cyan, UNCERTAIN=yellow.
+[ ] 6.2 Console per frame: frame_id, n_balls, counts{C,S,St,?}, fps.
+        Tee to outputs/logs/run_YYYYMMDD.txt.
+[ ] 6.3 VideoWriter mp4v -> outputs/recording/run_YYYYMMDD.mp4, WRITE_VIDEO=true.
+[ ] 6.4 waitKey(10); exit ESC or 'q'; flush writer on exit.
+
+================================================================================
+PHASE 7 — ROBUSTNESS (evidence for complexity rubric)
+================================================================================
+[ ] 7.1 F1 GLARE: blur + tight white mask + UNCERTAIN band + GUI '?'.
+[ ] 7.2 F2 OVERLAP: aspect-ratio filter drops merged blob (log rejected bbox).
+[ ] 7.3 F3 LIGHTING: widened HSV + masked-ROI ratio (area-invariant).
+[ ] 7.4 Accepted limits (docs/robustness.md): motion blur, off-frame,
+        occlusion by hand/cue, pockets. Named, not solved.
+
+================================================================================
+PHASE 8 — DEFENSE PREP
+================================================================================
+[ ] 8.1 docs/design_rationale.md — one paragraph per stage:
+        what / why this method / controlling params.
+[ ] 8.2 docs/parameters.md — table: name|value|why|effect-if-wrong.
+[ ] 8.3 INTERNAL criterion-evidence check (not a deliverable):
+        Acquisition -> 1.1,1.3 | Enhancement -> 2.1,2.3
+        Segmentation -> 3.1-3.5 | Features -> 4.1,4.2
+        Classification -> 5.1-5.3 | Complexity -> 7.1-7.3
+        Explanation -> 8.1,8.2
+        Any row empty at defense time = DO NOT SUBMIT.
+[ ] 8.4 docs/demo_script.md — 5 beats:
+        (1) success on game1 (2) glare->? (3) overlap dropped
+        (4) console log (5) accepted limits list.
+
+================================================================================
+END
+================================================================================

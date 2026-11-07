@@ -1,5 +1,5 @@
 [1.1]
-brief. step-by-step walkthrough. wait for me to upload results. validate results.
+brief. provide a step-by-step walkthrough to get it done. wait for me to upload results then validate results
 
 if valid, do a really detailed .txt writeup, including all that's being discussed, explained, creation of new files,, change of things, and all that's relevant.
 

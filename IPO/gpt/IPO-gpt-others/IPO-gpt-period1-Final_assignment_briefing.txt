@@ -1,0 +1,78 @@
+================================================================================
+EVD1 (IPO) FINAL ASSIGNMENT — DISCUSSION & STRATEGY SUMMARY
+================================================================================
+
+1. PROJECT CONTEXT & MODULE SEPARATION
+--------------------------------------------------------------------------------
+- Overarching Project: "Billiard Vision system" (Solo project for commercial use).
+- The Minor project has multiple capabilities. Two distinct functionalities 
+  were extracted for two different modules:
+  - IAI Module: OCR of billiard balls (Python / Machine Learning).
+  - EVD1 (IPO) Module: Distinguishing ball types (Solid, Stripe, Cue). 
+- Note: OCR is strictly an IAI assignment objective. It was never part of 
+  the EVD1/IPO scope. The EVD1 assignment is purely classical Computer Vision 
+  applied to ball-type classification.
+
+2. EVD1 ASSESSMENT CRITERIA & RUBRIC
+--------------------------------------------------------------------------------
+- The final assignment is standalone. Exercises are practice, not mandatory submissions.
+- The module demands a 5-step OpenCV vision pipeline:
+  1. Acquisition (VideoCapture or imread)
+  2. Enhancement (Background subtraction, warp, blur, etc.)
+  3. Segmentation (Thresholding, inRange, findContours)
+  4. Feature Extraction (At least 2 techniques: Canny, Sobel, Color processing, Morphology)
+  5. Classification (Blob analysis, Template matching, no Deep Learning required here)
+- Grading: 36 points total. 
+- "Knockout" Rule: The student must convincingly explain the design and code 
+  choices. Failing this fails the assignment regardless of code functionality.
+
+3. EVD1 SCOPE & COMPLEXITY
+--------------------------------------------------------------------------------
+- EVD1 Application: Build a real-time C++ pipeline that classifies billiard 
+  balls into Solid, Stripe, or Cue using classical OpenCV methods.
+- Complexity: Handling glare, overlapping balls, and dynamic lighting in the 
+  billiard clips satisfies the "complexity" and "robustness" rubric criteria.
+
+4. PIPELINE MAPPING (PYTHON TO C++)
+--------------------------------------------------------------------------------
+- Acquisition: cv::VideoCapture (reads the existing .mp4 clips).
+- Enhancement: cv::GaussianBlur (smooths noise and glare).
+- Segmentation: 
+  - cv::inRange (using existing HSV cloth bounds).
+  - cv::bitwise_not (inverts the mask to isolate balls).
+  - cv::morphologyEx (cleans up artifacts).
+  - cv::findContours (draws bounding boxes/Rect around each ball).
+- Feature Extraction: 
+  - cv::cvtColor (HSV filtering inside the bounding box).
+  - C++ logic to calculate the ratio of white pixels vs. colored pixels.
+- Classification: 
+  - cv::SimpleBlobDetector (or C++ if/else logic).
+  - Rule of thumb: Cue > 80% white; Stripe = 20-50% white; Solid < 10% white.
+- Output: cv::rectangle (boxes) + cv::putText (labels).
+
+5. ASSET INVENTORY (WHAT STAYS VS. WHAT IS BUILT)
+--------------------------------------------------------------------------------
+[WHAT STAYS AS-IS - Existing Data & Assets]
+- Raw Data: 5x 1080p .mp4 clips.
+- Processed Data: Extracted frames, sorted crops (1-15), extracted masks.
+- Tabular/Log Data: .csv files, .txt logs.
+- Figures: EDA plots, histograms.
+- Parameters/Logic: constants.py (HSV bounds) and config.py (thresholds) serve 
+  as reference logic.
+
+[WHAT WE BUILD - New Code & Configs]
+- CMakeLists.txt (EVD1 build system).
+- main.cpp (The complete C++ vision pipeline).
+- C++ Config (Structs/constants translated from the Python config).
+
+[WHAT THE NEW CODE PRODUCES - New Data]
+- GUI Windows: Live bounding boxes and "Solid/Stripe/Cue" labels.
+- Console Logs: Terminal output printing ball counts/types.
+- (Optional): Saved Video using cv::VideoWriter with burned-in labels.
+
+6. EXECUTION PLAN & DEFENSE
+--------------------------------------------------------------------------------
+- The defense for EVD1 focuses solely on the C++ 5-step pipeline and classical 
+  Computer Vision logic for ball-type distinction. 
+- Next step: Extract the HSV bounds from constants.py and begin writing the 
+  C++ main.cpp to fulfill the 5 rubric criteria.
