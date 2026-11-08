@@ -1,0 +1,494 @@
+================================================================================
+IPO (EVD1) FINAL ASSIGNMENT — DEV TRACKER (v1, concise)
+================================================================================
+Purpose: BUILD & VERIFY in order. No code in this file — only what to write,
+         run, and check. Each step cites its DesignTracker (DT) subsec.
+
+PARALLEL-TICK CONTRACT
+  - When a step passes its Verify line:
+        tick [x] here (DevTracker)
+        tick [x] in DT for the cited subsec(s)
+  - If step has no DT counterpart: mark (self-standing); tick here only.
+  - If two DT subsecs share a step: tick both.
+  - A DT subsec may only be ticked via a step here (not on its own).
+
+REPO / BUILD
+  repo        : <workspace>/IPO/Ball-Type-Identifier
+  data root   : D:/HAN/Semester 7 Minor/billiards-game-clips
+  OpenCV_DIR  : C:/dev/opencv-build/opencv-install/x64/mingw/lib
+  build dir   : repo/build/
+  exe         : repo/build/Ball-Type-Identifier.exe
+  asset path  : ../<relative> from build/  (i.e. ../.. to repo root)
+
+CONVENTIONS (inherited)
+  exit key      : ESC (27) or 'q'
+  waitKey       : 10 ms
+  window flag   : WINDOW_AUTOSIZE
+  BGR order     : channels[0]=B, [1]=G, [2]=R
+  HSV ranges    : H 0..179, S 0..255, V 0..255
+  no magic nums : only names from src/config.h
+
+
+================================================================================
+SECTION 0 — PREFLIGHT (verify Phase 0 artifacts)
+================================================================================
+
+[ ] 0.1  REPO TREE + LAYOUT
+    Type: verification | Design: DT 0.2
+    Action: ls repo root. Confirm: src/{config.h,main.cpp,scope_check.ps1,
+            cloth_sampler.py}, docs/{scope_lock.md}, CMakeLists.txt,
+            README.md, .gitignore, assets/, outputs/.
+    Verify: all present. git status clean.
+    Debug:  missing -> recreate from DT 0.2 log before continuing.
+
+[ ] 0.2  CONFIG.H CONSTANTS
+    Type: verification | Design: DT 0.5
+    Action: open src/config.h. Confirm: #pragma once first non-comment token;
+            CLOTH_*_LO/HI = 85/96 243/255 111/166; all blocks present per
+            DT 0.5 C5.
+    Verify: matches DT 0.5 C5 layout. No stray numeric literals outside
+            constexpr declarations.
+    Debug:  diff vs DT 0.5 C5. Any mismatch -> fix config.h, re-run 0.3.
+
+[ ] 0.3  SCOPE CHECK
+    Type: run | Design: DT 0.4
+    Action: powershell -File src/scope_check.ps1
+    Verify: prints "SCOPE OK".
+    Debug:  HIT lines -> fix source per DT 0.4 D1/D2. Do not edit script.
+
+[ ] 0.4  CLIPS READABLE
+    Type: verification | Design: DT 1.1 (prep)
+    Action: confirm 5 clips exist under data-root/game1/ with sizes from
+            DT 0.3 B.
+    Verify: 5/5 present.
+    Debug:  missing -> re-acquire; do not proceed.
+
+
+================================================================================
+SECTION 1 — BUILD + ACQUISITION + ENHANCEMENT
+================================================================================
+
+[ ] 1.1  CMAKELISTS.TXT
+    Type: code (self-standing infra)
+    Design: none — uses per-exercise template
+    Action: write CMakeLists.txt at repo root:
+              cmake_minimum_required(VERSION 3.10)
+              project(Ball-Type-Identifier)
+              set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
+              find_package(OpenCV REQUIRED)
+              include_directories(${OpenCV_INCLUDE_DIRS})
+              add_executable(Ball-Type-Identifier src/main.cpp)
+              target_link_libraries(Ball-Type-Identifier ${OpenCV_LIBS})
+            .vscode/settings.json: cmake.sourceDirectory =
+              "${workspaceFolder}"
+    Verify: CMake: Delete Cache & Reconfigure -> "Found OpenCV 4.12.0 ...
+            Generating done". No generator-specific flags.
+    Debug:  "OpenCV not found" -> OpenCV_DIR wrong. Confirm path exists.
+
+[ ] 1.2  MAIN SKELETON + VIDEOCAPTURE + EXIT
+    Type: code | Design: DT 1.1, DT 6.4 (partial)
+    Action: src/main.cpp:
+              includes (opencv2/opencv.hpp, "config.h")
+              using namespace cv;
+              main(): VideoCapture cap on clip1 under DATA_ROOT/game1/
+                      if (!cap.isOpened()) return -1;
+                      while (true) { cap >> frame; if (frame.empty()) break;
+                                     imshow("out", frame);
+                                     int k = waitKey(10);
+                                     if (k == 27 || k == 'q') break; }
+                      cap.release(); destroyAllWindows();
+    Verify: F7 builds clean. exe opens clip1, ESC and 'q' both exit cleanly.
+    Debug:  no window -> imshow missing or waitKey(0). Wrong clip -> path
+            concatenation off (DATA_ROOT + "/game1/" + name).
+
+[ ] 1.3  RESIZE + FPS
+    Type: code | Design: DT 1.3
+    Action: after cap >> frame, resize to PROCESS_WIDTH preserving aspect:
+              resize(frame, frame, Size(PROCESS_WIDTH,
+                     frame.rows * PROCESS_WIDTH / frame.cols));
+            Measure and print FPS (frames elapsed / tick per 1 s).
+    Verify: FPS > 15 on demo laptop. Console prints FPS periodically.
+    Debug:  FPS < 15 -> lower PROCESS_WIDTH to 800 and re-verify.
+            Aspect distorted -> use INTER_AREA for downscale.
+
+[ ] 1.4  BLUR -> HSV ORDER
+    Type: code | Design: DT 2.1, DT 2.3
+    Action: after resize:
+              Mat blurred; GaussianBlur(frame, blurred,
+                     Size(BLUR_KSIZE, BLUR_KSIZE), BLUR_SIGMA);
+              Mat hsv; cvtColor(blurred, hsv, COLOR_BGR2HSV);
+            Display blurred BGR and (for debug) H, S, V as gray windows.
+    Verify: denoise visible; H/S/V channels look sane (no wrap noise at
+            cloth). Order BGR->Blur->HSV confirmed by reading code once.
+    Debug:  colour noise in H channel -> blurred input was HSV, not BGR.
+            Fix order. Do not blur HSV.
+
+
+================================================================================
+SECTION 2 — SEGMENTATION
+================================================================================
+
+[ ] 2.1  CLOTH MASK + INVERT
+    Type: code | Design: DT 3.1
+    Action:
+              Mat cloth; inRange(hsv,
+                Scalar(CLOTH_H_LO, CLOTH_S_LO, CLOTH_V_LO),
+                Scalar(CLOTH_H_HI, CLOTH_S_HI, CLOTH_V_HI), cloth);
+              Mat ball; bitwise_not(cloth, ball);
+            imshow "cloth" and "ball".
+    Verify: cloth mask shows green cloth as white; ball mask shows
+            balls/rails/pockets as white, cloth as black.
+    Debug:  cloth under-masked (V too low) -> raise CLOTH_V_HI to 180
+            (evidence: DT 0.5 D1). Re-verify.
+            cloth leaks into ball (S_LO too low) -> raise CLOTH_S_LO to 250.
+            Any change -> update DT 0.5 log + 0.5_cloth_samples.txt.
+
+[ ] 2.2  MORPHOLOGY
+    Type: code | Design: DT 3.2
+    Action:
+              Mat k = getStructuringElement(MORPH_RECT,
+                       Size(MORPH_KERNEL_SIZE, MORPH_KERNEL_SIZE));
+              Mat m; morphologyEx(ball, m, MORPH_OPEN,  k);
+                     morphologyEx(m,    m, MORPH_CLOSE, k);
+            Display "morph".
+    Verify: one solid white blob per non-overlapping ball; specks gone.
+    Debug:  merged adjacent balls -> acceptable; DT 3.4 filter will drop.
+            k=5 introduced -> revert to k=3 (DT 3.2 explicit).
+
+[ ] 2.3  CONTOURS + FILTERS
+    Type: code | Design: DT 3.3, DT 3.4
+    Action:
+              vector<vector<Point>> contours;
+              findContours(m, contours, RETR_EXTERNAL,
+                           CHAIN_APPROX_SIMPLE);
+              for each contour c:
+                area = contourArea(c); if area < MIN_BALL_AREA or
+                  > MAX_BALL_AREA -> reject, log "area".
+                peri  = arcLength(c, true);
+                circ  = 4*CV_PI*area/(peri*peri);
+                if circ < MIN_CIRCULARITY -> reject, log "circ".
+                Rect bb = boundingRect(c);
+                aspect = (float)bb.width / bb.height;
+                if aspect < ASPECT_MIN or aspect > ASPECT_MAX -> reject,
+                  log "aspect:<val>".
+                else accept.
+    Verify: on clip1 frame, accepted contours land on balls only. Rails,
+            pockets, HUD dropped. Console shows rejected bbox count per
+            reason.
+    Debug:  all rejected -> area range too tight; sample area of a
+            correct contour, adjust MIN/MAX.
+            rails accepted -> aspect filter too loose; tighten to 0.75/1.35.
+            Log rejected bbox to DATA_ROOT/IPO/logs/rejects_YYYYMMDD.txt
+            (evidence for F2, feeds DT 7.2).
+
+[ ] 2.4  BALL CANDIDATE STRUCT
+    Type: code | Design: DT 3.5
+    Action: struct BallCandidate { Rect bbox; Point2f center; int area; };
+            Fill vector<BallCandidate> from accepted contours.
+    Verify: size == accepted contour count. No mutation of image in this
+            loop (pure build of candidates).
+    Debug:  count mismatch -> filtering logic differs between c-out and
+            push-back.
+
+[ ] 2.5  BBOX CHECKPOINT (visual)
+    Type: run (self-standing, but gates DT 3.5)
+    Design: none (visual checkpoint)
+    Action: draw rectangle + putText "?" on each candidate; imshow "bbox".
+    Verify: every visible ball has exactly one bbox. No duplicate boxes.
+            On overlap frames (F2) merged blobs are dropped, not drawn.
+    Debug:  duplicates -> two contours over same ball; tighten morphology
+            (increase MORPH_ITER to 2) OR raise MIN_CIRCULARITY to 0.80.
+            Do not proceed until visually clean on 30 s of clip1.
+
+
+================================================================================
+SECTION 3 — FEATURES + CLASSIFICATION
+================================================================================
+
+[ ] 3.1  WHITE RATIO
+    Type: code | Design: DT 4.1
+    Action: for each candidate:
+              Rect r = bbox inset by 2 px on all sides;
+              Mat roi_hsv = hsv(r);
+              Mat white; inRange(roi_hsv,
+                 Scalar(0, 0, WHITE_V_MIN),
+                 Scalar(179, WHITE_S_MAX, 255), white);
+              c.white_ratio = countNonZero(white) / (float)white.total();
+    Verify: print per-ball white_ratio. On clip1: cue ~0.9-1.0,
+            stripes ~0.2-0.5, solids ~0-0.1, 8-ball ~0-0.1.
+    Debug:  cue < 0.8 -> WHITE_V_MIN too high (200). Lower to 180.
+            stripes read as solid -> RATIO_STRIPE_LO will handle; do not
+            change here.
+
+[ ] 3.2  EDGE DENSITY
+    Type: code | Design: DT 4.2
+    Action: for each candidate:
+              Mat g; cvtColor(blurred(r), g, COLOR_BGR2GRAY);
+              Mat e; Canny(g, e, CANNY_LO, CANNY_HI);
+              c.edge_density = countNonZero(e) / (float)e.total();
+    Verify: print per-ball. Cue < 0.04; stripes 0.04-0.10; solids > 0.10.
+            (Stripes: edges at stripe boundaries; solids: numeral ring.)
+    Debug:  all zero -> Canny on wrong channel (HSV not gray). Fix.
+            all high -> CANNY_LO too low; raise to 70.
+
+[ ] 3.3  ATTACH TO CANDIDATE
+    Type: code | Design: DT 4.4
+    Action: extend struct with { float white_ratio; float edge_density; }.
+            Feature computation remains pure (no mutation of candidate
+            fields other than those two).
+    Verify: struct fields populated per candidate. Compiles clean.
+    Debug:  none expected.
+
+[ ] 3.4  FEATURE DUMP CHECKPOINT
+    Type: run (gates DT 4.1, 4.2, 4.4 jointly)
+    Design: DT 4.1, DT 4.2, DT 4.4
+    Action: for 100 frames of clip1, print
+              frame, n_balls, per-ball (wr, ed, class-not-yet-known).
+    Verify: values sit in expected ranges above. No NaN. No 0-width
+            bbox crash (guard: skip candidate if r.width < 4).
+    Debug:  NaN -> division by zero; guard with area > 0.
+            out-of-range -> re-check WHITE_V_MIN / CANNY_LO.
+
+[ ] 3.5  CLASSIFICATION RULES
+    Type: code | Design: DT 5.1, DT 5.2
+    Action: per candidate, if/else in order:
+              if (wr >  RATIO_CUE)                            type = CUE;
+              else if (wr >  UNCERTAIN_WHITE_HI)              type = UNCERTAIN;
+              else if (wr >= RATIO_STRIPE_LO)                 type = STRIPE;
+              else if (wr >= SOLID_WHITE_LO &&
+                       ed >  EDGE_SOLID_MIN)                  type = SOLID;
+              else if (wr <  UNCERTAIN_WHITE_LO &&
+                       ed <  EDGE_CUE_MAX)                    type = UNCERTAIN;
+              else                                            type = SOLID;
+    Verify: on clip1, majority of balls classified correctly by eye.
+            Cue -> CUE. Stripes -> STRIPE. Solids -> SOLID. Glare balls ->
+            UNCERTAIN (see 3.6).
+    Debug:  stripes misclassified as solid -> lower RATIO_STRIPE_LO to
+            0.12 in config.h; document in DT 5.2.
+            solids misclassified as uncertain -> raise SOLID_WHITE_LO to
+            0.07.
+            Every threshold change -> cite new evidence, update DT 5.2.
+
+[ ] 3.6  UNCERTAIN BAND (glare handling)
+    Type: code | Design: DT 5.3, DT 2.2
+    Action: keep UNCERTAIN as first-class:
+              separate counter int n_uncertain;
+              not folded into CUE/SOLID/STRIPE totals;
+              will render as yellow "?" in 4.1.
+            Confirm glare-affected balls (oversaturated to white) hit the
+            UNCERTAIN branch and not CUE/STRIPE.
+    Verify: over a 10 s run on clip1, at least one UNCERTAIN appears on a
+            known glint frame. CUE counter does not include it.
+    Debug:  glare balls become CUE -> raise RATIO_CUE to 0.85 (document).
+
+
+================================================================================
+SECTION 4 — OUTPUT
+================================================================================
+
+[ ] 4.1  OVERLAY
+    Type: code | Design: DT 6.1
+    Action: per accepted ball:
+              rectangle on original frame;
+              Scalar colour by class: CUE=white, SOLID=red,
+                STRIPE=cyan, UNCERTAIN=yellow;
+              putText with label + short wr/ed (optional).
+            imshow "out" = original frame + overlay.
+    Verify: window shows boxes and labels. Colours match spec. No box on
+            rejected blobs.
+    Debug:  text illegible -> FONT_HERSHEY_SIMPLEX, scale 0.5, thickness 1.
+            text clipped at edge -> clamp putText origin inside frame.
+
+[ ] 4.2  CONSOLE LOG
+    Type: code | Design: DT 6.2
+    Action: per frame print:
+              frame_idx, n_balls, C:<n> S:<n> St:<n> ?:<n>, fps
+            Tee stdout to DATA_ROOT/IPO/logs/run_YYYYMMDD.txt via
+            freopen on the log file for stdout.
+    Verify: log file created at that path. Contents consistent with the
+            on-screen counters.
+    Debug:  file not created -> IPO/logs/ must exist (DT 0.3). Create
+            folder if missing (do not change DATA_ROOT).
+            counter drift vs overlay -> classification called twice; call
+            once per candidate.
+
+[ ] 4.3  VIDEO WRITER (OPTIONAL)
+    Type: code | Design: DT 6.3
+    Action: VideoWriter mp4v on DATA_ROOT/IPO/recordings/run_YYYYMMDD.mp4.
+            Gate on a constexpr WRITE_VIDEO = true (add to config.h).
+            write() the overlay frame each iteration; flush on exit.
+    Verify: mp4 plays back with overlay. Clean shutdown flushes writer.
+    Debug:  zero-byte mp4 -> writer.open failed; check recording folder
+            exists + codec string "mp4v".
+            Can SKIP this step if time-pressed (DT 6.3 is optional); if
+            skipped, note in DT 6.3.
+
+[ ] 4.4  EXIT KEYS + CLEAN SHUTDOWN
+    Type: code | Design: DT 6.4
+    Action: ensure waitKey(10); 'q' and ESC both break; on break:
+            writer.release(); cap.release(); destroyAllWindows(); return 0.
+    Verify: ESC exits from any window; no lock file left behind; log
+            flushed on exit.
+    Debug:  process hangs -> waitKey inside nested loop with no path out;
+            break out.
+
+
+================================================================================
+SECTION 5 — ROBUSTNESS EVIDENCE
+================================================================================
+
+[ ] 5.1  F1 GLARE EVIDENCE
+    Type: run | Design: DT 7.1
+    Action: run game1, pause on a glare frame. Screenshot overlay with a
+            yellow '?' on the glinted ball.
+            Save to DATA_ROOT/IPO/screenshots/glare.png
+    Verify: screenshot exists, '?' visible, ball not mislabeled CUE/SOLID.
+    Debug:  no '?' -> UNCERTAIN band not triggering; revisit 3.6.
+
+[ ] 5.2  F2 OVERLAP EVIDENCE
+    Type: run | Design: DT 7.2
+    Action: find an overlap frame in clip1. Show rejects_*.txt contains
+            an "aspect:<val>" line for the merged blob. Screenshot with
+            merged blob unboxed, individual balls boxed.
+            Save to DATA_ROOT/IPO/screenshots/overlap.png
+    Verify: aspect reject logged for the merged blob. Screenshot matches.
+    Debug:  merged blob got a box -> aspect filter too loose (raise to
+            0.75/1.35). Document change.
+
+[ ] 5.3  F3 LIGHTING EVIDENCE
+    Type: run | Design: DT 7.3
+    Action: run clip3 and clip5 (both have different lighting). Confirm
+            similar classification behaviour vs clip1: counts within
+            ±15% per class, no mass UNCERTAIN.
+            Screenshot each to screenshots/clip3.png, screenshots/clip5.png
+    Verify: no clip-wide class shift. No balls labelled UNCERTAIN
+            systematically (would indicate HSV bound drift).
+    Debug:  clip3/clip5 mass-fail -> widen CLOTH_V_HI to 180 and
+            re-verify. Evidence update -> DT 0.5 D1.
+
+[ ] 5.4  DOCS/ROBUSTNESS.MD
+    Type: writing | Design: DT 7.4
+    Action: write docs/robustness.md:
+              F1 glare    -> screenshot + code ref (2.1, 3.6)
+              F2 overlap  -> screenshot + reject-log excerpt (2.3)
+              F3 lighting -> 3 clips + counts (5.3)
+              Accepted limits: motion blur, off-frame, hand/cue
+                occlusion, pockets — named, not solved.
+    Verify: document exists, each F has an evidence link + code ref.
+    Debug:  evidence missing -> redo 5.1-5.3. Do not invent evidence.
+
+
+================================================================================
+SECTION 6 — DEFENSE DOCS
+================================================================================
+
+[ ] 6.1  DOCS/DESIGN_RATIONALE.MD
+    Type: writing | Design: DT 8.1
+    Action: one paragraph per stage: Acquisition, Enhancement, Segmentation,
+            Features, Classification, Output. Each: what / why this method /
+            controlling config.h constants.
+    Verify: 6 paragraphs. Every constant referenced by name.
+    Debug:  prose paragraph for every stage -> knockout risk. Do not
+            leave any stage unexplained.
+
+[ ] 6.2  DOCS/PARAMETERS.MD
+    Type: writing | Design: DT 8.2
+    Action: table |name|value|why|effect-if-wrong| covering every
+            constexpr in config.h (except DATA_ROOT).
+    Verify: no constant missing. Effect-if-wrong column non-empty for all.
+    Debug:  missing constant -> re-open config.h; tick off each line.
+
+[ ] 6.3  INTERNAL CRITERION-EVIDENCE CHECK
+    Type: verification | Design: DT 8.3
+    Action: walk DT 8.3 matrix. For each criterion (Acquisition,
+            Enhancement, Segmentation, Features, Classification,
+            Complexity, Explanation): confirm at least one code file +
+            one doc file satisfies it.
+    Verify: every row populated. No row empty.
+    Debug:  row empty -> add code OR doc before proceeding. If row empty
+            at defense time = DO NOT SUBMIT.
+
+[ ] 6.4  DOCS/DEMO_SCRIPT.MD
+    Type: writing | Design: DT 8.4
+    Action: 5 beats:
+              (1) game1 success — show all 3 classes + '?'.
+              (2) glare frame — highlight '?'.
+              (3) overlap frame — merged blob dropped.
+              (4) console log — counters + FPS.
+              (5) accepted limits list — from robustness.md.
+    Verify: 5 beats listed, each beat cites a file/frame/screenshot.
+    Debug:  beat without concrete evidence -> redo corresponding evidence
+            step.
+
+
+================================================================================
+SECTION 7 — FINAL
+================================================================================
+
+[ ] 7.1  FULL RUN ACROSS ALL 5 CLIPS
+    Type: run | Design: DT 1.1, DT 6.2
+    Action: run exe against clip1..clip5 sequentially; logs written.
+            Confirm no crash, no mass-UNCERTAIN, FPS ≥ 15 average.
+    Verify: 5 log files present in IPO/logs/. No fatal error lines.
+    Debug:  crash on clipN -> check codec/dimension; some clips may be
+            different resolution; confirm cap.read returns ok.
+
+[ ] 7.2  RE-RUN SCOPE CHECK + COMMIT + PUSH
+    Type: run + submission | Design: DT 0.4 (final enforcement)
+    Action: src/scope_check.ps1 -> expect "SCOPE OK".
+            git add -A
+            git commit -m "feat(pipeline): complete 5-stage classifier +
+                             defense docs"
+            git push
+    Verify: push accepted. git log shows commit.
+    Debug:  scope HIT -> revert offending line, re-commit.
+            Push rejected -> pull --rebase then push.
+
+
+================================================================================
+DEBUG REFERENCE (ordered by likelihood)
+================================================================================
+  1. No video window / F7 builds but exe silent
+     -> waitKey(10) missing. imshow after waitKey. Cap not opened.
+
+  2. Cloth mask under-covers (cloth leaks into ball)
+     -> CLOTH_V_HI too tight. Raise to 180. Update DT 0.5 log.
+
+  3. Cloth mask over-covers (balls treated as cloth)
+     -> CLOTH_S_LO too low. Raise to 250. Update DT 0.5 log.
+
+  4. Too many bboxes per ball
+     -> MORPH_ITER=2, or MIN_CIRCULARITY 0.80.
+
+  5. No bboxes at all
+     -> area range wrong; MIN_CIRCULARITY too high; morphology destroyed
+        blobs (k=5 not k=3).
+
+  6. Cue classified STRIPE
+     -> WHITE_V_MIN too high; RATIO_CUE too low.
+
+  7. Solids classified STRIPE
+     -> WHITE_S_MAX too low (white noise picked up); RATIO_STRIPE_LO too
+        low.
+
+  8. All UNCERTAIN (glare over-triggers)
+     -> UNCERTAIN_WHITE_HI too low; raise to 0.70.
+
+  9. FPS < 15
+     -> PROCESS_WIDTH 800. Skip optional VideoWriter (4.3).
+
+ 10. Scope-check HIT
+     -> reword comment; do not edit script.
+
+
+================================================================================
+TIME-PRESSED SHORTCUTS (only if clock forces it)
+================================================================================
+  - Skip 4.3 VideoWriter (DT 6.3 is optional).
+  - Skip per-class ±15% verification in 5.3 if 5.1/5.2 evidence is solid;
+    still write robustness.md noting F3 as "visual evidence only".
+  - Never skip: 3.5, 3.6, 6.3, 7.2. Knockout risk or non-submission.
+
+================================================================================
+END
+================================================================================
