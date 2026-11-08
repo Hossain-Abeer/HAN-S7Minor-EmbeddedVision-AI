@@ -14,3 +14,9 @@ Express your understanding first. I need to validate it before proceeding
 
 
 I go through the roadmap-designTracker first. but it needs revision. Phase 0. it should involve verify environment, git repo, data locations, setting up directories relevant only to final assignment.
+
+
+
+
+
+we are really short on time, possible to complete designtracker's phase 0, one subsec at a time. and then jump straight to a fast devtracker? we tick the boxes of of designtracker as we move through devtracker. so the two roadmaps in parallel in a sense. agree possible or not? compare & reason.

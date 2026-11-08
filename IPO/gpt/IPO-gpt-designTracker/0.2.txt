@@ -1,0 +1,139 @@
+================================================================================
+0.2 GIT + LAYOUT — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: lock data-root layout, code-repo layout, .gitignore scope, and the
+         read/write contract between IPO code and the shared billiards data
+         root. 0.2 is a VERIFICATION gate, not a build step.
+
+--------------------------------------------------------------------------------
+A. WHAT 0.2 MUST PROVE
+--------------------------------------------------------------------------------
+  1. Data root exists at the canonical path.
+  2. Data root is partitioned by owner: game1 (source), IAI (IAI-only),
+     IPO (IPO-only).
+  3. Code repo exists, initialised, cloned from GitHub, and lives on local
+     disk (separate from data root).
+  4. .gitignore excludes build artefacts and outputs, but NOT source.
+  5. Tree is clean after initial commit (no untracked build/ or *.exe).
+
+  Items 1-2 are data. Items 3-5 are code. Item 5 is the actual gate.
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  Data root   : D:\HAN\Semester 7 Minor\billiards-game-clips\
+                  game1\     5x billiards-game-clipN.mp4 (1080p)
+                             + clothColor_noAspectRatio.png
+                             + clothColor_rawPixelValueSet.txt
+                  IAI\       (unsorted_png\, mask_png\, figures\, logs\,
+                              dataset*.csv, features.csv, splits.csv)
+                  IPO\       logs\, recordings\, screenshots\   (writes)
+
+  Code repo   : D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IPO\
+                  Ball-Type-Identifier\
+                    assets\          (empty, no clips in repo)
+                    docs\
+                    src\config.h
+                    src\main.cpp
+                    CMakeLists.txt
+                    README.md
+                    .gitignore       (23 bytes)
+
+  Sync model  : data lives on hardware (both workstations).
+                code lives on GitHub, cloned per workstation.
+                No data inside the repo. No code inside the data root.
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  C1. ls -recurse of data root
+      -> game1\, IAI\, IPO\ present at top level; each contains expected
+         contents. IPO\ subfolders (logs, recordings, screenshots) present.
+
+  C2. ls -recurse of code repo
+      -> assets\, docs\, src\, CMakeLists.txt, README.md, .gitignore
+         present. src\config.h and src\main.cpp present (empty stubs).
+
+  C3. .gitignore contents
+      -> build/, *.exe, outputs/  (covers artefacts; does not exclude src/)
+
+--------------------------------------------------------------------------------
+D. DECISIONS LOCKED BY 0.2
+--------------------------------------------------------------------------------
+  D1. Data root is fixed:
+        D:\HAN\Semester 7 Minor\billiards-game-clips\
+      This is the single source of truth for all video assets.
+
+  D2. Data root is partitioned by ownership:
+        game1\  - source clips + cloth reference images. Read-only.
+        IAI\    - IAI-only writes. IPO never reads or writes.
+        IPO\    - IPO-only writes (logs, recordings, screenshots).
+      Cross-owner writes are forbidden.
+
+  D3. No shared\ folder. IPO reads clips directly from game1\.
+      Reason: game1\ already exists, contains the 5 clips, and is used by
+      IAI as well. A parallel shared\clips\ would duplicate ~640 MB and
+      create a drift risk.
+
+  D4. No reference_frame.png required. Cloth HSV sampling will use:
+        game1\clothColor_noAspectRatio.png  (visual reference)
+        game1\clothColor_rawPixelValueSet.txt  (numeric HSV triple)
+      Reason: reference frame already exists and carries the finalized
+      pixel set. Re-sampling is unnecessary and would introduce noise.
+
+  D5. Code repo name: Ball-Type-Identifier (not BilliardClassifier).
+      All designTracker / devTracker references updated to this name.
+
+  D6. .gitignore scope:
+        build/
+        *.exe
+        outputs/
+      Reason: outputs/ is a decoy inside the repo; real outputs go to
+      data-root IPO\*. Build artefacts and binaries must never be pushed.
+
+  D7. Two-workstation sync contract:
+        - Code: git pull / push per workstation.
+        - Data: hardware-only; not synced via git.
+        - Paths in config.h point at the canonical data root. No absolute
+          paths inside src/ other than the single DATA_ROOT constant.
+
+  D8. IPO does NOT produce a preprocessed dataset.
+      Its pipeline is real-time; only writes recordings/, screenshots/,
+      logs/ under the data-root IPO\ tree. No per-ball crops are cached.
+
+  D9. IAI data is usable by IPO ONLY as offline calibration evidence for
+      choosing white_ratio / edge_density thresholds. It is never read at
+      runtime by the C++ pipeline. Rationale:
+        - IAI crops are numeral ROIs; IPO needs whole-ball ROIs.
+        - IAI labels are 1..15; IPO labels are CUE / SOLID / STRIPE.
+        - IAI features are numeral-shape; IPO features are white-fraction
+          and edge-density.
+      Runtime coupling would be semantically wrong and would break
+      independence if IAI's crop strategy changes.
+
+--------------------------------------------------------------------------------
+E. FAILED ATTEMPTS / PITFALLS RECORDED
+--------------------------------------------------------------------------------
+  E1. Earlier draft proposed shared\clips\ + shared\reference_frame.png.
+      Rejected: duplicates existing game1\ assets and adds a second source
+      of truth.
+
+  E2. Earlier draft proposed repo name BilliardClassifier.
+      Corrected to Ball-Type-Identifier to match the actual folder on disk.
+
+  E3. Earlier draft proposed IPO reading IAI crops/masks for preprocessing.
+      Rejected: wrong ROI granularity, wrong labels, wrong feature space.
+      Restated as offline calibration only (D9).
+
+--------------------------------------------------------------------------------
+F. STATUS
+--------------------------------------------------------------------------------
+  [x] 0.2 GIT + LAYOUT — VERIFIED
+      data root            : pass (game1 / IAI / IPO partitioned)
+      code repo            : pass (Ball-Type-Identifier initialised)
+      .gitignore           : pass (build/, *.exe, outputs/)
+      sync contract        : pass (code via git, data via hardware)
+      read/write contract  : pass (game1 read-only, IPO write-only)
+
+  Next : 0.3 DATA LOCATIONS (do NOT start until user approves).
+================================================================================

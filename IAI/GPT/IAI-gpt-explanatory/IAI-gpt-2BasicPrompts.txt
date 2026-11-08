@@ -1,5 +1,5 @@
 [1.1]
-brief. provide a step-by-step walkthrough to get it done. wait for me to upload results then validate results
+brief. provide a step-by-step walkthrough (code, CLI commands, etc whatever is suitable) to get it done. wait for me to upload results then validate results
 
 if valid, do a really detailed .txt writeup, including all that's being discussed, explained, creation of new files,, change of things, and all that's relevant.
 
@@ -17,7 +17,7 @@ provide the relevant skeletal code with [params] (this i will copy-paste), with 
 wait for me to upload results. validate results.
 
 
-
+if valid, sufficient discussion. do the txt writeup of all that's being discussed about & related to the subsection, EVERY SINGLE thing. if not valid, prompt for data
 
 
 
@@ -53,9 +53,6 @@ sufficient discussion. do the txt writeup of all that's being discussed about & 
 proceed to produce the code for copy-pasting, then proceed to explanation of the code, by using skeletal codeblocks with [params] & description
 
 
-
-i have made a decision. If mitigating the issue of orientation fails, ie. non of the method works or the code becomes too complex, we will be ignoring 6, and only recognizing 9, as it matters for 9-ball game rule, and during 8-ball game rule, 6 doesn't really count. so both 6 & 9 could be mapped to a 9. 
-do a txt writeup. will be saved as 'IAI-gpt-explains-6vs9_fails.txt'
 
 [1.5.3]
 you have written a good explanatory article without having it mentioned or included in the .txt writeup. include it & redo the .txt writeup

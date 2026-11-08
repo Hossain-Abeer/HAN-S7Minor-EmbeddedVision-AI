@@ -18,16 +18,42 @@ PHASE 0 — SETUP, SCOPE, ENVIRONMENT
     Verify: CMake Configure -> "Found OpenCV ... Generating done".
 
 [ ] 0.2 GIT + LAYOUT
-    repo: CMakeLists.txt, src/main.cpp, src/config.h, assets/, outputs/,
-    docs/, .gitignore(build/,*.exe,outputs/*.mp4), README.md.
-    Verify: git status clean after init.
+    Code repo: <workspace>/IPO/Ball-Type-Identifier/
+      src/main.cpp, src/config.h, assets/(empty), docs/, CMakeLists.txt,
+      README.md, .gitignore(build/, *.exe, outputs/), outputs/(decoy).
+    Data root: D:/HAN/Semester 7 Minor/billiards-game-clips/
+      game1/  5x billiards-game-clipN.mp4 + clothColor_noAspectRatio.png
+              + clothColor_rawPixelValueSet.txt   (read-only)
+      IAI/    IAI-only writes. IPO never reads/writes.
+      IPO/    logs/, recordings/, screenshots/    (write-only)
+    Sync: code via GitHub clone per workstation; data via hardware only.
+    Contract: no data inside repo. No code inside data root. No shared/.
+    No per-ball crop cache (real-time pipeline; D8).
+    IAI data = offline calibration only (D9); never read at runtime.
+    Verify: data root tree = {game1, IAI, IPO}. repo tree matches above.
+            git status clean after initial commit.
+            .gitignore covers build/, *.exe, outputs/.
 
 [ ] 0.3 DATA LOCATIONS
-    assets/clips/game1..5.mp4 (existing 5x1080p)
-    assets/reference_frame.png (for HSV sampling)
-    outputs/screenshots/ , outputs/logs/run_YYYYMMDD.txt ,
-    outputs/recording/ (optional VideoWriter)
-    Verify: folders exist, ref frame is real cloth frame.
+    DATA_ROOT = "D:/HAN/Semester 7 Minor/billiards-game-clips"
+      (src/config.h: one constexpr, forward slashes, no trailing slash).
+    READ (runtime):   DATA_ROOT/game1/billiards-game-clip{1..5}.mp4
+    READ (offline, 0.5 calibration only):
+                      DATA_ROOT/game1/clothColor_noAspectRatio.png
+                      DATA_ROOT/game1/clothColor_rawPixelValueSet.txt
+    WRITE:            DATA_ROOT/IPO/logs/run_YYYYMMDD.txt
+                      DATA_ROOT/IPO/screenshots/
+                      DATA_ROOT/IPO/recordings/run_YYYYMMDD.mp4 (optional)
+    Portability: single absolute path in src/ (DATA_ROOT). All other
+                 paths concatenated. No backslash literals.
+    No preprocessed dataset (reinforces 0.2 D8).
+    Caveats carried to 0.5:
+      - reference PNG contains cue ball -> exclude cue ROI when sampling.
+      - raw TXT is shadow/edge scan, not a clean triple -> pixel-pick
+        reference PNG or widen Region 3 and validate empirically.
+    Verify: 5/5 clips + 2 cloth files present with listed sizes.
+            IPO/{logs,recordings,screenshots}/ exist.
+            src/config.h contains exactly one absolute path.
 
 [ ] 0.4 SCOPE LOCK
     3 classes fixed. 8-ball->SOLID. OCR OUT (IAI owns). Camera OUT (files OK

@@ -1,0 +1,149 @@
+================================================================================
+0.3 DATA LOCATIONS — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: lock the concrete filesystem paths the C++ pipeline reads from and
+         writes to, and confirm the single DATA_ROOT constant in src/config.h.
+         0.3 is a VERIFICATION gate, not a build step.
+
+--------------------------------------------------------------------------------
+A. WHAT 0.3 MUST PROVE
+--------------------------------------------------------------------------------
+  1. All 5 source clips exist under the canonical data root.
+  2. Cloth reference assets exist (PNG + raw pixel set TXT).
+  3. IPO write folders exist under the data root (logs/, recordings/,
+     screenshots/).
+  4. src/config.h contains exactly one absolute path constant (DATA_ROOT),
+     and it points at the on-disk data root.
+  5. No other absolute paths leak into src/ (forward-slash form is fine).
+
+  Items 1-3 are data. Item 4 is the code contract. Item 5 is the hygiene gate.
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  Data root   : D:/HAN/Semester 7 Minor/billiards-game-clips
+                  game1\
+                    billiards-game-clip1.mp4     88,729,810 B
+                    billiards-game-clip2.mp4    122,374,315 B
+                    billiards-game-clip3.mp4    113,678,894 B
+                    billiards-game-clip4.mp4    107,606,368 B
+                    billiards-game-clip5.mp4    242,641,441 B
+                    clothColor_noAspectRatio.png      929,874 B
+                    clothColor_rawPixelValueSet.txt       472 B
+                  IPO\
+                    logs\
+                    recordings\
+                    screenshots\
+
+  Code repo   : D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+                  IPO/Ball-Type-Identifier/
+                    src/config.h  (DATA_ROOT only)
+
+  DATA_ROOT constant (src/config.h):
+    constexpr const char* DATA_ROOT =
+        "D:/HAN/Semester 7 Minor/billiards-game-clips";
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  C1. Get-ChildItem data-root\game1\
+      -> 5 .mp4 + clothColor_noAspectRatio.png +
+         clothColor_rawPixelValueSet.txt present. Sizes as listed in B.
+
+  C2. Get-ChildItem data-root\IPO\
+      -> logs\, recordings\, screenshots\ present (empty, created
+         2026-11-07 17:39).
+
+  C3. Get-Content clothColor_rawPixelValueSet.txt
+      -> 3 regions reported (see D-CAVEATS below). File content parsed and
+         classified as shadow/edge scan, NOT a centre-cloth triple.
+
+  C4. Inspect clothColor_noAspectRatio.png
+      -> Bare cloth visible, but cue ball (white) present in upper-right.
+         Not strictly ball-free.
+
+  C5. src/config.h
+      -> Exactly one constexpr, DATA_ROOT, absolute, forward-slash,
+         matching the on-disk data root.
+
+--------------------------------------------------------------------------------
+D. CAVEATS RECORDED (non-blocking for 0.3; resolve in 0.5)
+--------------------------------------------------------------------------------
+  D-CAVEAT-1  Reference image contains cue ball.
+      clothColor_noAspectRatio.png is not ball-free. Acceptable provided
+      0.5 cloth sampling explicitly excludes the cue-ball ROI. DesignTracker
+      0.3 wording "real cloth frame" is hereby reinterpreted as
+      "cloth frame with cue ball; cue-ball ROI excluded from sampling".
+
+  D-CAVEAT-2  Raw pixel set is a shadow/edge scan, not a clean triple.
+      clothColor_rawPixelValueSet.txt reports three scanned regions:
+        Region 1  Whole Cloth Box (70,77)-(1051,562):
+                    H 0..174  (polluted by wood/UI wraparound)
+                    S 0..255  (polluted by cue ball)
+                    V 51..255
+        Region 2  Cue Ball Box (848,149)-(881,182):
+                    H 0..174  (mixed with cloth)
+                    S 0..255  (includes white S=0)
+                    V 71..255
+        Region 3  Dark Shadow Box (79,558)-(87,575):
+                    H 89..92
+                    S 163..255
+                    V 39..77
+      Only Region 3 is clean, and it is shadow-only (low V). No mid-cloth
+      sample exists in the file. From visual inspection, mid-cloth is
+      approximately H 85..95, S 150..255, V 60..200.
+      Consequence: 0.5 cannot be seeded from this file alone. 0.5 must
+      either (a) manually pixel-pick the reference PNG (3-4 clicks), or
+      (b) take widened Region 3 as a starting range and validate
+      empirically against a real frame.
+
+  D-CAVEAT-3  Addendum to 0.2 D4.
+      0.2 D4 stated "reference frame already exists and carries the
+      finalized pixel set". Correction: it carries a scan, not a finalized
+      triple. 0.2 D4 remains valid in spirit (no re-sampling of frames),
+      but 0.5 is responsible for converting the scan into CLOTH_H_LO/HI,
+      CLOTH_S_LO/HI, CLOTH_V_LO/HI.
+
+--------------------------------------------------------------------------------
+E. DECISIONS LOCKED BY 0.3
+--------------------------------------------------------------------------------
+  E1. DATA_ROOT = "D:/HAN/Semester 7 Minor/billiards-game-clips"
+      Single absolute path in src/. Forward slashes. No trailing slash.
+
+  E2. READ contract:
+        DATA_ROOT/game1/billiards-game-clip{1..5}.mp4
+        DATA_ROOT/game1/clothColor_noAspectRatio.png        (calibration)
+        DATA_ROOT/game1/clothColor_rawPixelValueSet.txt     (calibration)
+      Runtime reads are limited to the 5 clips. The two cloth files are
+      read offline only, during 0.5 calibration. They are NOT read by the
+      runtime pipeline.
+
+  E3. WRITE contract:
+        DATA_ROOT/IPO/logs/run_YYYYMMDD.txt
+        DATA_ROOT/IPO/screenshots/
+        DATA_ROOT/IPO/recordings/run_YYYYMMDD.mp4          (optional)
+      No writes outside these three folders. No writes inside the repo.
+
+  E4. No preprocessed dataset is produced (reinforces 0.2 D8).
+      The pipeline is real-time. Only logs, screenshots, and optional
+      recordings are emitted.
+
+  E5. Path portability rule:
+      - Windows: forward slashes accepted by C++ and OpenCV.
+      - src/ contains exactly one absolute path (DATA_ROOT).
+      - Any other path in code is built by concatenation from DATA_ROOT.
+      - No "D:\\...\\" backslash literals anywhere in src/.
+
+--------------------------------------------------------------------------------
+F. STATUS
+--------------------------------------------------------------------------------
+  [x] 0.3 DATA LOCATIONS — VERIFIED (with caveats D-CAVEAT-1, D-CAVEAT-2)
+      clips present        : pass (5/5, sizes match)
+      cloth assets present : pass (PNG + TXT)
+      IPO write folders    : pass (logs / recordings / screenshots)
+      config.h DATA_ROOT   : pass (single constexpr, matches disk)
+      runtime read scope   : pass (clips only; cloth files offline)
+      caveats carried      : D-CAVEAT-1, D-CAVEAT-2, D-CAVEAT-3 -> 0.5
+
+  Next : 0.4 SCOPE LOCK (do NOT start until user approves).
+================================================================================
