@@ -1,0 +1,5 @@
+0.6 COMPLEXITY — LOCKED
+  F1 Glare    -> 2.1 blur + 4.1 tight white mask + 5.3 UNCERTAIN band
+  F2 Overlap  -> 3.4 aspect-ratio filter drops merged blob + rejected-bbox log
+  F3 Lighting -> 3.1 widened HSV + 4.1 masked-ROI ratio (area-invariant)
+  Evidence    -> docs/robustness.md (write during dev Phase 7)

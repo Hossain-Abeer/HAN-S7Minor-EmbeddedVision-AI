@@ -11,13 +11,13 @@ Repo: <workspace>/IPO/BilliardClassifier
 ================================================================================
 PHASE 0 — SETUP, SCOPE, ENVIRONMENT
 ================================================================================
-[ ] 0.1 TOOLCHAIN
+[x] 0.1 TOOLCHAIN
     OpenCV + opencv_contrib SAME version, MinGW-w64 build at
     C:/dev/opencv-build/opencv-install/x64/mingw/lib
     CMake>=3.10, g++ C:/msys64/ucrt64/bin/g++.exe, VS Code + CMake+C/C++ ext.
     Verify: CMake Configure -> "Found OpenCV ... Generating done".
 
-[ ] 0.2 GIT + LAYOUT
+[x] 0.2 GIT + LAYOUT
     Code repo: <workspace>/IPO/Ball-Type-Identifier/
       src/main.cpp, src/config.h, assets/(empty), docs/, CMakeLists.txt,
       README.md, .gitignore(build/, *.exe, outputs/), outputs/(decoy).
@@ -34,7 +34,7 @@ PHASE 0 — SETUP, SCOPE, ENVIRONMENT
             git status clean after initial commit.
             .gitignore covers build/, *.exe, outputs/.
 
-[ ] 0.3 DATA LOCATIONS
+[x] 0.3 DATA LOCATIONS
     DATA_ROOT = "D:/HAN/Semester 7 Minor/billiards-game-clips"
       (src/config.h: one constexpr, forward slashes, no trailing slash).
     READ (runtime):   DATA_ROOT/game1/billiards-game-clip{1..5}.mp4
@@ -55,12 +55,12 @@ PHASE 0 — SETUP, SCOPE, ENVIRONMENT
             IPO/{logs,recordings,screenshots}/ exist.
             src/config.h contains exactly one absolute path.
 
-[ ] 0.4 SCOPE LOCK
+[x] 0.4 SCOPE LOCK
     3 classes fixed. 8-ball->SOLID. OCR OUT (IAI owns). Camera OUT (files OK
     per rubric). VideoWriter OPTIONAL.
     Verify: no code path references 4th class or OCR.
 
-[ ] 0.5 CONSTANTS (Python config -> src/config.h, constexpr only)
+[x] 0.5 CONSTANTS (Python config -> src/config.h, constexpr only)
     CLOTH_H_LO/HI, CLOTH_S_LO/HI, CLOTH_V_LO/HI
     WHITE_S_MAX, WHITE_V_MIN
     MIN_BALL_AREA, MAX_BALL_AREA, MIN_CIRCULARITY
@@ -71,7 +71,7 @@ PHASE 0 — SETUP, SCOPE, ENVIRONMENT
     Canny_LO/HI, PROCESS_WIDTH
     Verify: no magic numbers in main.cpp.
 
-[ ] 0.6 COMPLEXITY CLAIM (for defense)
+[x] 0.6 COMPLEXITY CLAIM (for defense)
     Three handled failures: F1 glare, F2 overlap, F3 lighting.
     Each -> mitigation in Phases 2-4 + evidence in docs/robustness.md.
 
