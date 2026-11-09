@@ -1,0 +1,367 @@
+================================================================================
+DEV 1.1 — CMAKELISTS.TXT — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: deliver the first file written into the repo — CMakeLists.txt — and
+         prove CMake discovers OpenCV with the correct generator, compiler,
+         and build directory, so that all downstream dev steps have a working
+         build target. Dev 1.1 is BUILD INFRASTRUCTURE, not a DT decision
+         step. No DT subsec is closed here.
+Parallel-tick: Dev 1.1 [x]  (self-standing; no DT counterpart).
+               Confirms DT 0.1 (toolchain) and DT 0.2 (layout) still hold
+               operationally, but neither changes status.
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 1.1 MUST PROVE
+--------------------------------------------------------------------------------
+  1. CMakeLists.txt exists at repo root and declares a single executable
+     target that consumes src/main.cpp.
+  2. CMake discovers the OpenCV installation at the path locked by DT 0.1 E1
+     (C:/dev/opencv-build/opencv-install), version 4.12.0.
+  3. The generator used is Ninja (DT 0.1 E3), not "MinGW Makefiles".
+  4. The compiler used is g++ from C:/msys64/ucrt64/bin/ (DT 0.1 E1).
+  5. The build directory lands at repo/build/ (not shared, not data-root,
+     not elsewhere).
+  6. No generator-specific flags are embedded in CMakeLists.txt (DT 0.1 E4).
+  7. VS Code's CMake Tools extension drives configure + build (DT 0.1 E2).
+
+  Items 1-6 are the CMake contract. Item 7 is the orchestration contract.
+  Item 2 is the actual gate: without "Found OpenCV ... Configuring done /
+  Generating done", nothing downstream can proceed.
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  Repo root        : D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+                       IPO/Ball-Type-Identifier/
+  CMakeLists.txt   : repo root (written by this step)
+  Build dir        : repo/Ball-Type-Identifier/build/
+  CMake executable : C:/msys64/ucrt64/bin/cmake.EXE
+  CMake version    : 4.4.3 (DT 0.1 B)
+  Compiler C       : C:/msys64/ucrt64/bin/gcc.exe
+  Compiler C++     : C:/msys64/ucrt64/bin/g++.exe
+  Compiler version : 16.2.0 (DT 0.1 B)
+  Generator        : Ninja
+  OpenCV           : 4.12.0 at C:/dev/opencv-build/opencv-install,
+                     lib at x64/mingw/lib (DT 0.1 E1)
+  VS Code ext.     : ms-vscode.cmake-tools, ms-vscode.cpptools
+                     (DT 0.1 B)
+
+  Parent state (verified before this step):
+    Dev 0.1 — repo tree matches DT 0.2 baseline.
+    Dev 0.2 — config.h carries full DT 0.5 constant set.
+    Dev 0.3 — SCOPE OK, archive written.
+    Dev 0.4 — 5/5 clips present, cloth assets present, IPO write folders
+              present.
+    main.cpp — still 0 B stub.
+    CMakeLists.txt — 0 B stub.
+
+--------------------------------------------------------------------------------
+C. THE WORKSPACE-LEVEL SETTINGS.JSON DECISION
+--------------------------------------------------------------------------------
+  Discovered during this step: a workspace-level .vscode/settings.json
+  already exists at:
+
+      D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/.vscode/
+      settings.json
+
+  Its pre-existing content was:
+
+      {
+          "cmake.sourceDirectory": "D:/HAN/Semester 7 Minor/
+                                   HAN-S7Minor-EmbeddedVision-AI/IPO/Ex2_1",
+          "cmake.buildDirectory": "${sourceDir}/build",
+          "cmake.options.statusBarVisibility": "visible"
+      }
+
+  Two decisions were considered:
+
+    OPTION A — create a second .vscode/settings.json inside
+               IPO/Ball-Type-Identifier/.
+
+    OPTION B — reuse the workspace-level file, editing only the
+               cmake.sourceDirectory line.
+
+  DECISION: Option B.
+
+  Rationale:
+    - One settings file = one source of truth. Duplicating creates drift
+      risk (which one wins if they conflict?).
+    - The workspace-level file already has cmake.buildDirectory set to
+      ${sourceDir}/build, which correctly produces build/ under whichever
+      source dir cmake.sourceDirectory points to. No need to redeclare.
+    - The project's own guide (guide-config-path_per_exercise-build.txt)
+      prescribes exactly this pattern: "Update ONLY this line per
+      exercise: cmake.sourceDirectory".
+    - The pre-existing file used an absolute path
+      (D:/HAN/.../IPO/Ex2_1). The guide specifies using ${workspaceFolder}
+      instead, for portability. That was corrected in the same edit.
+
+  The single-line edit applied:
+
+      "cmake.sourceDirectory":
+          "${workspaceFolder}/IPO/Ball-Type-Identifier",  // change per exercise
+
+  All other lines preserved verbatim:
+      "cmake.buildDirectory": "${sourceDir}/build",
+      "cmake.options.statusBarVisibility": "visible"
+
+  Consequence: no .vscode/ folder is created inside
+  IPO/Ball-Type-Identifier/. Dev 0.1 D2 ("`.vscode/` absent at this point,
+  expected") remains valid: the absence is permanent, not pending.
+
+--------------------------------------------------------------------------------
+D. FILES WRITTEN BY DEV 1.1
+--------------------------------------------------------------------------------
+  D1. repo/CMakeLists.txt  (new content; overwrites 0 B stub)
+
+      Content:
+
+        cmake_minimum_required(VERSION 3.10)
+        project(Ball-Type-Identifier VERSION 0.0.1)
+
+        set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
+        find_package(OpenCV REQUIRED)
+        include_directories(${OpenCV_INCLUDE_DIRS})
+
+        add_executable(Ball-Type-Identifier src/main.cpp)
+        target_link_libraries(Ball-Type-Identifier ${OpenCV_LIBS})
+
+      Design notes:
+        - No include(CTest) / enable_testing() block. The per-exercise
+          template in gpt-workflow-standard.txt includes them, but they
+          trigger VS Code Test Explorer warnings
+          ("[ctest] Folder is not found in Test Explorer") that are
+          cosmetic noise for a single-binary project. Omitted deliberately.
+        - No set(CPACK_*) block either. Single target, no packaging.
+        - No generator flags. DT 0.1 E4 mandates generator-agnostic
+          CMakeLists.
+        - OpenCV_DIR points at x64/mingw/lib (DT 0.1 E1 — the lib dir,
+          not the install root). This matches what DT 0.5's build
+          (config.h → main.cpp in 1.2) will link against.
+
+  D2. workspace .vscode/settings.json  (single-line edit)
+
+      See Section C above. Change:
+        "cmake.sourceDirectory": ".../IPO/Ex2_1"
+      To:
+        "cmake.sourceDirectory": "${workspaceFolder}/IPO/Ball-Type-Identifier"
+
+--------------------------------------------------------------------------------
+E. CONFIGURE EVIDENCE (per devTracker 1.1 Verify line)
+--------------------------------------------------------------------------------
+  E1. VS Code CMake Tools configured the project. The proc/capture from the
+      Output → CMake/Build panel:
+
+        [proc] Executing command: C:\msys64\ucrt64\bin\cmake.EXE --version
+        [proc] Executing command: C:\msys64\ucrt64\bin\cmake.EXE -E capabilities
+        [proc] Executing command: C:\msys64\ucrt64\bin\gcc.exe -v
+        [ctest] Folder is not found in Test Explorer:
+                d:/han/semester 7 minor/han-s7minor-embeddedvision-ai/ipo/
+                ball-type-identifier
+        [main] Configuring project: HAN-S7Minor-EmbeddedVision-AI
+        [proc] Executing command: C:\msys64\ucrt64\bin\cmake.EXE
+               -DCMAKE_BUILD_TYPE:STRING=Debug
+               -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
+               -DCMAKE_C_COMPILER:FILEPATH=C:\msys64\ucrt64\bin\gcc.exe
+               -DCMAKE_CXX_COMPILER:FILEPATH=C:\msys64\ucrt64\bin\g++.exe
+               -Wno-unused-cli
+               -S "D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+                    IPO/Ball-Type-Identifier"
+               -B "D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+                    IPO/Ball-Type-Identifier/build"
+               -G Ninja
+        [cmake] -- Found OpenCV: C:/dev/opencv-build/opencv-install
+                 (found version "4.12.0")
+        [cmake] -- Configuring done (6.2s)
+        [cmake] -- Generating done (0.4s)
+        [cmake] -- Build files have been written to:
+                 D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+                 IPO/Ball-Type-Identifier/build
+
+      Interpretation:
+        - "Found OpenCV ... 4.12.0"  -> DT 0.1 E1 satisfied.
+        - "Configuring done"          -> CMakeLists.txt syntactically valid.
+        - "Generating done"           -> Makefiles/Ninja files written.
+        - "-G Ninja"                   -> DT 0.1 E3 satisfied.
+        - "-DCMAKE_CXX_COMPILER ... g++.exe" -> DT 0.1 E1 compiler
+                                                satisfied.
+        - "-S .../IPO/Ball-Type-Identifier"  -> correct source dir.
+        - "-B .../IPO/Ball-Type-Identifier/build" -> correct build dir
+                                                    (matches cmake.
+                                                    buildDirectory =
+                                                    ${sourceDir}/build).
+
+  E2. Automatic post-configure build attempt (VS Code CMake Tools runs
+      build immediately after reconfigure by default):
+
+        [build] Starting build
+        [build] [1/2  50% :: 0.112]
+                Building CXX object
+                CMakeFiles/Ball-Type-Identifier.dir/src/main.cpp.obj
+        [build] [2/2 100% :: 0.400]
+                Linking CXX executable Ball-Type-Identifier.exe
+        [build] FAILED: [code=1] Ball-Type-Identifier.exe
+        [build] ... ld.exe: undefined reference to `WinMain'
+        [build] collect2.exe: error: ld returned 1 exit status
+        [build] ninja: build stopped: subcommand failed.
+        [proc] The command: ... --build ... --target all -- exited with
+                code: 1
+
+      Interpretation:
+        - Compilation of main.cpp SUCCEEDED (main.cpp.obj was produced).
+          This proves the toolchain and OpenCV headers are usable.
+        - Linking FAILED with "undefined reference to `WinMain'".
+        - Root cause: src/main.cpp is 0 B (empty). No main() function
+          exists. The MinGW linker for a Windows executable defaults to
+          needing WinMain() when main() is absent.
+        - This is the EXPECTED behaviour at Dev 1.1. It is NOT a defect
+          in CMakeLists.txt, nor in the toolchain. It resolves at Dev 1.2
+          when main.cpp acquires a real main() function.
+        - The devTracker's 1.1 Verify line does not require a successful
+          build. It requires the configure gate to pass (Found OpenCV /
+          Configuring done / Generating done), which it did.
+
+  E3. Build directory inventory after the step:
+
+        PS> Get-ChildItem ".../IPO/Ball-Type-Identifier/build" | Select Name
+
+        Name
+        ----
+        .cmake
+        CMakeFiles
+        .ninja_deps
+        .ninja_log
+        build.ninja
+        CMakeCache.txt
+        cmake_install.cmake
+        compile_commands.json
+
+      Interpretation:
+        - build.ninja present           -> Ninja generator honoured.
+        - CMakeCache.txt present        -> cache exists; reconfigure will
+                                            be fast, delete-cache will
+                                            re-run cleanly.
+        - compile_commands.json present -> C/C++ IntelliSense will resolve
+                                            OpenCV headers (feeds the
+                                            c_cpp_properties fix noted in
+                                            guide-config-VSCode_editor-
+                                            IntelliSenseError.txt, should
+                                            it be needed).
+        - Ball-Type-Identifier.exe     -> ABSENT (correct; link failed).
+        - No stray outputs outside build/ — DT 0.2 D8 / DT 0.3 E4 "no
+          repo writes outside build/" invariant holds.
+
+--------------------------------------------------------------------------------
+F. DECISIONS LOCKED BY DEV 1.1
+--------------------------------------------------------------------------------
+  E1. Single .vscode/settings.json at the workspace root is the sole
+      configuration source for CMake Tools. No project-local .vscode/
+      folder exists. Any future per-exercise change is a one-line edit to
+      cmake.sourceDirectory in that workspace file.
+
+  E2. cmake.sourceDirectory must use ${workspaceFolder} (portable), not an
+      absolute path. This matches guide-config-path_per_exercise-build.txt
+      and is enforced by discipline, not by a script.
+
+  E3. cmake.buildDirectory = ${sourceDir}/build is retained. The build
+      directory is always repo/build/, automatically derived. No manual
+      mkdir build.
+
+  E4. CMakeLists.txt is minimal and generator-agnostic. It uses:
+        - set(OpenCV_DIR ...) with the DT 0.1 E1 path.
+        - find_package(OpenCV REQUIRED).
+        - a single add_executable target.
+        - target_link_libraries to OpenCV_LIBS.
+      It does NOT use CTest, CPack, or any generator-specific flag.
+
+  E5. The "Found OpenCV 4.12.0 / Configuring done / Generating done"
+      triad is the acceptance gate for all future reconfigures. If a
+      future edit to CMakeLists.txt breaks this triad, it must be reverted
+      before any further dev step is attempted.
+
+  E6. The automatic post-configure build failure at Dev 1.1 (WinMain
+      undefined reference) is expected and non-blocking. It ceases to be
+      acceptable once Dev 1.2 has populated main.cpp with a real main().
+      From that point on, any build failure is a defect.
+
+  E7. compile_commands.json is produced for free by the
+      -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE flag that VS Code CMake
+      Tools passes. It is not consumed by the build itself, only by
+      IntelliSense. No action required to enable it.
+
+--------------------------------------------------------------------------------
+G. CAVEATS / OBSERVATIONS RECORDED (non-blocking)
+--------------------------------------------------------------------------------
+  D1. [ctest] "Folder is not found in Test Explorer" warning during
+      configure. Cause: CTest support was deliberately omitted from
+      CMakeLists.txt (Section D1). The warning is cosmetic; it does not
+      affect configuration, build, or the executable. No action.
+
+  D2. VS Code CMake Tools auto-builds after every reconfigure. This is
+      why a build was attempted in the same session despite the step not
+      calling for one. The auto-build revealed the expected WinMain
+      failure early, which is useful, not harmful. If builds-on-configure
+      become annoying, the workspace setting "cmake.buildBeforeRun" can
+      be tuned — NOT a change for this project.
+
+  D3. The gcc/g++ version probes at configure (`gcc.exe -v`) confirm the
+      toolchain is what DT 0.1 E1 locked (16.2.0). No mismatch.
+
+  D4. Local commits still 3 ahead of origin/main (carried from Dev 0.1
+      D5 / 0.2 D4 / 0.3 D4 / 0.4 D4). Dev 1.1 does not commit. Flush at
+      Dev 2.5 checkpoint or Dev 7.2 at latest.
+
+  D5. Pre-existing workspace settings.json used an absolute path for
+      cmake.sourceDirectory (pointing at Ex2_1). This would have broken
+      on any machine with a different workspace root. The edit made here
+      fixes that globally for all future exercises, not just this one.
+
+  D6. No prior exercise's build directory was disturbed. The previous
+      build dir for Ex2_1 remains untouched at
+      IPO/Ex2_1/build/. Switching cmake.sourceDirectory in the workspace
+      file only affects future configure/build invocations; it does not
+      delete or migrate any existing build artefacts.
+
+  D7. The D:\...\HAN-S7Minor-EmbeddedVision-AI path contains a space in
+      "Semester 7 Minor". CMake Tools handled it correctly by
+      quoting -S and -B arguments. No action; recorded so that any
+      manual CLI invocation later quotes paths correctly.
+
+  D8. The 'IPOs' shorthand in some earlier notes (referring to the
+      "IPO" folder under the workspace) is spelled out here in full to
+      avoid ambiguity with the acronym IPO (Input/Process/Output) that
+      this module uses. Both uses coexist; context disambiguates.
+
+--------------------------------------------------------------------------------
+H. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 1.1 — CMAKELISTS.TXT — VERIFIED
+        CMakeLists.txt written      : pass (single exe target, no
+                                             generator flags)
+        workspace settings updated  : pass (one-line edit; uses
+                                             ${workspaceFolder})
+        Found OpenCV 4.12.0         : pass
+        Configuring done            : pass
+        Generating done             : pass
+        Generator = Ninja           : pass
+        Compiler  = g++.exe 16.2.0  : pass
+        Build dir = repo/build/     : pass
+        compile_commands.json       : pass (produced automatically)
+        Build (auto-triggered)      : FAILED — expected
+                                      (WinMain undefined; main.cpp 0 B).
+                                      Resolves at Dev 1.2.
+        no repo writes outside
+          build/                    : pass
+
+  Parallel-tick:
+        Dev 1.1 [x]  (self-standing; no DT subsec closed)
+        DT 0.1  — re-confirmed operationally (toolchain used as
+                  specified). No status change; already [x].
+        DT 0.2  — re-confirmed operationally (layout matches; build dir
+                  in-repo per D6). No status change; already [x].
+
+  Next: Dev 1.2 — MAIN SKELETON + VIDEOCAPTURE + EXIT.
+        Closes DT 1.1 and DT 6.4 (partial). Produces a working
+        executable that opens clip1, displays it, and exits on ESC / 'q'.
+================================================================================
+END

@@ -1,0 +1,186 @@
+================================================================================
+DEV 0.3 — SCOPE CHECK — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: standalone re-run of the DT 0.4 scope guard against the current
+         src/ tree, plus archival of the result to the data-root audit
+         trail (DT 0.4 E6). Dev 0.3 is a VERIFICATION gate, not a build step.
+         It produces no source and no commit.
+Parallel-tick: Dev 0.3 [x]  <=>  DT 0.4 re-verified (already [x]). No new DT
+               subsec is closed here; the tick confirms DT 0.4 enforcement
+               still holds after Phase 0.
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 0.3 MUST PROVE
+--------------------------------------------------------------------------------
+  1. src/scope_check.ps1 still executes without error.
+  2. Its verdict is "SCOPE OK" against the current src/ tree (config.h,
+     main.cpp stub, plus the .py and .ps1 utility files excluded by
+     -Include *.cpp,*.h,*.hpp).
+  3. The result is archived to DATA_ROOT/IPO/logs/0.4_scope_check.txt,
+     satisfying DT 0.4 E6 (audit-trail requirement).
+  4. The archive file is non-empty and contains the verbatim "SCOPE OK"
+     string, not a truncated or re-encoded variant.
+  5. No forbidden token from the DT 0.4 list has leaked into src/ since
+     Phase 0 (re-affirms 0.4 E1-E3 scope boundaries).
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  Repo        : D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+                  IPO/Ball-Type-Identifier/
+  Shell       : PowerShell 5.x (Windows default)
+  Working dir : repo root (PS prompt confirms repo root, not src/)
+  Script      : src/scope_check.ps1   (479 B, unchanged since DT 0.4)
+  Archive     : D:/HAN/Semester 7 Minor/billiards-game-clips/
+                  IPO/logs/0.4_scope_check.txt
+  Parent      : Dev 0.2 passed (config.h constants intact; SCOPE OK already
+                observed inside 0.2 C4). Dev 0.3 repeats the check in
+                isolation and captures the audit artefact.
+
+  Note on re-running: Dev 0.2 already executed scope_check.ps1 once (as
+  part of its C4 evidence). Dev 0.3 is NOT redundant. The distinction:
+    - 0.2 C4 = "does scope still hold after config.h verification?"
+    - 0.3    = "does scope hold as a standalone gate, with its output
+                persisted to the audit trail?"
+  DT 0.4 E4 declares the script run manually before every commit; 0.4 E6
+  declares every run that closes a phase is archived. 0.3 satisfies both.
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE (per devTracker 0.3 Verify line)
+--------------------------------------------------------------------------------
+  C1. Step 2 — direct invocation:
+        PS> powershell -File src/scope_check.ps1
+        SCOPE OK
+      -> Pass. No HIT lines. No encoding artefacts on the verdict.
+
+  C2. Step 3 — invocation with Tee to archive:
+        PS> $log = "D:/HAN/Semester 7 Minor/billiards-game-clips/
+                    IPO/logs/0.4_scope_check.txt"
+        PS> powershell -File src/scope_check.ps1 | Tee-Object -FilePath $log
+        SCOPE OK
+      -> Pass. Tee-Object wrote the same verdict to the archive while also
+         printing it to the console.
+
+  C3. Step 4 — archive read-back:
+        PS> Get-Content "D:/HAN/Semester 7 Minor/billiards-game-clips/
+                         IPO/logs/0.4_scope_check.txt"
+        SCOPE OK
+      -> Pass. Archive is non-empty, contains the verbatim string.
+         Trailing blank line present (typical for Tee-Object output,
+         harmless for audit).
+
+  C4. Interpreting C1-C3 against DT 0.4 E4/E6:
+        E4 requires "run manually before every commit during dev" and
+           "at the end of Phase 7 before Phase 8". Dev 0.3 is a mid-Phase-0
+           run; it satisfies the spirit (pre-commit gate in place) and
+           establishes the archive naming convention that Phase 7 will
+           reuse.
+        E6 requires archival to DATA_ROOT/IPO/logs/0.4_scope_check.txt.
+           Confirmed by C3.
+      -> Pass.
+
+  C5. What was actually scanned:
+        src/scope_check.ps1 iterates Get-ChildItem $src -Recurse -File
+        -Include *.cpp,*.h,*.hpp. At this point the matching files are:
+          src/config.h   (1930 B, DT 0.4/0.5 artefact)
+          src/main.cpp   (0 B stub, to be filled in Dev 1.2)
+        Not scanned: src/cloth_sampler.py (DT 0.5 utility), src/scope_check.ps1
+        itself (DT 0.4 D1 fix — the script must not scan its own token list).
+      -> Pass. The -Include discipline from DT 0.4 D1 remains in force.
+
+--------------------------------------------------------------------------------
+D. CAVEATS / OBSERVATIONS RECORDED (non-blocking)
+--------------------------------------------------------------------------------
+  D1. Console shows a blank line after "SCOPE OK" in Step 3.
+      Cause: Tee-Object emits the piped string plus a newline; the console
+      displays the string and then the newline is flushed separately.
+      The archive file also carries this trailing newline. Cosmetic only.
+      No file rewrite required.
+
+  D2. Dev 0.3 scans a 0 B main.cpp.
+      scope_check.ps1 will still scan main.cpp; an empty file produces
+      zero matches for every forbidden token, so the verdict is
+      trivially "SCOPE OK" for that file at this moment. The check becomes
+      meaningful again from Dev 1.2 onward, when main.cpp is populated and
+      the "no OCR / no camera / no temporal voting" discipline must hold
+      against real source. This is expected, not a weakness: the script
+      is designed to be safe at any file size.
+
+  D3. Console encoding consistency (carried from Dev 0.2 D1).
+      config.h line 1 contains a UTF-8 em-dash which PowerShell's OEM
+      codepage renders as "â€”" in Get-Content echoes. scope_check.ps1
+      does not print config.h content, only its match verdict, so the
+      encoding artefact does NOT appear in the Dev 0.3 output. No action.
+
+  D4. Local commits ahead of origin.
+      Carried from Dev 0.1 D5 / Dev 0.2 D4. Dev 0.3 produces no commit.
+      Flush still deferred to Dev 2.5 checkpoint (updated roadmap) or
+      Dev 7.2 at latest.
+
+  D5. Dev 0.3 does not re-assert the exact forbidden-token list.
+      The list lives in DT 0.4 C4 and in the script itself. If a future
+      scope decision requires adding a token (unlikely in Phase 1-4),
+      it must be added to both the script and DT 0.4 before running
+      Dev 0.3-equivalent checks again. Recorded so the maintenance point
+      is unambiguous.
+
+  D6. Archive overwrite policy.
+      Tee-Object without -Append overwrites the file. This is correct for
+      the 0.4_scope_check.txt audit slot: the file is intended to hold
+      the LATEST scope verdict for the most recent gate run. If a
+      historical trail is later wanted, that would be a new filename
+      (e.g. 0.4_scope_check_YYYYMMDD.txt) — NOT a change to this step.
+      Decision made now so Dev 7.2 re-run does not accidentally append.
+
+--------------------------------------------------------------------------------
+E. DECISIONS LOCKED BY DEV 0.3
+--------------------------------------------------------------------------------
+  E1. src/scope_check.ps1 remains the canonical scope guard for the
+      duration of the project. No alternative script may be introduced
+      without amending DT 0.4.
+
+  E2. The archive slot DATA_ROOT/IPO/logs/0.4_scope_check.txt is the
+      authoritative persisted verdict for each gate run. Overwrite is
+      intentional (see D6). Historical snapshots, if required, will use
+      date-suffixed filenames and will be treated as out-of-scope
+      additions in later phases.
+
+  E3. The -Include *.cpp,*.h,*.hpp discipline (DT 0.4 D1) is a permanent
+      invariant. Any new source extension added to the project (e.g. .hpp,
+      .cc) must be added to the -Include list in the same commit that
+      introduces the file, so the scope guard does not silently skip it.
+      Currently irrelevant (only .cpp and .h exist) but recorded to
+      prevent drift.
+
+  E4. Dev 0.3 does not modify source, does not modify the script, does not
+      produce a commit. It is a run + archive step. Only the archive file
+      under DATA_ROOT/IPO/logs/ changes as a side effect.
+
+  E5. Every subsequent gate run of scope_check.ps1 during dev (per
+      DT 0.4 E4) may reuse the same archive slot unless a specific gate
+      wants a date-stamped snapshot. This keeps the audit trail simple
+      for the final submission.
+
+--------------------------------------------------------------------------------
+F. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 0.3 — SCOPE CHECK — VERIFIED
+        script executes         : pass
+        verdict is SCOPE OK     : pass (both direct and Tee'd runs)
+        archive written         : pass
+        archive read-back ok    : pass ("SCOPE OK" present verbatim)
+        no HIT lines            : pass
+        caveats                 : D1 trailing newline (cosmetic)
+                                  D2 main.cpp still stub (expected)
+                                  D3 encoding artefact not surfaced here
+                                  D4 3 commits ahead (flush at 2.5/7.2)
+                                  D5 token-list sync discipline recorded
+                                  D6 archive overwrite policy locked
+
+  Parallel-tick:
+        Dev 0.3 [x]
+        DT  0.4 [x] (re-confirmed; no status change)
+
+  Next: Dev 0.4 — CLIPS READABLE (verify only; pre-acquisition sanity).
+================================================================================
+END

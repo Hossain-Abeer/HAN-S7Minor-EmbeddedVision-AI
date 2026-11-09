@@ -1,0 +1,274 @@
+================================================================================
+DEV 0.4 — CLIPS READABLE — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: prove that all 5 source clips are present, non-corrupt at the
+         container level, and that the runtime read targets (game1/*.mp4)
+         plus runtime write targets (IPO/{logs,recordings,screenshots})
+         exist before the first line of acquisition code is written.
+         Dev 0.4 is a VERIFICATION gate, not a build step. No source is
+         touched, no commit is produced.
+Parallel-tick: Dev 0.4 [x]  <=>  DT 1.1 (prep) re-confirmed, DT 0.3
+               (data locations) re-confirmed. Both already [x]; the tick
+               confirms they still hold on the actual disk state at the
+               moment build work begins.
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 0.4 MUST PROVE
+--------------------------------------------------------------------------------
+  1. All 5 clips exist under DATA_ROOT/game1/ with the byte sizes recorded
+     in DT 0.3 B (no substitution, no re-encode, no rename).
+  2. The count of matching files is exactly 5 (no strays, no duplicates
+     like "...clip1 (1).mp4").
+  3. Each file is a real MP4 (ISO-BMFF container: bytes 4..7 = "ftyp").
+     This does not prove decodability, only that the file was not truncated
+     to zero or replaced by a text stub. Decodability is proven in Dev 1.2
+     by cap.isOpened() on clip1 and in Dev 7.1 across all 5 clips.
+  4. Cloth calibration assets exist and match the sizes in DT 0.3 B
+     (PNG 929,874 B, TXT 472 B). Required as defence evidence for the
+     DT 0.5 provenance comment already embedded in src/config.h.
+  5. The three IPO write folders exist under DATA_ROOT/IPO/ so that
+     Dev 4.2 (console log) and Dev 4.3 (VideoWriter, optional) have a
+     destination that does not need creating at runtime.
+  6. No new artefact is created. Dev 0.4 is read-only.
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  Data root  : D:/HAN/Semester 7 Minor/billiards-game-clips
+  Working dir: D:/HAN/Semester 7 Minor/billiards-game-clips/game1
+               (step 1-4 executed from game1; step 5 executed from game1
+                with an absolute path to the sibling IPO folder)
+  Shell      : PowerShell 5.x on Windows
+
+  Parent state:
+    Dev 0.1 passed — repo tree matches DT 0.2 baseline.
+    Dev 0.2 passed — config.h carries the full DT 0.5 constant set.
+    Dev 0.3 passed — SCOPE OK, archive written.
+    No dev source has been written yet (main.cpp still 0 B).
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE (per devTracker 0.4 Verify line)
+--------------------------------------------------------------------------------
+  C1. Step 1 — clip listing with sizes and mtimes:
+        PS> cd "D:/HAN/Semester 7 Minor/billiards-game-clips/game1"
+        PS> Get-ChildItem billiards-game-clip*.mp4 |
+              Select-Object Name, Length, LastWriteTime
+
+        Name                        Length     LastWriteTime
+        ----                        ------     -------------
+        billiards-game-clip1.mp4    88,729,810  2026-10-22 12:11:57
+        billiards-game-clip2.mp4   122,374,315  2026-10-22 12:01:37
+        billiards-game-clip3.mp4   113,678,894  2026-10-22 12:18:13
+        billiards-game-clip4.mp4   107,606,368  2026-10-22 12:24:23
+        billiards-game-clip5.mp4   242,641,441  2026-10-22 12:35:32
+
+      Sizes match DT 0.3 B byte-for-byte:
+        clip1  88,729,810  -> DT 0.3 B:  88,729,810  PASS
+        clip2 122,374,315  -> DT 0.3 B: 122,374,315  PASS
+        clip3 113,678,894  -> DT 0.3 B: 113,678,894  PASS
+        clip4 107,606,368  -> DT 0.3 B: 107,606,368  PASS
+        clip5 242,641,441  -> DT 0.3 B: 242,641,441  PASS
+
+      LastWriteTime (2026-10-22) is consistent across the set: the same
+      acquisition session produced them. No file has been edited since.
+      -> Pass.
+
+  C2. Step 2 — count check:
+        PS> (Get-ChildItem billiards-game-clip*.mp4).Count
+        5
+      -> Exactly 5. No duplicates ("...clip1 (1).mp4"), no extras.
+      -> Pass.
+
+  C3. Step 3 — MP4 container signature check:
+        PS> Get-ChildItem billiards-game-clip*.mp4 | ForEach-Object {
+              $b = [System.IO.File]::ReadAllBytes($_.FullName)[4..7]
+              $sig = [System.Text.Encoding]::ASCII.GetString($b)
+              "{0} -> {1}" -f $_.Name, $sig
+            }
+
+        billiards-game-clip1.mp4 -> ftyp
+        billiards-game-clip2.mp4 -> ftyp
+        billiards-game-clip3.mp4 -> ftyp
+        billiards-game-clip4.mp4 -> ftyp
+        billiards-game-clip5.mp4 -> ftyp
+
+      All five files carry "ftyp" at offset 4, which is the ISO-BMFF
+      file-type box signature (MP4 family). This rules out:
+        - zero-byte stubs,
+        - plain text placeholders,
+        - non-video containers (MKV, AVI) misnamed .mp4,
+        - truncated files that lost their header.
+      It does NOT prove the video stream is decodable; that is proven
+      later by cap.isOpened() (Dev 1.2) and by a full multi-clip run
+      (Dev 7.1).
+      -> Pass.
+
+  C4. Step 4 — cloth calibration assets:
+        PS> Get-ChildItem clothColor_noAspectRatio.png,
+                           clothColor_rawPixelValueSet.txt |
+              Select-Object Name, Length
+
+        Name                            Length
+        ----                            ------
+        clothColor_noAspectRatio.png    929,874
+        clothColor_rawPixelValueSet.txt     472
+
+      Sizes match DT 0.3 B (PNG 929,874; TXT 472). These two files are
+      the provenance of every CLOTH_* constant in src/config.h (DT 0.5 E1,
+      DT 0.5 C6 comment in config.h). Their continued presence and byte
+      size mean the defence story "these constants came from this evidence"
+      is reproducible on this workstation.
+      Runtime does NOT read them (DT 0.3 E2). They are offline evidence
+      only. Dev 0.4 does not open them with cv::imread.
+      -> Pass.
+
+  C5. Step 5 — IPO write-folder inventory:
+        PS> Get-ChildItem "D:/HAN/Semester 7 Minor/billiards-game-clips/IPO"
+              -Directory | Select-Object Name
+
+        Name
+        ----
+        logs
+        recordings
+        screenshots
+
+      All three write targets exist. Runtime writes in Dev 4.2
+      (logs/run_YYYYMMDD.txt) and Dev 4.3 (recordings/run_YYYYMMDD.mp4)
+      can now proceed without needing to create folders.
+      Note: DT 0.3 E3 lists recordings/ as optional (gated by
+      WRITE_VIDEO). Its presence here pre-clears the optional path too.
+      -> Pass.
+
+--------------------------------------------------------------------------------
+D. ARTEFACT CREATION / CHANGE LOG FOR DEV 0.4
+--------------------------------------------------------------------------------
+  Files created by this step      : NONE
+  Files modified by this step     : NONE
+  Files read by this step         :
+    5x  DATA_ROOT/game1/billiards-game-clip{1..5}.mp4
+     1x DATA_ROOT/game1/clothColor_noAspectRatio.png
+     1x DATA_ROOT/game1/clothColor_rawPixelValueSet.txt
+  Folders inspected (existence)   :
+     DATA_ROOT/IPO/logs/
+     DATA_ROOT/IPO/recordings/
+     DATA_ROOT/IPO/screenshots/
+
+  Why no archive file:
+    Dev 0.3 archived its verdict because DT 0.4 E6 mandates a persisted
+    audit record for scope checks. Dev 0.4 has no equivalent mandate in
+    DT. The evidence in section C of this log is the audit record.
+    If a future phase needs to prove the clips were intact at build time,
+    the sizes in C1 tie to file mtimes that are immutable, so re-verifying
+    later is a single Get-ChildItem invocation.
+
+--------------------------------------------------------------------------------
+E. DECISIONS LOCKED BY DEV 0.4
+--------------------------------------------------------------------------------
+  E1. The 5 clip files in DATA_ROOT/game1/ are accepted as the fixed
+      runtime input set. They will not be re-encoded, resampled to disk,
+      or replaced. Any transformation happens in memory per frame
+      (resize to PROCESS_WIDTH, blur, cvtColor).
+      Rationale: DT 0.2 D3 chose direct-read from game1/ to avoid a
+      second source of truth; DT 0.3 E2 fixed the read path.
+
+  E2. Clip1 remains the demo clip (DT 1.2). Its size and mtime are now
+      recorded twice — DT 0.3 B and Dev 0.4 C1 — so drift is detectable.
+
+  E3. The cloth assets in game1/ are locked as the sole provenance of
+      CLOTH_* constants. They will not be deleted, replaced, or
+      re-sampled unless DT 0.5 is formally reopened (DT 0.5 E1).
+      Rationale: the defence story for the cloth HSV bounds depends on
+      these two files being the same ones present at build time.
+
+  E4. Runtime writes are confirmed to be confined to DATA_ROOT/IPO/
+      {logs,recordings,screenshots}/. Dev 0.4 is the last point at which
+      this is checked without any code on disk. From Dev 1.2 onwards,
+      every write in main.cpp must trace to one of these three folders.
+
+  E5. No file under the repo (IPO/Ball-Type-Identifier/) is written by
+      Dev 0.4. This keeps the DT 0.2 D8 / DT 0.3 E4 "no repo writes"
+      invariant intact through Phase 0.
+
+  E6. The signature check (C3) is the minimum acceptance test for clip
+      readability at Phase-0 level. It is not sufficient on its own for
+      final submission — Dev 7.1 must additionally prove decodability
+      across all 5 clips via cv::VideoCapture. This decision prevents a
+      "looks like an MP4, therefore it works" assumption from entering
+      the defence argument.
+
+--------------------------------------------------------------------------------
+F. CAVEATS / OBSERVATIONS RECORDED (non-blocking)
+--------------------------------------------------------------------------------
+  D1. ftyp check is necessary but not sufficient.
+      Container-level validity does not guarantee the H.264 stream
+      decodes cleanly on this workstation's OpenCV build. Codec/decoder
+      availability is proven at Dev 1.2 (cap.isOpened() on clip1) and
+      Dev 7.1 (all 5 clips). If Dev 1.2 fails on clip1 despite ftyp
+      being present, the likely cause is a codec pack mismatch, not a
+      corrupt file. Handle at that step, not here.
+
+  D2. File sizes are matched to DT 0.3 B exactly, not approximately.
+      Any future drift (e.g. an accidental editor open + save) would
+      change the byte count and would surface at the next Dev 0.4-style
+      check. This is intentional: any change to a clip is treated as a
+      signal to stop and re-establish provenance.
+
+  D3. Working-directory jump.
+      Steps 1-4 ran from DATA_ROOT/game1/. Step 5 ran from the same cwd
+      but with an absolute path to the sibling IPO folder. This is fine
+      for a read-only inventory but it means the shell is not anchored
+      to the repo. Subsequent steps (Dev 1.1, 1.2) must return to the
+      repo root before running CMake or g++. Recorded so Dev 1.1 does
+      not accidentally invoke CMake from game1/.
+
+  D4. Local commits ahead of origin (carried from Dev 0.1 D5, 0.2 D4,
+      0.3 D4).
+      Still 3 commits ahead. Dev 0.4 produces no commit. Flush at the
+      Dev 2.5 safety checkpoint or Dev 7.2 at the latest. Non-submission
+      risk if 7.2 is skipped.
+
+  D5. No screenshots or videos were captured for the defence during
+      this step.
+      Dev 0.4 is a presence check, not an evidence capture. All defence
+      screenshots come from Dev 5.1-5.3 (glare, overlap, lighting), not
+      from here. If the defence later asks "show me the input", the
+      answer is a live run against DATA_ROOT/game1/, not a screenshot
+      from Dev 0.4.
+
+  D6. recordings/ is present but empty; no VideoWriter target file yet.
+      Expected. Dev 4.3 is optional (DT 6.3) and gated by WRITE_VIDEO.
+      Presence of the empty folder is enough to prove the destination
+      exists if 4.3 is taken.
+
+  D7. Encoding artefact from Dev 0.2 D1 / 0.3 D3 does not surface here.
+      None of the Dev 0.4 output echoes UTF-8 content; all output is
+      ASCII file names and integer byte counts. No chcp action needed.
+
+--------------------------------------------------------------------------------
+G. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 0.4 — CLIPS READABLE — VERIFIED
+        5/5 clips present             : pass (sizes match DT 0.3 B)
+        count exactly 5               : pass
+        MP4 "ftyp" signatures         : pass (5/5)
+        cloth PNG + TXT present       : pass (929,874 B / 472 B)
+        IPO write folders present     : pass (logs / recordings / screenshots)
+        no new artefacts created      : pass (read-only step)
+        caveats                       : D1 ftyp != decodable (proven later)
+                                        D2 exact byte-match policy
+                                        D3 cwd jump recorded
+                                        D4 3 commits ahead (flush 2.5/7.2)
+                                        D5 no defence screenshots here
+                                        D6 recordings/ empty (optional path)
+                                        D7 encoding artefact not surfaced
+
+  Parallel-tick:
+        Dev 0.4 [x]
+        DT  1.1 (prep)  [x]  re-confirmed
+        DT  0.3         [x]  re-confirmed (clips + write folders on disk)
+
+  Next: Dev 1.1 — CMAKELISTS.TXT (self-standing infra step; no DT
+        counterpart. This is the first step that writes a file into the
+        repo).
+================================================================================
+END
