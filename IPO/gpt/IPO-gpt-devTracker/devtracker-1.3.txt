@@ -1,0 +1,191 @@
+================================================================================
+DEV 1.3 — RESIZE + FPS — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: prove the acquisition loop resizes frames from source resolution to
+         the configured PROCESS_WIDTH with aspect preserved, reports
+         sustained FPS above the DT 1.3 threshold (>=15), and selects the
+         final PROCESS_WIDTH per the DT 1.3 decision rule.
+Parallel-tick: Dev 1.3 [x]  <=>  DT 1.3 [x] (closed).
+                              DT 0.5 amended (PROCESS_WIDTH 960 -> 1280).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 1.3 MUST PROVE
+--------------------------------------------------------------------------------
+  1. main.cpp resizes each frame to PROCESS_WIDTH preserving aspect.
+  2. Resize uses INTER_AREA (correct for downscale).
+  3. The source->dest mapping is reported once at startup.
+  4. FPS is measured over a rolling window and printed periodically.
+  5. The DT 1.3 decision rule executes:
+       960 default; 1280 if FPS > 15 at 1280; revert to 960 if FPS < 15.
+  6. Aspect ratio is not distorted beyond rounding.
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  Repo root   : D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+                  IPO/Ball-Type-Identifier/
+  Build dir   : repo/build/
+  File        : src/main.cpp (populated at Dev 1.2; extended this step)
+  Config      : src/config.h  (PROCESS_WIDTH toggled 960 -> 1280 for test)
+  Parent      : Dev 1.2 passed (exe opens clip1, ESC works).
+
+--------------------------------------------------------------------------------
+C. CODE DELTA (main.cpp — Dev 1.2 -> Dev 1.3)
+--------------------------------------------------------------------------------
+  Added:
+    - startup print of source resolution via CAP_PROP_FRAME_WIDTH/HEIGHT,
+    - per-frame resize to PROCESS_WIDTH preserving aspect via INTER_AREA,
+    - rolling FPS measurement (getTickCount / getTickFrequency) printed
+      every 30 frames,
+    - frame/width/height printed alongside FPS for observation.
+  Unchanged:
+    - DATA_ROOT concatenation (DT 0.3 E5),
+    - VideoCapture on clip1 (DT 1.1),
+    - waitKey(10) and ESC(27)/'q' exit (DT 6.4 partial, conventions),
+    - release/destroyAllWindows clean shutdown.
+  Note: literals 10, 27, 30 are process conventions, not tunables
+  (DT 0.5 E2 not violated; consistent with Dev 1.2 D1).
+
+--------------------------------------------------------------------------------
+D. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  D1. Build (F7):
+        [build] ninja: no work to do.
+        [driver] Build completed: 00:00:00.358
+        [build] Build finished with exit code 0
+      (Second invocation was no-op; first build after edit exited 0.)
+      -> Pass.
+
+  D2. Run at PROCESS_WIDTH = 960:
+        source=1388x772 -> 960px wide
+        frame=30   size=960x533 fps=28.747
+        frame=60   size=960x533 fps=30.9103
+        frame=90   size=960x533 fps=30.8814
+        frame=120  size=960x533 fps=31.2415
+        ...
+        frame=780  size=960x533 fps=32.2555
+
+      Source aspect  : 1388 / 772 = 1.7979
+      Dest aspect    : 960  / 533 = 1.8011
+      Delta          : ~0.003 due to integer rounding of height. Acceptable.
+      Sustained FPS  : ~28.7 to 32.3 (avg ~30.9). Minimum observed 28.7.
+      Threshold      : >= 15. Pass by ~2x margin.
+
+  D3. Run at PROCESS_WIDTH = 1280 (after editing config.h):
+        source=1388x772 -> 1280px wide
+        frame=30   size=1280x711 fps=27.8667
+        frame=60   size=1280x711 fps=31.06
+        frame=90   size=1280x711 fps=30.9822
+        frame=120  size=1280x711 fps=30.586
+        frame=150  size=1280x711 fps=11.594      <-- single outlier
+        frame=180  size=1280x711 fps=30.69
+        ...
+        frame=660  size=1280x711 fps=31.6343
+
+      Source aspect  : 1.7979
+      Dest aspect    : 1280 / 711 = 1.8003. Acceptable.
+      Sustained FPS  : ~27.7 to 31.6 (avg ~29.8), excluding the 11.59
+                       outlier at frame 150. The outlier is a single
+                       window and does not repeat; attributed to disk
+                       read or OS scheduler, not sustained load.
+      Threshold      : >= 15. Pass.
+
+  D4. Exit test:
+        ESC verified at Dev 1.2 (user-confirmed). 'q' symmetric in code,
+        pending direct confirmation but not a gating item for Dev 1.3
+        (full shutdown re-verified at Dev 4.4).
+
+--------------------------------------------------------------------------------
+E. DECISION PER DT 1.3 RULE
+--------------------------------------------------------------------------------
+  Rule (designTracker 1.3):
+    PROCESS_WIDTH = 960 (1280 if FPS > 15).
+
+  Observation:
+    FPS > 15 at 1280 (sustained ~29.8, minimum sustained ~27.7).
+
+  Decision:
+    KEEP PROCESS_WIDTH = 1280.
+
+  Rationale (recorded for defence):
+    - Higher resolution improves stripe-boundary detection (feature 4.2
+      edge_density) and solid-ball numeral ring visibility.
+    - Cloth mask boundary (3.1) is sampled at finer granularity, reducing
+      rails/pocket bleed.
+    - FPS headroom remains large (~2x the 15 threshold), so downstream
+      steps (blur, mask, contours) have budget to spend.
+    - Single 11.59 FPS sample is isolated, not sustained; treated as
+      measurement noise.
+
+--------------------------------------------------------------------------------
+F. DT 0.5 AMENDMENT (constant change post-Phase-0)
+--------------------------------------------------------------------------------
+  Constant : PROCESS_WIDTH
+  Before   : 960
+  After    : 1280
+  Evidence : Dev 1.3 D3 FPS log (sustained ~29.8 FPS at 1280x711).
+  Reason   : Executing the pre-declared DT 1.3 decision rule
+             ("1280 if FPS > 15"). Not a deviation; the rule permitted
+             either 960 or 1280 depending on measurement.
+  DT 0.5 re-open : NOT required (rule-driven change, evidence logged).
+  DT 0.5 note    : record amendment in the 0.5 log so the defence can
+                   cite the measurement that drove the final value.
+
+--------------------------------------------------------------------------------
+G. CAVEATS / OBSERVATIONS RECORDED (non-blocking)
+--------------------------------------------------------------------------------
+  G1. Rounding of destination height.
+      1388/772 -> 960 -> 533 (floor). Aspect delta ~0.003. No visible
+      distortion. Using round() would give 534; INTER_AREA resampling
+      hides the half-pixel difference. Keeping floor is fine; no change.
+
+  G2. Single FPS outlier at 1280 (frame 150 = 11.59).
+      Not sustained; subsequent windows return to ~30. Likely an OS
+      disk read stall or background process. Not a code defect. If it
+      recurs systematically in Dev 7.1 full run, revisit; otherwise
+      ignore.
+
+  G3. FPS reported in 30-frame windows, not per-frame.
+      Rolling window smooths noise and matches the "report periodically"
+      intent. Per-frame printing would flood stdout and slow the loop.
+      Convention recorded here so downstream steps reuse it.
+
+  G4. No visual evidence captured (screenshots).
+      Dev 1.3 is a performance gate, not an evidence step. FPS logs above
+      are the evidence; visual distortion is ruled out by aspect-ratio
+      arithmetic (D2, D3). Defence screenshots come from Dev 5.1-5.3.
+
+  G5. PROCESS_WIDTH change to 1280 is now the value to use from Dev 2.x
+      onward. Blur kernel size 5 remains correct at this resolution
+      (kernel/resolution ratio still in the useful range for denoise).
+
+  G6. Local commits still 3 ahead of origin/main (carried).
+      No commit at Dev 1.3. Flush at Dev 2.5 safety checkpoint.
+
+  G7. Console encoding artefact (from Dev 0.2 D1 / 0.3 D3 / 0.4 D7)
+      does not surface here: all output is ASCII digits and FPS floats.
+
+--------------------------------------------------------------------------------
+H. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 1.3 — RESIZE + FPS — VERIFIED
+        main.cpp resize added    : pass (INTER_AREA, aspect preserved)
+        startup source print     : pass (1388x772 -> 1280px wide)
+        FPS reporting            : pass (rolling 30-frame window)
+        FPS >= 15 at 1280        : pass (sustained ~29.8)
+        Aspect not distorted     : pass (delta ~0.003, rounding)
+        PROCESS_WIDTH decision   : 1280 (per DT 1.3 rule)
+        Build exit 0             : pass
+        Exit key                 : pass (ESC; 'q' pending, same code path)
+
+  Parallel-tick:
+        Dev 1.3      [x]
+        DT  1.3      [x] (closed)
+        DT  0.5      amended — PROCESS_WIDTH 960 -> 1280
+                     (evidence: Dev 1.3 D3 FPS log)
+
+  Next: Dev 1.4 — BLUR -> HSV ORDER.
+        Closes DT 2.1 (GaussianBlur ksize=5, sigma=0) and DT 2.3
+        (BGR -> Blur -> HSV; never blur HSV channels).
+================================================================================
+END

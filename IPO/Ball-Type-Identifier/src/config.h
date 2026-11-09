@@ -20,9 +20,9 @@ constexpr double BLUR_SIGMA  = 0.0;
 // cue-ball + shadow ROIs excluded). Source: 0.5_cloth_samples.txt.
 // Raw min/max: H 90..91 | S 253..255 | V 121..156.
 // Widened per designTracker 3.1: H +-5, S +-10, V +-10.
-constexpr int CLOTH_H_LO = 85,  CLOTH_H_HI = 96;
-constexpr int CLOTH_S_LO = 243, CLOTH_S_HI = 255;
-constexpr int CLOTH_V_LO = 111, CLOTH_V_HI = 166;
+constexpr int CLOTH_H_LO = 35,  CLOTH_H_HI = 100;  // widened H
+constexpr int CLOTH_S_LO = 50,  CLOTH_S_HI = 255;  // widened S (lowered 243 -> 50)
+constexpr int CLOTH_V_LO = 50,  CLOTH_V_HI = 220;  // widened V (raised 166 -> 220)
 
 constexpr int MORPH_KERNEL_SIZE = 3;
 constexpr int MORPH_ITER        = 1;
@@ -50,4 +50,4 @@ constexpr double EDGE_SOLID_MIN     = 0.10;
 constexpr double EDGE_CUE_MAX       = 0.04;
 
 // --- Acquisition (1.3) ---
-constexpr int PROCESS_WIDTH = 960;
+constexpr int PROCESS_WIDTH = 1280;

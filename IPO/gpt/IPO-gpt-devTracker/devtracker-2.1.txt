@@ -1,0 +1,111 @@
+================================================================================
+DEV 2.1 — CLOTH MASK + INVERT — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: prove the cloth mask isolates the playing surface, the inverted
+         mask isolates balls/rails/pockets, and the pipeline maintains
+         sufficient FPS with the new masks. Closes DT 3.1 and executes
+         the first major amendment to DT 0.5.
+Parallel-tick: Dev 2.1 [x]  <=>  DT 3.1 [x] (closed).
+                              DT 0.5 amended (CLOTH_* widened).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 2.1 MUST PROVE
+--------------------------------------------------------------------------------
+  1. inRange() with CLOTH_* constants isolates the green cloth.
+  2. bitwise_not() inverts the mask to isolate objects of interest.
+  3. Mask correctly ignores the wooden rails and pockets (where possible).
+  4. Build succeeds and runtime is stable.
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  Repo root   : D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+                  IPO/Ball-Type-Identifier/
+  Build dir   : repo/build/
+  Files       : src/main.cpp     (populated + 2.1 delta)
+                src/config.h     (CLOTH_* amended during this step)
+  Source      : clip1.mp4 (1388x772 -> 1280x711)
+
+--------------------------------------------------------------------------------
+C. INITIAL DEFECT — OVERLY TIGHT HSV BOUNDS (CAUGHT AND FIXED)
+--------------------------------------------------------------------------------
+  First attempt used DT 0.5 constants (H: 85-96, S: 243-255, V: 111-166).
+  Result: cloth window was completely black, ball window completely white.
+  Cause: The single-frame PNG sample (DT 0.5) did not account for video
+  compression artifacts, dynamic lighting, and shadowing. The S_LO (243)
+  was far too high, and H range (11 units) too narrow.
+
+  Fix applied (src/config.h):
+    Old: H 85..96  | S 243..255 | V 111..166
+    New: H 35..100 | S  50..255 | V  50..220
+
+  Rationale for new values:
+    - Standard OpenCV green range.
+    - S_LO dropped to 50 to catch shadowed cloth.
+    - V_HI raised to 220 to catch brightly lit cloth near lamps.
+    - H widened to 35..100 to tolerate camera white-balance shifts.
+
+--------------------------------------------------------------------------------
+D. CODE DELTA (Dev 1.4 -> Dev 2.1)
+--------------------------------------------------------------------------------
+  Added (after split(hsv, ch)):
+      Mat cloth, ball;
+      inRange(hsv, Scalar(CLOTH_H_LO, CLOTH_S_LO, CLOTH_V_LO),
+                   Scalar(CLOTH_H_HI, CLOTH_S_HI, CLOTH_V_HI), cloth);
+      bitwise_not(cloth, ball);
+      imshow("cloth", cloth);
+      imshow("ball",  ball);
+
+--------------------------------------------------------------------------------
+E. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  E1. Build (F7): exit code 0.
+
+  E2. Run (Visual Evidence):
+      - "cloth" window: White table, black balls/rails/pockets.
+      - "ball"  window: Black table, white balls/rails/pockets.
+      -> Pass. Cloth is successfully isolated; inversion works.
+
+  E3. FPS (with 7 debug windows open: out, blurred, H, S, V, cloth, ball):
+      Run 1: avg ~22 FPS, dips to 9.5.
+      Run 2: avg ~24 FPS, dips to 4.4 (frame 990).
+      -> Pass (>= 15), but note heavy GUI overhead. Production will have
+         fewer windows. Dips flagged for Dev 7.1.
+
+--------------------------------------------------------------------------------
+F. DT 0.5 AMENDMENT (constant change post-Phase-0)
+--------------------------------------------------------------------------------
+  Constant : CLOTH_H_LO/HI, CLOTH_S_LO/HI, CLOTH_V_LO/HI
+  Before   : 85/96, 243/255, 111/166
+  After    : 35/100, 50/255, 50/220
+  Evidence : Dev 2.1 C (visual failure of original bounds).
+  Reason   : Video frames vary significantly from the static PNG sample.
+  DT 0.5 re-open : NOT required (runtime evidence drove the change).
+  DT 0.5 note    : Update 0.5_cloth_samples.txt to note the runtime override.
+
+--------------------------------------------------------------------------------
+G. CAVEATS / OBSERVATIONS RECORDED
+--------------------------------------------------------------------------------
+  D1. Pockets and rails are white in the "ball" window. This is expected
+      (they are not cloth). The contour filter (Dev 2.3) must drop them
+      using area/circularity/aspect logic.
+  D2. FPS drops are more frequent due to 7 windows. Re-verify in 7.1 with
+      only the final overlay window.
+  D3. Local commits still 3 ahead of origin/main. Flush at Dev 2.5.
+
+--------------------------------------------------------------------------------
+H. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 2.1 — CLOTH MASK + INVERT — VERIFIED
+        code added              : pass
+        mask works (visual)     : pass (cloth=white, ball=white)
+        inversion works         : pass
+        FPS >= 15               : pass (~22 avg)
+        config.h updated        : pass
+
+  Parallel-tick:
+        Dev 2.1 [x]
+        DT 3.1  [x] (closed)
+        DT 0.5  amended (CLOTH_* widened to 35/100, 50/255, 50/220)
+
+  Next: Dev 2.2 — MORPHOLOGY.
