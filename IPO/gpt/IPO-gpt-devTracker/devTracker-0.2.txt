@@ -1,0 +1,216 @@
+================================================================================
+DEV 0.2 — CONFIG.H CONSTANTS — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: confirm src/config.h still carries the full constant set locked by
+         DT 0.5, that no constexpr was dropped or renamed, that the header-
+         guard order fix from DT 0.5 D3 persists, and that the scope guard
+         still returns SCOPE OK after Phase 0. Dev 0.2 is a VERIFICATION gate.
+Parallel-tick: Dev 0.2 [x]  <=>  DT 0.5 re-verified (already [x]). No new DT
+               subsec is closed here; the tick confirms DT 0.5 still holds.
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 0.2 MUST PROVE
+--------------------------------------------------------------------------------
+  1. All DT 0.5 constants exist in src/config.h (no drift since Phase 0).
+  2. Five critical values still match DT 0.5 E1/E2:
+        CLOTH_H_LO/HI = 85/96, CLOTH_V_HI = 166,
+        MIN_CIRCULARITY = 0.75, WHITE_V_MIN = 200, RATIO_CUE = 0.80.
+  3. #pragma once is the first non-comment token (DT 0.5 D3 / E4).
+  4. scope_check.ps1 returns "SCOPE OK" with the current header.
+  5. No numeric literal drift outside constexpr declarations (spot check by
+     reading the file; strict no-magic-number rule is enforced at Dev 1.2+).
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  Repo  : D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+            IPO/Ball-Type-Identifier/
+  File  : src/config.h
+  Shell : PowerShell (default codepage — see Caveat D1)
+  Parent: Dev 0.1 passed (repo tree matches DT 0.2 baseline).
+
+  Full file content (echoed via Get-Content src/config.h):
+
+    // src/config.h — scope lock (0.4)
+    #pragma once
+
+    constexpr const char* DATA_ROOT =
+        "D:/HAN/Semester 7 Minor/billiards-game-clips";
+
+    enum class BallType { CUE, SOLID, STRIPE, UNCERTAIN };
+    // 8-ball -> SOLID. Three game classes only. No text-recognition class.
+    // No live-capture source class.
+
+    constexpr int NUM_GAME_CLASSES = 3;   // CUE, SOLID, STRIPE
+    constexpr int NUM_LABELS       = 4;   // + UNCERTAIN
+
+    // --- Enhancement (2.1) ---
+    constexpr int    BLUR_KSIZE  = 5;
+    constexpr double BLUR_SIGMA  = 0.0;
+
+    // --- Segmentation: cloth HSV (3.1, widened for F3 lighting) ---
+    // Sampled from game1/clothColor_noAspectRatio.png (7 mid-cloth points,
+    // cue-ball + shadow ROIs excluded). Source: 0.5_cloth_samples.txt.
+    // Raw min/max: H 90..91 | S 253..255 | V 121..156.
+    // Widened per designTracker 3.1: H +-5, S +-10, V +-10.
+    constexpr int CLOTH_H_LO = 85,  CLOTH_H_HI = 96;
+    constexpr int CLOTH_S_LO = 243, CLOTH_S_HI = 255;
+    constexpr int CLOTH_V_LO = 111, CLOTH_V_HI = 166;
+
+    constexpr int MORPH_KERNEL_SIZE = 3;
+    constexpr int MORPH_ITER        = 1;
+
+    // --- Contour filter (3.4) ---
+    constexpr int    MIN_BALL_AREA   = 1500;
+    constexpr int    MAX_BALL_AREA   = 60000;
+    constexpr double MIN_CIRCULARITY = 0.75;
+    constexpr double ASPECT_MIN      = 0.70;
+    constexpr double ASPECT_MAX      = 1.40;
+
+    // --- Feature extraction (4.1, 4.2) ---
+    constexpr int WHITE_S_MAX = 40;
+    constexpr int WHITE_V_MIN = 200;
+    constexpr int CANNY_LO    = 50;
+    constexpr int CANNY_HI    = 150;
+
+    // --- Classification rules (5.2) ---
+    constexpr double RATIO_CUE          = 0.80;
+    constexpr double UNCERTAIN_WHITE_HI = 0.60;
+    constexpr double RATIO_STRIPE_LO    = 0.15;
+    constexpr double SOLID_WHITE_LO     = 0.05;
+    constexpr double UNCERTAIN_WHITE_LO = 0.05;
+    constexpr double EDGE_SOLID_MIN     = 0.10;
+    constexpr double EDGE_CUE_MAX       = 0.04;
+
+    // --- Acquisition (1.3) ---
+    constexpr int PROCESS_WIDTH = 960;
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE (per devTracker 0.2 Verify line)
+--------------------------------------------------------------------------------
+  C1. Presence check (automated, DT 0.5 C5 list):
+      $expected = @(
+        'DATA_ROOT','BallType','NUM_GAME_CLASSES','NUM_LABELS',
+        'BLUR_KSIZE','BLUR_SIGMA',
+        'CLOTH_H_LO','CLOTH_H_HI','CLOTH_S_LO','CLOTH_S_HI',
+        'CLOTH_V_LO','CLOTH_V_HI',
+        'MORPH_KERNEL_SIZE','MORPH_ITER',
+        'MIN_BALL_AREA','MAX_BALL_AREA','MIN_CIRCULARITY',
+        'ASPECT_MIN','ASPECT_MAX',
+        'WHITE_S_MAX','WHITE_V_MIN','CANNY_LO','CANNY_HI',
+        'RATIO_CUE','UNCERTAIN_WHITE_HI','RATIO_STRIPE_LO',
+        'SOLID_WHITE_LO','UNCERTAIN_WHITE_LO',
+        'EDGE_SOLID_MIN','EDGE_CUE_MAX',
+        'PROCESS_WIDTH'
+      )
+      Result: "presence check done" with zero MISSING lines.
+      -> Pass.
+
+  C2. Spot-check (5 critical values via Select-String):
+      src\config.h:23: constexpr int CLOTH_H_LO = 85,  CLOTH_H_HI = 96;
+      src\config.h:25: constexpr int CLOTH_V_LO = 111, CLOTH_V_HI = 166;
+      src\config.h:33: constexpr double MIN_CIRCULARITY = 0.75;
+      src\config.h:39: constexpr int WHITE_V_MIN = 200;
+      src\config.h:44: constexpr double RATIO_CUE          = 0.80;
+      -> All five match DT 0.5 E1/E2. Pass.
+
+  C3. Header guard order:
+      Get-Content src/config.h | Select-Object -First 3
+        line 1: // src/config.h <em-dash> scope lock (0.4)
+        line 2: #pragma once
+        line 3: (blank)
+      -> #pragma once is the first non-comment token.
+         Fix for DT 0.5 D3 persists. Pass.
+      -> Note: 0.5 C5 claimed "#pragma once is line 1". In practice it is
+         line 2 (provenance comment is line 1). The governing rule is
+         DT 0.5 A4 / E4 ("first non-comment token"), which is satisfied.
+         DT 0.5 C5 wording is cosmetic; no fix required.
+
+  C4. Scope check:
+      powershell -File src/scope_check.ps1
+      -> "SCOPE OK"
+      -> Pass.
+
+  C5. No stray numeric literals outside constexpr declarations:
+      Read-through of the file confirms every numeric literal is inside
+      a `constexpr` line. No magic numbers in code yet (main.cpp is still
+      a 0 B stub, written in Dev 1.2).
+      -> Pass for this step; ongoing discipline enforced from Dev 1.2.
+
+--------------------------------------------------------------------------------
+D. CAVEATS / OBSERVATIONS RECORDED (non-blocking)
+--------------------------------------------------------------------------------
+  D1. Console encoding artefact.
+      Line 1 of config.h displayed as:
+        "// src/config.h â€” scope lock (0.4)"
+      The "â€”" sequence is the UTF-8 em-dash (U+2014) being interpreted by
+      PowerShell under the OEM codepage (CP437/CP850). The file on disk is
+      UTF-8 clean; VS Code and g++ both read it correctly. No code change.
+      If console cosmetics matter later:
+        chcp 65001
+        OR  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+      Not required for build.
+
+  D2. DT 0.5 C5 wording nit.
+      DT 0.5 C5 states "#pragma once is line 1". Actual file has a
+      provenance comment on line 1 and #pragma once on line 2.
+      Governing rule is "first non-comment token" (DT 0.5 A4 / E4),
+      which holds. DT 0.5 is not edited retroactively; this note is the
+      recorded clarification for defense purposes.
+
+  D3. RATIO_STRIPE_HI absent.
+      DT 0.5 block listed "RATIO_STRIPE_LO/HI" but config.h only defines
+      RATIO_STRIPE_LO = 0.15. Correct behaviour: the stripe upper bound
+      is UNCERTAIN_WHITE_HI = 0.60 in DT 5.2 rules. RATIO_STRIPE_HI was
+      a redundant designTracker list entry. No fix; noted so defense can
+      explain "the stripe upper bound is UNCERTAIN_WHITE_HI".
+
+  D4. No push since Phase 0.
+      Carried from Dev 0.1 D5: local branch is 3 commits ahead of
+      origin/main. Still true. Flush at the next safety checkpoint (end
+      of Dev 2.5) or at Dev 7.2 at the latest.
+
+--------------------------------------------------------------------------------
+E. DECISIONS LOCKED BY DEV 0.2
+--------------------------------------------------------------------------------
+  E1. src/config.h is the single source of truth for every tunable value
+      in the pipeline. No numeric literal may appear in src/main.cpp for
+      any parameter that already has a constexpr here.
+
+  E2. The constant set is frozen for the duration of Dev 1–4. Any change
+      after this point must cite runtime evidence (a failing Verify line
+      in Dev 2.x / 3.x / 4.x) and be recorded back into DT 0.5 (or the
+      relevant DT subsec) before re-verification.
+
+  E3. #pragma once remains the first non-comment token in config.h.
+      Any future header must follow the same convention.
+
+  E4. Cloth HSV values (85/96, 243/255, 111/166) are locked as evidence-
+      based (from cloth_sampler.py + DT 0.5 E1). They may only be widened
+      in Dev 2.1 (V_HI -> 180) or Dev 2.1 (S_LO -> 250) with an explicit
+      caveat update to DT 0.5 D1 / D2.
+
+  E5. Dev 0.2 touches no source code. It is a read-only verification step.
+      No commit is produced.
+
+--------------------------------------------------------------------------------
+F. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 0.2 — CONFIG.H CONSTANTS — VERIFIED
+        presence (31 constants) : pass
+        critical values (5)     : pass
+        header guard order      : pass
+        scope_check.ps1         : pass (SCOPE OK)
+        no stray literals       : pass (main.cpp still stub)
+        caveats                 : D1 console encoding (cosmetic)
+                                  D2 0.5 C5 wording nit (cosmetic)
+                                  D3 RATIO_STRIPE_HI absent (by design)
+                                  D4 3 commits ahead (flush at 2.5 / 7.2)
+
+  Parallel-tick:
+        Dev 0.2 [x]
+        DT  0.5 [x] (re-confirmed; no status change)
+
+  Next: Dev 0.3 — SCOPE CHECK (standalone run; re-verifies DT 0.4 enforcement).
+================================================================================
+END

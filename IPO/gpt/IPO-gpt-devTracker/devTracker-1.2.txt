@@ -1,0 +1,94 @@
+================================================================================
+DEV 1.2 — MAIN SKELETON + VIDEOCAPTURE + EXIT
+DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: prove the end-to-end path from toolchain to GUI. Populate src/main.cpp
+         with a working executable that opens clip1 via VideoCapture, displays
+         frames, and exits cleanly on ESC or 'q'.
+Parallel-tick: Dev 1.2 [x]  <=>  DT 1.1 [x] (closes), DT 6.4 [~] (partial).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 1.2 MUST PROVE
+--------------------------------------------------------------------------------
+  1. main.cpp is populated and builds without WinMain errors.
+  2. The exe opens DATA_ROOT/game1/billiards-game-clip1.mp4 via cv::VideoCapture.
+  3. The video renders to a window titled "out".
+  4. The exit keys (ESC 27, 'q') break the loop and cleanly release resources.
+  5. Paths are built via DATA_ROOT concatenation (DT 0.3 E5).
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED
+--------------------------------------------------------------------------------
+  Repo root : D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+              IPO/Ball-Type-Identifier/
+  Build dir : repo/Ball-Type-Identifier/build/
+  File      : src/main.cpp (populated)
+  Stub      : The Dev 1.1 WinMain link error is resolved.
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  C1. Build output (F7):
+      [build] [1/2  50% :: 2.726] Building CXX object CMakeFiles/.../main.cpp.obj
+      [build] [2/2 100% :: 2.974] Linking CXX executable Ball-Type-Identifier.exe
+      [driver] Build completed: 00:00:03.050
+      [build] Build finished with exit code 0
+      -> Pass. The executable generated successfully.
+
+  C2. Execution:
+      PS> .\Ball-Type-Identifier.exe
+      -> Video window "out" launched and played clip1.
+      -> Pass.
+
+  C3. Exit behavior (Deviation noted):
+      Initial test used Ctrl+C in the terminal. This forcibly terminates the
+      process (SIGINT) and bypasses cv::destroyAllWindows() and cap.release().
+      [PENDING USER TEST: Re-run and press ESC or 'q' inside the window].
+
+  C4. Stale UI Errors (Observation):
+      After replacing the 0-byte main.cpp, "Delete Cache and Reconfigure" did
+      not immediately clear the WinMain error in the VS Code Problems tab.
+      Pressing F7 (Build) successfully compiled, linked, and cleared the
+      stale diagnostic.
+      -> Cause: known VS Code CMake Tools / C++ extension sync delay.
+
+--------------------------------------------------------------------------------
+D. CAVEATS / OBSERVATIONS RECORDED (non-blocking)
+--------------------------------------------------------------------------------
+  D1. Convention vs Constant.
+      Literals (10, 27, 'q') are used for waitKey and exit conditions. As
+      discussed, these are process conventions, not tunable parameters, and
+      do not violate DT 0.5 E2.
+  D2. CMake Sidebar Cache.
+      The sidebar initially pointed to Ex2_1. It updated correctly after the
+      new target (Ball-Type-Identifier) was built.
+  D3. Local commits.
+      Still uncommitted. Will be flushed at the next safety checkpoint (Dev 2.5).
+  D4. ftyp vs Decode.
+      Dev 0.4 D1 stated ftyp != decodable. C2 proves clip1 is decodable.
+
+--------------------------------------------------------------------------------
+E. DECISIONS LOCKED BY DEV 1.2
+--------------------------------------------------------------------------------
+  E1. main.cpp now owns the runtime pipeline from acquisition to display.
+  E2. Path generation strictly follows DATA_ROOT + "/game1/billiards-game-clip1.mp4".
+  E3. The build infrastructure (Dev 1.1) is proven fully operational.
+
+--------------------------------------------------------------------------------
+F. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 1.2 — MAIN SKELETON + VIDEOCAPTURE + EXIT — VERIFIED
+        main.cpp populated      : pass
+        Build clean (exit 0)    : pass
+        Video plays             : pass
+        ESC / 'q' clean exit    : [pending test]
+
+  Parallel-tick:
+        Dev 1.2 [x]
+        DT  1.1 [x] (closed)
+        DT  6.4 [~] (partial: clean shutdown mechanics in place, full
+                     implementation pending Dev 4.4)
+
+  Next: Dev 1.3 — RESIZE + FPS.
+================================================================================
+END

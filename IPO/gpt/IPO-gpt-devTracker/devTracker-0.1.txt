@@ -1,0 +1,155 @@
+================================================================================
+DEV 0.1 — REPO TREE + LAYOUT — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: confirm the Phase 0 artifacts produced under DT 0.2–0.5 survived intact
+         to the moment dev work begins. Dev 0.1 is a VERIFICATION gate, not a
+         build step. Its only job is to prove that the repo on disk matches
+         what Phase 0 recorded.
+Parallel-tick: Dev 0.1 [x]  <=>  DT 0.2 re-verified (already [x]). No new DT
+               subsec is closed here; the tick confirms DT 0.2 still holds.
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 0.1 MUST PROVE
+--------------------------------------------------------------------------------
+  1. Repo root contains the canonical top-level tree agreed in DT 0.2.
+  2. src/ contains exactly the four files Phase 0 produced:
+        config.h, main.cpp, scope_check.ps1, cloth_sampler.py.
+  3. docs/ contains scope_lock.md (DT 0.4 deliverable).
+  4. .gitignore excludes build/, *.exe, outputs/ (DT 0.2 D6).
+  5. Working tree is clean; no build artefacts or binaries are tracked.
+  6. Any deviation (missing folder, extra file, unexpected size) is recorded
+     as a note, not as a fail, unless it violates a DT decision.
+
+--------------------------------------------------------------------------------
+B. ENVIRONMENT AS VERIFIED (raw, from disk)
+--------------------------------------------------------------------------------
+  Repo root : D:/HAN/Semester 7 Minor/HAN-S7Minor-EmbeddedVision-AI/
+              IPO/Ball-Type-Identifier/
+
+  Top level (Get-ChildItem -Force):
+    d  assets                     (empty; DT 0.2)
+    d  docs                       (contains scope_lock.md)
+    d  src                        (contains 4 files)
+    -  .gitignore        23 B
+    -  CMakeLists.txt     0 B     (not yet written; Dev 1.1)
+    -  README.md          0 B     (stub)
+
+  src/ (Get-ChildItem src):
+    -  cloth_sampler.py  2210 B   (DT 0.5 calibration utility)
+    -  config.h          1930 B   (DT 0.4 + DT 0.5 constants)
+    -  main.cpp             0 B   (stub; Dev 1.2)
+    -  scope_check.ps1    479 B   (DT 0.4 enforcement)
+
+  docs/ (Get-ChildItem docs):
+    -  scope_lock.md      889 B   (DT 0.4 E5 deliverable)
+
+  .gitignore (Get-Content .gitignore):
+    build/
+    *.exe
+    outputs/
+
+  git status:
+    On branch main
+    Your branch is ahead of 'origin/main' by 3 commits.
+    nothing to commit, working tree clean
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE (per devTracker 0.1 Verify line)
+--------------------------------------------------------------------------------
+  C1. All DT 0.2 top-level items present.
+        Pass: assets/, docs/, src/, .gitignore, CMakeLists.txt, README.md.
+        Note: outputs/ (decoy, DT 0.2) absent. Harmless — DT 0.2 D8 states
+              IPO produces no per-ball crop cache and writes only under
+              DATA_ROOT/IPO/. The decoy folder was a placeholder; its absence
+              does not break any DT decision.
+
+  C2. All DT 0.2 src/ items present.
+        Pass: config.h, main.cpp, scope_check.ps1, cloth_sampler.py.
+        Sizes consistent with their producing subsecs (config.h non-empty,
+        main.cpp still stub, sampler committed, scope script present).
+
+  C3. docs/scope_lock.md present.
+        Pass.
+
+  C4. .gitignore matches DT 0.2 D6.
+        Pass: exactly build/, *.exe, outputs/. No source excluded.
+
+  C5. git status clean.
+        Pass: "nothing to commit, working tree clean".
+        Note: branch is 3 commits ahead of origin/main. Not a violation —
+              DT 0.2 verify requires "clean", not "pushed". Push is deferred
+              to the next safe checkpoint / Dev 7.2.
+
+  C6. No tracked build artefacts.
+        Pass: build/ absent pre-configure; no *.exe anywhere in tree.
+
+--------------------------------------------------------------------------------
+D. CAVEATS / OBSERVATIONS RECORDED (non-blocking)
+--------------------------------------------------------------------------------
+  D1. outputs/ decoy folder absent.
+        Not required. DT 0.2 D8 declares no repo writes; DT 0.3 E3 confines
+        runtime writes to DATA_ROOT/IPO/. If a future step introduces a repo
+        outputs/ folder, .gitignore already covers it.
+
+  D2. .vscode/ absent at this point.
+        Expected. VS Code creates .vscode/settings.json when CMake Tools is
+        first invoked (Dev 1.1). Dev 0.1 must NOT fail on its absence.
+
+  D3. CMakeLists.txt is 0 B.
+        Expected. Written in Dev 1.1. Dev 0.1 only confirms file presence.
+
+  D4. main.cpp is 0 B.
+        Expected. Skeleton written in Dev 1.2. Dev 0.1 only confirms file
+        presence.
+
+  D5. 3 local commits ahead of origin/main.
+        Action: push at the next safe checkpoint (after Dev 2.5 per the
+        updated devTracker safety-commit note) or at latest in Dev 7.2.
+        Not part of Dev 0.1's Verify — recorded so it is not forgotten.
+
+  D6. Repo name is Ball-Type-Identifier, not BilliardClassifier.
+        Consistent with DT 0.2 D5 override. Earlier designTracker draft
+        referring to BilliardClassifier remains superseded; no action here.
+
+--------------------------------------------------------------------------------
+E. DECISIONS LOCKED BY DEV 0.1
+--------------------------------------------------------------------------------
+  E1. Repo layout is accepted as the operating baseline for all subsequent
+      dev steps. No structural reorganization from here on unless a DT
+      decision demands it.
+
+  E2. The two empty files (CMakeLists.txt, main.cpp) are explicitly allowed
+      to be empty at Dev 0.1; their content is delivered in Dev 1.1 and
+      Dev 1.2 respectively.
+
+  E3. Missing decoy outputs/ and absent .vscode/ are declared non-blocking
+      for all downstream dev steps; neither is a Verify condition.
+
+  E4. Local commits awaiting push will be flushed at the next safety
+      checkpoint (end of Dev 2.5) or at Dev 7.2 at the latest. Failure to
+      push at 7.2 remains a non-submission risk.
+
+  E5. Dev 0.1 does not touch source. It is a read-only verification step.
+      No commit is produced by Dev 0.1 itself.
+
+--------------------------------------------------------------------------------
+F. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 0.1 — REPO TREE + LAYOUT — VERIFIED
+        top-level tree         : pass
+        src/ contents          : pass (4/4)
+        docs/ contents         : pass (scope_lock.md)
+        .gitignore             : pass (build/, *.exe, outputs/)
+        git working tree clean : pass
+        no tracked artefacts   : pass
+        caveats                : D1 outputs/ absent (harmless)
+                                 D2 .vscode/ absent (auto in 1.1)
+                                 D5 3 commits ahead of origin (flush at 2.5/7.2)
+
+  Parallel-tick:
+        Dev 0.1 [x]
+        DT  0.2 [x] (re-confirmed; no status change)
+
+  Next: Dev 0.2 — CONFIG.H CONSTANTS (verify only).
+================================================================================
+END
