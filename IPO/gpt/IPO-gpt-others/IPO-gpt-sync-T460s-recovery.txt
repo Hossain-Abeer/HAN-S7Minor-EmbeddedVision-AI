@@ -1,0 +1,277 @@
+================================================================================
+RECOVERY LOG — sync-T460s-recovery
+DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: record the corruption event, root cause, recovery procedure, and
+         permanent rules adopted to prevent recurrence. This is a
+         (self-standing) recovery record — no DT subsec is closed here.
+         Its function is forensic: so a future reader (or examiner) can
+         trace what happened, why the repo was re-synced, and what
+         hygiene rules now govern the workflow.
+
+Event date : 2026-11-09
+Event type : Git object corruption caused by exFAT filesystem on USB
+Affected   : Y530 repo (D:\HAN\...\HAN-S7Minor-EmbeddedVision-AI)
+             and T460s-side USB copy
+Recovery   : Working tree rescued from USB; Y530 .git preserved;
+             history rebased; pushed cleanly to origin/main.
+
+================================================================================
+A. SYMPTOM
+================================================================================
+On Y530, git commands failed repeatedly with:
+
+    error: inflate: data stream error (incorrect header check)
+    error: unable to unpack 59194ac9e051dc1ec630eb90d882aebc467b39e9 header
+    error: refs/heads/main: invalid sha1 pointer 59194ac...
+    error: refs/remotes/origin/HEAD: invalid sha1 pointer 59194ac...
+    fatal: loose object 59194ac... is corrupt
+    fatal: bad object HEAD
+
+Additional objects later surfaced as corrupt (75daee..., ba446c...,
+2d5aa1..., 426a53..., etc.). Git fsck reported invalid reflog entries
+and missing reachable objects.
+
+Effect: fetch, push, blame, add, and status all failed. Repo unusable
+for any git operation.
+
+================================================================================
+B. ROOT CAUSE
+================================================================================
+Two filesystems, one shared workflow, one of them unsafe for .git.
+
+  Y530        : D:\ (internal)  = NTFS Fixed       — safe for .git
+  T460s       : D:\ (USB)       = exFAT Removable  — NOT safe for .git
+
+The USB was used as a live sync medium for BOTH code (repo) and data
+(clips). On T460s, git wrote loose objects into .git/objects/ on the
+exFAT volume. exFAT:
+
+  - does not record file ownership (git detects this: "dubious ownership")
+  - has weaker write semantics for many-small-file workloads
+  - is fragile under mid-write disconnects (eject, sleep, unsafe removal)
+
+The result was silent zlib stream corruption in loose objects. Once
+an object in the reachable set (HEAD, refs/heads/main, refs/remotes/
+origin/*) is corrupt, git stops operating on the whole repository.
+
+Key insight: exFAT corruption is byte-level. Copying the corrupt
+object file to NTFS carries the corruption unchanged — NTFS does not
+repair zlib headers. Location is not the problem; the bytes are.
+
+================================================================================
+C. WHAT WAS PRESERVED vs LOST
+================================================================================
+PRESERVED
+  - Y530 working tree through Dev 1.2 (older copy, last known good)
+  - Y530 .git (initially unverified; later proven healthy via fsck)
+  - All files on USB (repo working tree through Dev 2.1, plus clips)
+  - Origin/main on GitHub (contained commits up to 59194ac merge)
+
+LOST / UNRECOVERABLE
+  - 3 unpushed commits on Y530 (dev work beyond Dev 1.2)
+  - 3 unpushed commits on T460s (later replicated via USB working tree)
+  - The literal commit objects corresponding to 59194ac's corrupt
+    loose counterpart were re-fetched from origin.
+
+RECONCILED
+  - Dev 2.1 source (main.cpp 2954 B, config.h widened CLOTH_*, three
+    devtracker-*.txt files) recovered from USB working tree
+  - Repacked as one recovery commit: 708a830 "sync-T460s-devtracker-2.1"
+
+================================================================================
+D. RECOVERY PROCEDURE (AS EXECUTED)
+================================================================================
+D1. Closed VS Code completely (releases file locks).
+
+D2. Backed up the USB working tree before any mutation.
+
+D3. Verified filesystem identity on Y530:
+        Get-Volume D | Format-Table DriveLetter, FileSystem, DriveType
+        -> D: NTFS Fixed  (Y530 internal — SAFE)
+    Verified USB mounts as E: on Y530 (D: occupied):
+        Get-Volume | Where-Object DriveType -eq 'Removable'
+        -> E: exFAT Removable
+
+D4. Verified Y530 .git health:
+        cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI"
+        git fsck --full
+        -> only dangling blob 2fc2161... and dangling tree 68d32a1...
+           No inflate errors. No invalid sha1. .git is HEALTHY.
+
+D5. Compared source versions:
+        Get-Item "E:\...\IPO\Ball-Type-Identifier\src\main.cpp" |
+            Select LastWriteTime, Length
+        Get-Item "D:\...\IPO\Ball-Type-Identifier\src\main.cpp" |
+            Select LastWriteTime, Length
+        -> USB : 2026-11-09 12:30, 2954 B  (Dev 2.1)
+        -> Y530: 2026-11-08 16:23, 821  B  (Dev 1.2)
+    Decision: USB working tree is source of truth for FILES.
+              Y530 .git is source of truth for HISTORY.
+
+D6. Copied USB -> Y530 working tree, EXCLUDING .git, build, .vscode,
+    *.exe:
+        robocopy "E:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI" `
+                 "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI" `
+                 /E /XD .git build .vscode /XF *.exe /MT:16 /R:2 /W:2
+        -> Exit code 1 (success). 5 files updated:
+             devtracker-1.3.txt, 1.4.txt, 2.1.txt (new)
+             src/config.h, src/main.cpp (newer)
+
+D7. Verified Y530 git state:
+        git status
+        -> modified: config.h, main.cpp
+        -> untracked: devtracker-1.3/1.4/2.1.txt
+        -> branch is 2 behind origin/main (fast-forward possible)
+        git fsck --full
+        -> still only the dangling tree; .git remains healthy.
+
+D8. Attempted stash + pull --ff-only + stash pop:
+        -> Stash failed: "No stash entries found"
+        -> Reason: changes had ALREADY been committed locally as 382ebb9
+           before stashing. Working tree was clean.
+        -> git pull --ff-only: refused (diverged: 1 ahead, 2 behind).
+
+D9. Rebase:
+        git rebase origin/main
+        -> "Current branch main is up to date" (no conflicts, instant)
+        -> history became linear:
+             708a830 (HEAD) sync-T460s-devtracker-2.1
+             59194ac        Merge branch 'main'...
+             ba27208        repo-clone-ThinkPad-T460
+             064a1de        thru - 1.2
+             f12e7bd        starting devTracker
+             57cd010        designTracker-Phase0-done
+             8b0af6a        update - thru 0.5
+
+D10. Pushed:
+        git push origin main
+        -> 59194ac..708a830  main -> main  (fast-forward, no force)
+
+D11. Verified end state:
+        git fsck --full   -> 1 dangling tree (harmless)
+        git status        -> clean, up to date with origin/main
+        git log -3        -> 708a830 = HEAD = origin/main
+
+D12. Deleted the USB repo folder:
+        Remove-Item -Recurse -Force "E:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI"
+    Preserved USB data folder:
+        E:\HAN\Semester 7 Minor\billiards-game-clips\ (unchanged)
+
+D13. Confirmed Y530 has clips locally:
+        Get-ChildItem "D:\HAN\Semester 7 Minor\billiards-game-clips\game1"
+        -> 5/5 .mp4 + clothColor_noAspectRatio.png + clothColor_rawPixelValueSet.txt
+        -> Y530 is self-sufficient; no USB needed at runtime.
+
+================================================================================
+E. POST-RECOVERY STATE (VERIFIED)
+================================================================================
+  Repo location   : D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI
+  Filesystem      : NTFS (Y530 internal D:)
+  HEAD            : 708a830 (= origin/main)
+  fsck            : clean (only 1 dangling tree)
+  Working tree    : clean
+  Dev progress    : through Dev 2.1
+                    main.cpp 2954 B, config.h with widened CLOTH_*
+                    devtracker-1.3 / 1.4 / 2.1 present
+  Clips           : 5/5 present at DATA_ROOT on Y530 internal D:
+  USB             : contains billiards-game-clips/ only (repo removed)
+
+================================================================================
+F. PERMANENT RULES (NOW IN FORCE)
+================================================================================
+R1. Repo lives on internal NTFS ONLY.
+      Y530 : D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI
+      T460s: C:\dev\HAN-S7Minor-EmbeddedVision-AI (after fresh clone)
+    Never place .git on exFAT/FAT32/USB.
+
+R2. USB role is DATA + BACKUP ONLY.
+    Permitted on USB:
+      - billiards-game-clips/  (runtime input, DATA_ROOT)
+      - backup/*.bundle        (git bundle, single-file backup)
+
+R3. Sync code via git push / git pull. Never via robocopy of the repo
+    folder between machines. Never copy .git between machines.
+
+R4. Session-end backup (both machines):
+      git bundle create "E:\backup\HAN-S7Minor-repo-$(Get-Date -Format yyyyMMdd-HHmm).bundle" --all
+    Single file, exFAT-safe, restorable with: git clone <bundle>
+
+R5. Never run git add / commit / fetch / push from any path under the
+    USB drive.
+
+R6. If git reports "inflate: data stream error" or "invalid sha1
+    pointer", STOP. Do not attempt local repair. Refer to this log.
+    Recovery path is: preserve working tree, preserve .git if it
+    passes fsck, rebase, push. Never repair loose objects by hand.
+
+================================================================================
+G. LESSONS LEARNED
+================================================================================
+L1. exFAT is a silent corruptor for git workloads. "It works" is
+    temporary; failures appear only after accumulated corruption
+    reaches a reachable object.
+
+L2. The git error "dubious ownership in repository" was an early
+    warning, not noise. It indicated the .git was on a filesystem
+    that cannot track ownership. It should have been heeded.
+
+L3. All recovery attempts that copy .git across filesystems fail.
+    Corruption is byte-level, not location-level.
+
+L4. Always verify which physical volume a drive letter points to
+    BEFORE asserting "D: is safe":
+      Get-Volume D | Format-Table DriveLetter, FileSystem, DriveType
+    On Y530 D: is internal NTFS. On T460s D: is USB exFAT.
+    Same letter, different filesystem, different safety profile.
+
+L5. When local and remote diverge with one clean commit each, rebase
+    (not merge, not force-push) is the correct resolution. If the
+    local commit contains the superset of remote changes, no
+    conflicts occur — the rebase is instantaneous.
+
+L6. Push early, push often. Three unpushed commits (Y530) and three
+    unpushed commits (T460s) were the entire operational cost of
+    this incident. A `git push` after each devTracker close would
+    have made this recovery trivial.
+
+================================================================================
+H. PENDING FIXES FLAGGED BY THIS EVENT
+================================================================================
+P1. config.h provenance comment for CLOTH_* contradicts current
+    values. Comment says "H ±5, S ±10, V ±10" from PNG; constants
+    are 35/100, 50/255, 50/220 (video-derived via Dev 2.1).
+    Amend before Dev 6.1 (defense docs). Knockout risk.
+
+P2. 0.5_cloth_samples.txt should append the Dev 2.1 runtime-override
+    note. Amendment, not replacement.
+
+P3. Consider a pre-commit hook that runs:
+        src/scope_check.ps1
+    to institutionalize DT 0.4 E4. Low cost, prevents forgetting
+    the scope gate before each commit.
+
+================================================================================
+I. STATUS
+================================================================================
+  [x] RECOVERY — COMPLETE AND VERIFIED
+        root cause identified    : pass (exFAT + .git)
+        working tree rescued     : pass (USB -> Y530, excl. .git)
+        .git health preserved    : pass (fsck clean before/after)
+        history reconciled       : pass (rebase, no conflicts)
+        push to origin           : pass (fast-forward)
+        USB cleaned              : pass (clips retained)
+        Y530 self-sufficiency    : pass (clips on internal D:)
+        rules codified           : pass (R1-R6)
+        lessons recorded         : pass (L1-L6)
+        pending fixes listed     : pass (P1-P3)
+
+  Recovery commit : 708a830 "sync-T460s-devtracker-2.1"
+  Pushed to       : origin/main (59194ac..708a830)
+
+  Next: Dev 2.2 — MORPHOLOGY (closes DT 3.2).
+        First step run on the recovered, NTFS-based repo.
+
+================================================================================
+END
+================================================================================

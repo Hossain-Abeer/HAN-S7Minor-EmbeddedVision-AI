@@ -28,7 +28,7 @@ constexpr int MORPH_KERNEL_SIZE = 3;
 constexpr int MORPH_ITER        = 1;
 
 // --- Contour filter (3.4) ---
-constexpr int    MIN_BALL_AREA   = 1500;
+constexpr int    MIN_BALL_AREA   = 200;
 constexpr int    MAX_BALL_AREA   = 60000;
 constexpr double MIN_CIRCULARITY = 0.75;
 constexpr double ASPECT_MIN      = 0.70;
