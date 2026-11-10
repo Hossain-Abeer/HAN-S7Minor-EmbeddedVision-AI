@@ -18,7 +18,7 @@ constexpr double BLUR_SIGMA  = 0.0;
 // --- Segmentation: cloth HSV (3.1, widened for F3 lighting) ---
 // Sampled from game1/clothColor_noAspectRatio.png (7 mid-cloth points,
 // cue-ball + shadow ROIs excluded). Source: 0.5_cloth_samples.txt.
-// Raw min/max: H 90..91 | S 253..255 | V 121..156.
+// Raw min/max
 // Widened per designTracker 3.1: H +-5, S +-10, V +-10.
 constexpr int CLOTH_H_LO = 35,  CLOTH_H_HI = 100;  // widened H
 constexpr int CLOTH_S_LO = 50,  CLOTH_S_HI = 255;  // widened S (lowered 243 -> 50)

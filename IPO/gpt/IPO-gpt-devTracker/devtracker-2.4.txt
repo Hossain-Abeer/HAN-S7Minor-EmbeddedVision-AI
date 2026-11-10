@@ -1,0 +1,137 @@
+================================================================================
+DEV 2.4 — BALL CANDIDATE STRUCT + MODULARIZATION PIVOT
+DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: confirm that accepted contours are correctly converted into 
+         BallCandidate structs, and document the major architectural pivot 
+         where main.cpp was split into a modular .h/.cpp structure.
+Parallel-tick: Dev 2.4 [x]  <=>  DT 3.5 [x] (closed).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 2.4 MUST PROVE
+--------------------------------------------------------------------------------
+  1. struct BallCandidate exists and holds bbox, center, area.
+  2. A std::vector<BallCandidate> is populated inside the filter loop.
+  3. candidates.size() strictly equals nAccepted on every frame.
+  4. The center is computed purely from moments without mutation.
+  5. The project still builds cleanly and runs at acceptable FPS.
+
+--------------------------------------------------------------------------------
+B. THE MODULARIZATION PIVOT (CRITICAL CONTEXT)
+--------------------------------------------------------------------------------
+  Mid-implementation, the monolith main.cpp was refactored to improve
+  maintainability, debugging, and defense readiness. The pipeline logic
+  was extracted into discrete modules.
+
+  NEW REPO STRUCTURE:
+    IPO/Ball-Type-Identifier/
+    ├── CMakeLists.txt  (updated to compile 3 .cpp files)
+    └── src/
+        ├── config.h       (constants)
+        ├── types.h        (shared structs: BallCandidate)
+        ├── preprocess.h   (declarations for Phase 2)
+        ├── preprocess.cpp (implementation: blur, HSV)
+        ├── segment.h      (declarations for Phase 3)
+        ├── segment.cpp    (implementation: masks, morph, contours, filters)
+        └── main.cpp       (orchestrator: reads video, calls functions)
+
+  KEY CHANGES & SYNTAX FIXES:
+    - CMakeLists.txt add_executable now includes: src/main.cpp src/preprocess.cpp src/segment.cpp
+    - types.h created to hold BallCandidate, avoiding circular includes.
+    - segment.cpp uses explicit cv:: and std:: namespaces (best practice for modules).
+    - A syntax error (trailing comma in the Point2f center constructor) was 
+      caught and fixed in segment.cpp during the pivot.
+
+--------------------------------------------------------------------------------
+C. CODE DELTA (The modular components)
+--------------------------------------------------------------------------------
+  src/types.h:
+    struct BallCandidate { cv::Rect bbox; cv::Point2f center; int area; };
+
+  src/segment.cpp (The core of 2.4):
+    - Accepts hsv, rejectPath, and a reference to filteredOut.
+    - Iterates contours. If accepted, increments nAccepted, draws to 
+      filteredOut, computes Moments to get center, and pushes to the 
+      candidates vector.
+    - Returns candidates.
+
+  src/main.cpp:
+    - Stripped down to a clean orchestrator.
+    - Calls applyPreprocessing(), then extractCandidates().
+    - Handles FPS calculation, imshow(), and waitKey().
+
+--------------------------------------------------------------------------------
+D. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  D1. Build (F7):
+      Build finished with exit code 0. (3 .cpp files compiled and linked).
+
+  D2. Terminal log (excerpt):
+      contours=24 accepted=14 candidates=14 rejArea=9 rejCirc=1 rejAspect=0
+      contours=23 accepted=15 candidates=15 rejArea=8 rejCirc=0 rejAspect=0
+      contours=25 accepted=14 candidates=14 rejArea=10 rejCirc=1 rejAspect=0
+      -> Pass: candidates matches accepted perfectly on every line.
+
+  D3. Reject log (`2.4-filtered-bbox-rejects_20261110-gpt-extract.txt`):
+      area 908090 | bbox 0,0,1280,711          <-- Table frame
+      area 10 | bbox 68,591,3,6                <-- Noise speck
+      circ 0.502604 | bbox 966,381,22,21       <-- Cue stick / merged blob
+      -> Pass: filters are working exactly as designed.
+
+  D4. Visual Evidence (Screenshot: "filtered"):
+      - Black background.
+      - 14 distinct white blobs (balls).
+      - Grey bounding boxes drawn exactly around the white blobs.
+      - Zero boxes on rails, pockets, or cue stick.
+      -> Pass.
+
+  D5. FPS:
+      ~27 to 32 FPS sustained with 1 debug window open ("filtered").
+      -> Pass. Well above the 15 FPS threshold.
+
+--------------------------------------------------------------------------------
+E. DECISIONS LOCKED BY DEV 2.4
+--------------------------------------------------------------------------------
+  E1. The modular architecture (.h/.cpp) is the permanent baseline. No 
+      further logic will be written directly in main.cpp.
+  E2. BallCandidate is the immutable data carrier passed from Segmentation 
+      (Phase 3) to Feature Extraction (Phase 4).
+  E3. The pure-function approach in segment.cpp is locked: it receives 
+      inputs, returns a vector, and mutates only the provided filteredOut 
+      Mat reference (for visual debug).
+  E4. RETR_LIST remains mandatory. (RETR_EXTERNAL is banned).
+  E5. MIN_BALL_AREA = 200 remains locked.
+
+--------------------------------------------------------------------------------
+F. CAVEATS / OBSERVATIONS RECORDED (non-blocking)
+--------------------------------------------------------------------------------
+  D1. The `filtered` window is drawn inside segment.cpp via the passed 
+      reference. In Dev 4.1 (Overlay), we will draw on the original BGR 
+      frame in main.cpp, and the `filtered` reference will become strictly 
+      an optional debug parameter.
+  D2. Local commits still ahead of origin/main. Flush at Dev 2.5.
+  D3. The config.h provenance comment debt remains. Must be fixed before 
+      Dev 6.1 (design_rationale.md).
+
+--------------------------------------------------------------------------------
+G. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 2.4 — BALL CANDIDATE STRUCT — VERIFIED
+        struct created          : pass
+        vector populated        : pass
+        candidates == accepted  : pass
+        center via moments      : pass
+        modular pivot           : pass (repo restructured)
+        Build exit 0            : pass
+        Reject log accurate     : pass
+        Visual bboxes accurate  : pass
+
+  Parallel-tick:
+        Dev 2.4 [x]
+        DT 3.5  [x] (closed)
+
+  Next: Dev 2.5 — BBOX CHECKPOINT (visual) + SAFETY COMMIT.
+        Since the screenshot already proves the bboxes are clean, 2.5 will 
+        be a rapid formal sign-off + git commit/push.
+================================================================================
+END
