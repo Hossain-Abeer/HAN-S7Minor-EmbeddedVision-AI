@@ -41,13 +41,14 @@ constexpr int CANNY_LO    = 50;
 constexpr int CANNY_HI    = 150;
 
 // --- Classification rules (5.2) ---
-constexpr double RATIO_CUE          = 0.80;
+// AMENDED via Dev 3.1/3.2 empirical evidence
+constexpr double RATIO_CUE          = 0.65; // was 0.80
 constexpr double UNCERTAIN_WHITE_HI = 0.60;
 constexpr double RATIO_STRIPE_LO    = 0.15;
 constexpr double SOLID_WHITE_LO     = 0.05;
 constexpr double UNCERTAIN_WHITE_LO = 0.05;
 constexpr double EDGE_SOLID_MIN     = 0.10;
-constexpr double EDGE_CUE_MAX       = 0.04;
+constexpr double EDGE_CUE_MAX       = 0.15; // was 0.04
 
 // --- Acquisition (1.3) ---
 constexpr int PROCESS_WIDTH = 1280;

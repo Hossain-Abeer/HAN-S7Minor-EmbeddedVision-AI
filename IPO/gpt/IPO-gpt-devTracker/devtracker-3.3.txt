@@ -1,0 +1,55 @@
+================================================================================
+DEV 3.3 — ATTACH TO CANDIDATE — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: formally extend the BallCandidate struct to hold the extracted 
+         features and ensure feature computation remains pure (or explicitly 
+         mutates only the designated fields). Closes DT 4.4.
+Parallel-tick: Dev 3.3 [x]  <=>  DT 4.4 [x] (closed).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 3.3 MUST PROVE
+--------------------------------------------------------------------------------
+  1. BallCandidate contains both float white_ratio and float edge_density.
+  2. Struct fields are populated per candidate during the loop.
+  3. Code compiles clean; no side effects on the image matrices.
+
+--------------------------------------------------------------------------------
+B. CODE DELTA
+--------------------------------------------------------------------------------
+  - src/types.h: 
+      Added float white_ratio = 0.0f; 
+      Added float edge_density = 0.0f;
+  - src/main.cpp: 
+      Consolidated loop iterates by reference (auto& ball) to populate fields.
+      computeWhiteRatio returns a float which is assigned to ball.white_ratio.
+      computeEdgeDensity takes a BallCandidate& and directly writes to ball.edge_density.
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  C1. Build (F7): exit code 0.
+  C2. Runtime: Console prints wr and ed per ball. 
+      Overlay draws "wr|ed" on the frame, proving both fields are populated 
+      and accessible post-computation.
+
+--------------------------------------------------------------------------------
+D. DECISIONS LOCKED BY DEV 3.3
+--------------------------------------------------------------------------------
+  E1. BallCandidate is the single source of truth for per-ball data 
+      (geometry + features + future classification label).
+  E2. Feature functions do not mutate the underlying cv::Mat frames.
+
+--------------------------------------------------------------------------------
+E. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 3.3 — ATTACH TO CANDIDATE — VERIFIED
+        struct extended        : pass
+        fields populated       : pass
+        build exit 0           : pass
+
+  Parallel-tick:
+        Dev 3.3 [x]
+        DT 4.4  [x] (closed)
+
+  Next: Dev 3.4 — FEATURE DUMP CHECKPOINT.
+================================================================================

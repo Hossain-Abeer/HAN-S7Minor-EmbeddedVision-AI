@@ -5,5 +5,5 @@ set(OpenCV_DIR "C:/dev/opencv-build/opencv-install/x64/mingw/lib")
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
-add_executable(Ball-Type-Identifier src/main.cpp src/preprocess.cpp src/segment.cpp)
+add_executable(Ball-Type-Identifier src/main.cpp src/preprocess.cpp src/segment.cpp src/features.cpp src/classify.cpp)
 target_link_libraries(Ball-Type-Identifier ${OpenCV_LIBS})

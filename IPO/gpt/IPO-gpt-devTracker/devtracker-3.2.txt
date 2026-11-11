@@ -1,0 +1,132 @@
+================================================================================
+DEV 3.2 — EDGE DENSITY — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: compute the second required feature (edge_density) for each candidate
+         ball, verifying the theoretical ranges and analyzing the empirical
+         overlap between solids, stripes, and the cue ball. Closes DT 4.2 and
+         finalizes both feature extractions required for the rubric.
+Parallel-tick: Dev 3.2 [x]  <=>  DT 4.2 [x] (closed).
+                              DT 5.2 flagged again for imminent amendment.
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 3.2 MUST PROVE
+--------------------------------------------------------------------------------
+  1. Feature computation is added as a pure function.
+  2. Uses config.h constants (CANNY_LO, CANNY_HI); no magic numbers.
+  3. Bbox is inset by 2px to avoid the ball-to-cloth boundary edge.
+  4. Verification shows the actual empirical ranges for ed.
+
+--------------------------------------------------------------------------------
+B. BLOCKING BUGS (CAUGHT BEFORE BUILD)
+--------------------------------------------------------------------------------
+  Bug 1: Duplicate computation in main.cpp.
+      - The 3.1 loop computed white_ratio, and a newly added 3.2 loop
+        recomputed it while adding edge_density.
+      - Fix: Commented out the 3.1 loop and consolidated into one unified
+        loop that computes both features simultaneously.
+  Bug 2: Out-of-bounds crash risk in computeEdgeDensity.
+      - Missing image boundary clamp (present in computeWhiteRatio).
+      - If a ball is at the frame edge, blurred(r) would throw a cv::Exception.
+      - Fix: Added r &= cv::Rect(0, 0, blurred.cols, blurred.rows).
+  Bug 3: Invisible overlay.
+      - putText and rectangle drew on `frame`, but `frame` was not imshow'd.
+      - Fix: Added imshow("frame", frame) to display the annotated BGR image.
+
+--------------------------------------------------------------------------------
+C. CODE DELTA
+--------------------------------------------------------------------------------
+  - src/types.h: Added float edge_density = 0.0f; to BallCandidate.
+  - src/features.h/cpp: Created computeEdgeDensity().
+      - Insets bbox by 2px, clamps to image bounds.
+      - cvtColor(roi_bgr, gray, COLOR_BGR2GRAY)
+      - Canny(gray, edges, CANNY_LO, CANNY_HI)
+      - countNonZero(edges) / edges.total()
+  - src/main.cpp: Consolidated the feature loop. Computes both wr and ed.
+    Prints to console. Draws "wr|ed" on the original frame. Shows "frame".
+  - CMakeLists.txt: (features.cpp already added in 3.1).
+
+--------------------------------------------------------------------------------
+D. VERIFICATION EVIDENCE (FROM USER UPLOAD)
+--------------------------------------------------------------------------------
+  D1. Runtime Output & Screenshot:
+      - Log confirms steady, deterministic feature extraction.
+      - Screenshot shows green boxes with yellow "wr|ed" text.
+  D2. Empirical Clusters Discovered:
+      - CUE     : wr ~0.89 | ed ~0.13  (e.g., the cue ball in screenshot)
+      - SOLIDS  : wr ~0.00-0.10 | ed ~0.09-0.25 (e.g., Solid 1: 0.10|0.25,
+                  Solid 8: 0.00|0.09)
+      - STRIPES : wr ~0.15-0.30 | ed ~0.11-0.24 (e.g., Stripe 11: 0.26|0.22)
+  D3. Stability Test:
+      - Values remain stable across frames (same bounds as 3.1).
+
+--------------------------------------------------------------------------------
+E. TEACHING: THE REALITY OF EDGE DENSITY
+--------------------------------------------------------------------------------
+  Dev 3.2 confirms that while edge_density is mathematically sound, it is
+  heavily influenced by two factors that the DT 4.2 assumptions underestimated:
+  
+  1. The Numeral Ring: Solids (1-8) are not flat colors; they have white
+     circular patches with numbers. The Canny edge detector picks up this
+     ring, spiking the solid ball's ed to ~0.25.
+  2. The Bounding Box Boundary: Even with the 2px inset, the transition from
+     the white cue ball to the green cloth creates an edge. Shadows also
+     create edges. The cue ball's ed is ~0.13, not <0.04 as theorized.
+
+  Conclusion: white_ratio (wr) is the primary, highly reliable feature for
+  separating Cue (0.89) -> Stripe (0.20) -> Solid (0.05). edge_density (ed)
+  is noisy and overlaps significantly between Solids and Stripes.
+
+--------------------------------------------------------------------------------
+F. IMMINENT DT 5.2 AMENDMENTS (CRITICAL FOR DEV 3.5)
+--------------------------------------------------------------------------------
+  Observation 1: RATIO_CUE = 0.80 is too high. The cue ball is ~0.89 but can
+  drop due to shadows. If it drops below 0.80, it falls into the Stripe range.
+  Decision 1: Lower RATIO_CUE to 0.65 (or 0.70) during Dev 3.5.
+
+  Observation 2: EDGE_CUE_MAX = 0.04 is completely invalid. The actual cue
+  ball ed is 0.13.
+  Decision 2: Raise EDGE_CUE_MAX to 0.15 during Dev 3.5. 
+
+  Observation 3: The rubric requires classification. Because ed overlaps
+  heavily between stripes and solids, ed cannot be used as the primary
+  separator. It must be relegated to a tie-breaker (e.g., if wr is
+  ambiguous between 0.10 and 0.15, a high ed = 0.25 pushes it to SOLID).
+
+--------------------------------------------------------------------------------
+G. DECISIONS LOCKED BY DEV 3.2
+--------------------------------------------------------------------------------
+  E1. Edge density is computed via Canny on the grayscale inset bbox.
+  E2. The consolidated feature loop computes wr and ed in one pass.
+  E3. Overlay uses imshow("frame", frame) for real-time visualization.
+  E4. Primary classification relies on white_ratio. Edge density is a
+      secondary tie-breaker.
+  E5. Empirical thresholds dictate changes to DT 5.2 (RATIO_CUE and
+      EDGE_CUE_MAX).
+
+--------------------------------------------------------------------------------
+H. CAVEATS / OBSERVATIONS
+--------------------------------------------------------------------------------
+  D1. Console output remains verbose (per-ball per-frame). Throttle for 7.1.
+  D2. Config.h provenance comment debt remains pending for Dev 6.1.
+
+--------------------------------------------------------------------------------
+I. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 3.2 — EDGE DENSITY — VERIFIED
+        features.cpp/h created   : pass
+        main.cpp integration     : pass (consolidated, no duplicates)
+        crash prevention         : pass (clamping added)
+        visual overlay           : pass (imshow("frame") works)
+        values in expected range : pass (clusters identified)
+        cue ball ed              : ~0.13 (prompts DT 5.2 alert)
+        build exit 0             : pass
+
+  Parallel-tick:
+        Dev 3.2 [x]
+        DT 4.2  [x] (closed)
+        DT 5.2  [~] (flagged for amendment at Dev 3.5)
+
+  Next: Dev 3.3 — ATTACH TO CANDIDATE. (Already satisfied during 3.1/3.2
+        integration; struct has both features populated. Ticking and moving
+        to Dev 3.5).
+================================================================================

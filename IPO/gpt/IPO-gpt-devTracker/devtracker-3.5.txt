@@ -1,0 +1,110 @@
+================================================================================
+DEV 3.5 — CLASSIFICATION RULES — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: implement the rule-based classification logic (if/else), amend the
+         DT 5.2 thresholds using empirical evidence, and render the final
+         class labels and colors on the overlay. Closes DT 5.1 and DT 5.2.
+Parallel-tick: Dev 3.5 [x]  <=>  DT 5.1 [x] (closed), DT 5.2 [x] (closed & amended).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 3.5 MUST PROVE
+--------------------------------------------------------------------------------
+  1. Classification rules run in exact DT 5.2 order.
+  2. config.h thresholds are amended based on Dev 3.1/3.2 empirical logs.
+  3. BallCandidate stores the final BallType.
+  4. Overlay renders specific colors and text for each class.
+  5. Code merges feature extraction and classification into a single loop.
+
+--------------------------------------------------------------------------------
+B. CODE CHANGES
+--------------------------------------------------------------------------------
+  1. config.h (DT 5.2 Amendment)
+     - RATIO_CUE lowered from 0.80 to 0.65 (cue wr drops under shadow).
+     - EDGE_CUE_MAX raised from 0.04 to 0.15 (cue ball shadow/edges yield ed ~0.13).
+
+  2. types.h
+     - Added `BallType type = BallType::UNCERTAIN;` to BallCandidate struct.
+
+  3. classify.h / classify.cpp (New Files)
+     - Added `BallType classifyBall(const BallCandidate& ball);`
+     - Implemented the if/else evaluation logic.
+     - (Fix): Removed the aggressive `UNCERTAIN` fallback for low-wr balls. 
+       Dark solids (e.g., 8-ball) were triggering the cue-shadow fallback 
+       because their ed was < 0.15. The final `else` now defaults to SOLID.
+
+  4. main.cpp
+     - Included `classify.h`.
+     - Consolidated the feature extraction (wr, ed) and classification into
+       ONE loop to avoid double computation.
+     - Added a switch statement to map BallType to label string and Scalar color.
+     - (Fix): Moved `imshow("frame", frame);` to the END of the loop, after
+       the drawing commands, so the bounding boxes and text actually render.
+
+  5. CMakeLists.txt
+     - Added `src/classify.cpp` to the executable target.
+
+--------------------------------------------------------------------------------
+C. CODE EXPLANATION
+--------------------------------------------------------------------------------
+  1. The Rule Order (classify.cpp):
+     - `if (wr > RATIO_CUE)`: Highest priority. White ball dominates.
+     - `else if (wr > UNCERTAIN_WHITE_HI)`: Extreme glare between 0.60 and 0.65.
+     - `else if (wr >= RATIO_STRIPE_LO)`: Stripe range (0.15 to 0.60).
+     - `else if (wr >= SOLID_WHITE_LO && ed > EDGE_SOLID_MIN)`: Solid with a 
+       visible numeral ring (high edge density).
+     - `else`: Catch-all for dark solids (wr < 0.15, ed < 0.10). This prevents 
+       the 8-ball and 7-ball from falling into UNCERTAIN.
+
+  2. Color Mapping (main.cpp):
+     - CUE    -> White box  (Scalar 255,255,255)
+     - SOLID  -> Red box    (Scalar 0,0,255)
+     - STRIPE -> Cyan box   (Scalar 255,255,0)
+     - UNCERTAIN -> Yellow box (Scalar 0,255,255) with label "?"
+
+  3. Structural Fix (main.cpp):
+     - OpenCV draws directly onto the Mat. If `imshow` is called before 
+       `rectangle` and `putText`, the window displays the clean frame. 
+       Placing `imshow` at the bottom guarantees the UI reflects the drawings.
+
+--------------------------------------------------------------------------------
+D. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  D1. Build (F7): exit code 0.
+  D2. Terminal log (`3.5-log-classify-2.txt`):
+      - Output streams `wr`, `ed`, and `class`.
+      - Example Cue: `wr=0.67 ed=0.13 class=CUE`
+      - Example Solid: `wr=0.06 ed=0.15 class=SOLID`
+      - Example Stripe: `wr=0.30 ed=0.16 class=STRIPE`
+  D3. Visual Screenshot:
+      - Cue ball has a White box and "CUE" label.
+      - Solid 1, 2, 7, 8 have Red boxes and "SOLID" labels.
+      - Striped balls have Cyan boxes and "STRIPE" labels.
+      - No false "UNCERTAIN" labels.
+
+--------------------------------------------------------------------------------
+E. DECISIONS LOCKED BY DEV 3.5
+--------------------------------------------------------------------------------
+  E1. DT 5.2 thresholds are finalized (RATIO_CUE=0.65, EDGE_CUE_MAX=0.15).
+  E2. Edge density is used exclusively as a tie-breaker for SOLIDs.
+  E3. The unified loop pattern (Extract -> Classify -> Draw) is locked.
+  E4. Overlay color scheme locked (White/Red/Cyan/Yellow).
+
+--------------------------------------------------------------------------------
+F. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 3.5 — CLASSIFICATION RULES — VERIFIED
+        config.h amended       : pass
+        classify.cpp created   : pass
+        main.cpp integrated    : pass
+        imshow placement fixed : pass
+        visual classes correct : pass
+        build exit 0           : pass
+
+  Parallel-tick:
+        Dev 3.5 [x]
+        DT 5.1  [x] (closed)
+        DT 5.2  [x] (closed)
+
+  Next: Dev 3.6 — UNCERTAIN BAND (GLARE HANDLING).
+        Closes DT 5.3 and DT 2.2 (partial).
+================================================================================

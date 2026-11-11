@@ -1,0 +1,61 @@
+================================================================================
+DEV 3.4 — FEATURE DUMP CHECKPOINT — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: validate the robustness of both extracted features (white_ratio, 
+         edge_density) across a large sample of frames, ensuring no NaNs, 
+         no crashes (0-width bbox), and that empirical ranges are stable. 
+         Gates DT 4.1, 4.2, and 4.4 jointly.
+Parallel-tick: Dev 3.4 [x]  <=>  DT 4.1, 4.2, 4.4 (re-confirmed).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 3.4 MUST PROVE
+--------------------------------------------------------------------------------
+  1. 100+ frames processed without crash or NaN.
+  2. No zero-width bbox exceptions.
+  3. Values sit in expected empirical ranges.
+  4. Determinism: stationary balls yield near-identical values per frame.
+
+--------------------------------------------------------------------------------
+B. EVIDENCE (FROM USER UPLOADED LOGS)
+--------------------------------------------------------------------------------
+  Log 1 (white_ratio):
+    - 400+ frames processed.
+    - Example: ball=1 bbox=(1026,483,33,33) wr=0.58264 held stable for 
+      60+ frames.
+    - No NaN or Inf printed.
+
+  Log 2 (edge_density):
+    - 400+ frames processed.
+    - Example: ball=1 ed values oscillated slightly (e.g., 0.13 -> 0.14) 
+      but stayed within bounds.
+    - No 0-width bbox crash (clamping from Dev 3.2 works).
+
+  Ranges observed:
+    - wr: 0.00 to 0.72 (match DT 5.2 clusters)
+    - ed: 0.09 to 0.25 (proves ed overlaps, must be tie-breaker)
+
+--------------------------------------------------------------------------------
+C. DECISIONS LOCKED BY DEV 3.4
+--------------------------------------------------------------------------------
+  E1. Feature extraction pipeline is stable for full run.
+  E2. The logs serve as the baseline evidence for the defense (no NaNs, 
+      deterministic behavior).
+  E3. Threshold tuning (DT 5.2) can now proceed using these empirical bounds.
+
+--------------------------------------------------------------------------------
+D. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 3.4 — FEATURE DUMP CHECKPOINT — VERIFIED
+        no NaN                 : pass
+        no crash               : pass
+        ranges confirmed       : pass
+        determinism            : pass
+
+  Parallel-tick:
+        Dev 3.4 [x]
+        DT 4.1  [x] (gated/re-confirmed)
+        DT 4.2  [x] (gated/re-confirmed)
+        DT 4.4  [x] (gated/re-confirmed)
+
+  Next: Dev 3.5 — CLASSIFICATION RULES.
+================================================================================

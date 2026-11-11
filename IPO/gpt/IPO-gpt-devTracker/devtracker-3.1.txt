@@ -1,0 +1,110 @@
+================================================================================
+DEV 3.1 — WHITE RATIO — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: compute the first of the two required features (white_ratio) for
+         each candidate ball, verifying that the values cluster into
+         distinguishable ranges for Cue, Stripe, and Solid balls. Closes
+         DT 4.1 and alerts Dev 3.5 to an empirical threshold mismatch.
+Parallel-tick: Dev 3.1 [x]  <=>  DT 4.1 [x] (closed).
+                              DT 5.2 flagged for imminent amendment.
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 3.1 MUST PROVE
+--------------------------------------------------------------------------------
+  1. Feature computation is added as a pure function (no mutation of image).
+  2. Uses config.h constants (WHITE_S_MAX, WHITE_V_MIN); no magic numbers.
+  3. Bbox is inset to avoid edge artifacts.
+  4. Verification shows separable ranges for cue, stripe, solid balls.
+
+--------------------------------------------------------------------------------
+B. BLOCKING BUGS (CAUGHT BEFORE BUILD)
+--------------------------------------------------------------------------------
+  Bug 1: Duplicate `imshow("filtered", ...)` in main.cpp.
+      - The original debug mask overwrote the newly generated `overlay` with
+        the `wr` text before `waitKey`. 
+      - Fix: Removed the second `imshow("filtered", filtered);` call.
+  Bug 2: `snprintf` missing explicit `<cstdio>` include.
+      - Compiler might pull it in transitively via `<iostream>`, but explicit
+        inclusion prevents future breakage.
+      - Fix: Added `#include <cstdio>` to main.cpp.
+
+--------------------------------------------------------------------------------
+C. CODE DELTA
+--------------------------------------------------------------------------------
+  - src/types.h: Added `float white_ratio = 0.0f;` to BallCandidate.
+  - src/features.h/cpp: Created. `computeWhiteRatio(hsv, bbox)` insets bbox
+    by 2px, clamps to image bounds, and computes nonZero/area for HSV pixels
+    matching `[0, 0, WHITE_V_MIN]` to `[179, WHITE_S_MAX, 255]`.
+  - src/main.cpp: Added loop to compute wr, print to stdout, and draw the
+    `overlay` with green bboxes + yellow `wr` values.
+  - CMakeLists.txt: Added `src/features.cpp` to the executable target.
+
+--------------------------------------------------------------------------------
+D. VERIFICATION EVIDENCE (FROM USER UPLOAD)
+--------------------------------------------------------------------------------
+  D1. Runtime Output (`3.1_white_ratio.txt` & screenshot):
+      - Log shows stable values per ball across frames.
+      - Example stationary ball: `wr=0.0978836` repeats exactly for 60+ frames.
+      - Screenshot confirms green boxes with yellow floating-point text.
+
+  D2. Empirical Clusters Discovered:
+      - SOLIDS  : ~0.00 to 0.10 (e.g., 0.01, 0.04, 0.06)
+      - STRIPES : ~0.18 to 0.45 (e.g., 0.22, 0.30, 0.18)
+      - CUE     : ~0.60 to 0.72 (e.g., 0.68, 0.70)
+      - UNCERTAIN: N/A yet (awaiting glare samples).
+
+  D3. Stability Test:
+      - Ball=1 (stationary) stayed locked at 0.0978836 across frames 1-60.
+      - Proves bbox and feature extraction are deterministic.
+
+--------------------------------------------------------------------------------
+E. TEACHING: THE "AHA" MOMENT (SHAPE -> MEANING)
+--------------------------------------------------------------------------------
+  Dev 2.4: Created the container (BallCandidate).
+  Dev 2.5: Validated the shape (bboxes).
+  Dev 3.1: Opened the box and looked inside. We transitioned from geometry
+  to semantics. We extracted texture/color (White Ratio), revealing three
+  distinct statistical clusters.
+
+--------------------------------------------------------------------------------
+F. IMMINENT DT 5.2 AMENDMENT (CRITICAL FOR DEV 3.5)
+--------------------------------------------------------------------------------
+  Observation: The cue ball maxes out at ~0.72 in this lighting/glare.
+  The original DT 5.2 rule used `RATIO_CUE = 0.80`. If left unchanged,
+  the cue ball will be misclassified as UNCERTAIN or STRIPE.
+  Decision: Must lower `RATIO_CUE` to 0.65 during Dev 3.5.
+
+--------------------------------------------------------------------------------
+G. DECISIONS LOCKED BY DEV 3.1
+--------------------------------------------------------------------------------
+  E1. White ratio is computed via HSV `inRange` with bbox inset by 2px.
+  E2. Stationary balls yield highly stable, deterministic feature values.
+  E3. Empirical thresholds dictate `RATIO_CUE` MUST be lowered to 0.65.
+  E4. Overlay mechanism for debugging feature values is locked.
+
+--------------------------------------------------------------------------------
+H. CAVEATS / OBSERVATIONS
+--------------------------------------------------------------------------------
+  D1. Console output is verbose (per-ball per-frame). For Dev 7.1 (full run),
+      this should be throttled or piped to the log file only, to prevent
+      terminal lag.
+  D2. Config.h provenance comment debt (from Dev 2.1) remains pending for
+      Dev 6.1.
+
+--------------------------------------------------------------------------------
+I. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 3.1 — WHITE RATIO — VERIFIED
+        features.cpp/h created   : pass
+        main.cpp integration     : pass (overlay visible)
+        values in expected range : pass (clusters identified)
+        cue ball max wr           : ~0.72 (prompts DT 5.2 alert)
+        build exit 0             : pass
+
+  Parallel-tick:
+        Dev 3.1 [x]
+        DT 4.1  [x] (closed)
+        DT 5.2  [~] (flagged for amendment at Dev 3.5)
+
+  Next: Dev 3.2 — EDGE DENSITY. (Closes DT 4.2).
+================================================================================
