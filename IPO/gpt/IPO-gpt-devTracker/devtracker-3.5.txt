@@ -2,8 +2,9 @@
 DEV 3.5 — CLASSIFICATION RULES — DISCUSSION LOG / VERIFICATION RECORD
 ================================================================================
 Purpose: implement the rule-based classification logic (if/else), amend the
-         DT 5.2 thresholds using empirical evidence, and render the final
-         class labels and colors on the overlay. Closes DT 5.1 and DT 5.2.
+         DT 5.2 thresholds using empirical evidence, render the final class
+         labels, and document the segmentation limitation discovered during
+         the green ball overlap. Closes DT 5.1 and DT 5.2.
 Parallel-tick: Dev 3.5 [x]  <=>  DT 5.1 [x] (closed), DT 5.2 [x] (closed & amended).
 
 --------------------------------------------------------------------------------
@@ -26,7 +27,6 @@ B. CODE CHANGES
      - Added `BallType type = BallType::UNCERTAIN;` to BallCandidate struct.
 
   3. classify.h / classify.cpp (New Files)
-     - Added `BallType classifyBall(const BallCandidate& ball);`
      - Implemented the if/else evaluation logic.
      - (Fix): Removed the aggressive `UNCERTAIN` fallback for low-wr balls. 
        Dark solids (e.g., 8-ball) were triggering the cue-shadow fallback 
@@ -34,17 +34,41 @@ B. CODE CHANGES
 
   4. main.cpp
      - Included `classify.h`.
-     - Consolidated the feature extraction (wr, ed) and classification into
-       ONE loop to avoid double computation.
+     - Consolidated feature extraction (wr, ed) and classification into ONE loop.
      - Added a switch statement to map BallType to label string and Scalar color.
-     - (Fix): Moved `imshow("frame", frame);` to the END of the loop, after
+     - (Fix): Moved `imshow("frame", frame);` to the END of the loop, after 
        the drawing commands, so the bounding boxes and text actually render.
 
-  5. CMakeLists.txt
+  5. segment.cpp (Green Ball Fix)
+     - Added a dedicated `greenBall` HSV mask (H 40-75, S 150-255) and 
+       OR'd it back into the inverted `ball` mask to prevent the solid 
+       6-ball from being absorbed by the green cloth mask.
+
+  6. CMakeLists.txt
      - Added `src/classify.cpp` to the executable target.
 
 --------------------------------------------------------------------------------
-C. CODE EXPLANATION
+C. DOCUMENTED LIMITATION: GREEN-ON-GREEN CAMOUFLAGE
+--------------------------------------------------------------------------------
+  Observation: The solid green ball (6-ball) is only detected when rolling. 
+  When stationary, it is masked out by the cloth HSV range.
+
+  Root Cause (Pixel Count & Motion): 
+  - When stationary, the ball's HSV perfectly overlaps the cloth. The visible 
+    contour shrinks until it falls below MIN_BALL_AREA (200 pixels), triggering 
+    rejection.
+  - When rolling, motion blur and specular shifts alter the pixel values. The 
+    contour expands above the 200-pixel threshold, passing the area filter.
+  - Similarly, the stripe ball's bounding box glitches during rolling due to 
+    motion blur stretching the contour (affecting aspect ratio and edge density), 
+    but stabilizes when still.
+
+  Decision: This is an ACCEPTED LIMIT. Color-space segmentation without depth 
+  or IR cannot perfectly isolate identical hues. This will be documented in 
+  docs/robustness.md under F2 (Overlap/Camouflage) for the defense.
+
+--------------------------------------------------------------------------------
+D. CODE EXPLANATION
 --------------------------------------------------------------------------------
   1. The Rule Order (classify.cpp):
      - `if (wr > RATIO_CUE)`: Highest priority. White ball dominates.
@@ -61,42 +85,39 @@ C. CODE EXPLANATION
      - STRIPE -> Cyan box   (Scalar 255,255,0)
      - UNCERTAIN -> Yellow box (Scalar 0,255,255) with label "?"
 
-  3. Structural Fix (main.cpp):
-     - OpenCV draws directly onto the Mat. If `imshow` is called before 
-       `rectangle` and `putText`, the window displays the clean frame. 
-       Placing `imshow` at the bottom guarantees the UI reflects the drawings.
-
 --------------------------------------------------------------------------------
-D. VERIFICATION EVIDENCE
+E. VERIFICATION EVIDENCE
 --------------------------------------------------------------------------------
-  D1. Build (F7): exit code 0.
-  D2. Terminal log (`3.5-log-classify-2.txt`):
+  E1. Build (F7): exit code 0.
+  E2. Terminal log (`3.5-log-classify-2.txt`):
       - Output streams `wr`, `ed`, and `class`.
-      - Example Cue: `wr=0.67 ed=0.13 class=CUE`
+      - Example Cue:   `wr=0.67 ed=0.13 class=CUE`
       - Example Solid: `wr=0.06 ed=0.15 class=SOLID`
-      - Example Stripe: `wr=0.30 ed=0.16 class=STRIPE`
-  D3. Visual Screenshot:
-      - Cue ball has a White box and "CUE" label.
-      - Solid 1, 2, 7, 8 have Red boxes and "SOLID" labels.
-      - Striped balls have Cyan boxes and "STRIPE" labels.
-      - No false "UNCERTAIN" labels.
+      - Example Stripe:`wr=0.30 ed=0.16 class=STRIPE`
+      - Example Glare: `wr=0.647 ed=0.134 class=?`
+  E3. Visual Screenshot:
+      - Correct colored boxes render on all detected balls.
+      - No false "UNCERTAIN" labels on normal frames.
+      - Green ball detects with a Red SOLID box while rolling.
 
 --------------------------------------------------------------------------------
-E. DECISIONS LOCKED BY DEV 3.5
+F. DECISIONS LOCKED BY DEV 3.5
 --------------------------------------------------------------------------------
   E1. DT 5.2 thresholds are finalized (RATIO_CUE=0.65, EDGE_CUE_MAX=0.15).
   E2. Edge density is used exclusively as a tie-breaker for SOLIDs.
   E3. The unified loop pattern (Extract -> Classify -> Draw) is locked.
-  E4. Overlay color scheme locked (White/Red/Cyan/Yellow).
+  E4. Green-on-green failure is an accepted limit; no further HSV tuning.
+  E5. Overlay color scheme locked (White/Red/Cyan/Yellow).
 
 --------------------------------------------------------------------------------
-F. STATUS
+G. STATUS
 --------------------------------------------------------------------------------
   [x] DEV 3.5 — CLASSIFICATION RULES — VERIFIED
         config.h amended       : pass
         classify.cpp created   : pass
         main.cpp integrated    : pass
         imshow placement fixed : pass
+        green ball fix applied : pass (functional while rolling)
         visual classes correct : pass
         build exit 0           : pass
 
@@ -104,7 +125,10 @@ F. STATUS
         Dev 3.5 [x]
         DT 5.1  [x] (closed)
         DT 5.2  [x] (closed)
+        Dev 3.6 [x] (closed - UNCERTAIN logic verified in log)
+        DT 5.3  [x] (closed)
+        DT 6.1  [x] (closed - Overlay complete)
 
-  Next: Dev 3.6 — UNCERTAIN BAND (GLARE HANDLING).
-        Closes DT 5.3 and DT 2.2 (partial).
+  Next: Dev 4.2 — CONSOLE LOG.
+        Implement SUMMARY counters and Tee to log file.
 ================================================================================

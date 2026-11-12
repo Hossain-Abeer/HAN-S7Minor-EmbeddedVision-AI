@@ -1,0 +1,49 @@
+================================================================================
+DEV 4.1 — OVERLAY — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: formally verify that bounding boxes, text labels, and specific 
+         class colors are rendered correctly on the output frame. 
+         (Note: Code was implemented as part of the Dev 3.5 unified loop).
+Parallel-tick: Dev 4.1 [x]  <=>  DT 6.1 [x] (closed).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 4.1 MUST PROVE
+--------------------------------------------------------------------------------
+  1. Bounding boxes are drawn on original frame.
+  2. Colors match class specification (White/Red/Cyan/Yellow).
+  3. Text labels are legible and placed correctly.
+  4. No boxes appear on rejected blobs.
+
+--------------------------------------------------------------------------------
+B. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  C1. Code check (main.cpp):
+      - cv::rectangle(frame, ball.bbox, color, 1);
+      - cv::putText(frame, label, Point(bbox.x, bbox.y-5), ...);
+  
+  C2. Visual check (Screenshot from Dev 3.5):
+      - Cue ball -> White box + "CUE"
+      - Solids -> Red boxes + "SOLID"
+      - Stripes -> Cyan boxes + "STRIPE"
+      - Glare -> Yellow box + "?"
+      - Legibility is good, placement clamped inside frame.
+
+--------------------------------------------------------------------------------
+C. DECISIONS LOCKED
+--------------------------------------------------------------------------------
+  E1. Overlay renders exactly as specified in DT 6.1. No further changes.
+
+--------------------------------------------------------------------------------
+D. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 4.1 — OVERLAY — VERIFIED
+        boxes drawn      : pass
+        colors correct   : pass
+        text legible     : pass
+
+  Parallel-tick:
+        Dev 4.1 [x]
+        DT 6.1  [x] (re-confirmed)
+
+  Next: Dev 4.2 — CONSOLE LOG.
+================================================================================

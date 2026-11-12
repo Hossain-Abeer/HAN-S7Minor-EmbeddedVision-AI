@@ -19,6 +19,12 @@ std::vector<BallCandidate> extractCandidates(
                 cloth);
     cv::bitwise_not(cloth, ball);
 
+    // Fix: Re-include the green solid ball (6-ball) which overlaps with cloth
+    cv::Mat greenBall;
+    cv::inRange(hsv, cv::Scalar(40, 150, 50), cv::Scalar(75, 255, 255), greenBall);
+    cv::bitwise_or(ball, greenBall, ball);
+
+
     // 2.2 — morphology
     cv::Mat morphK = cv::getStructuringElement(cv::MORPH_RECT,
             cv::Size(MORPH_KERNEL_SIZE, MORPH_KERNEL_SIZE));

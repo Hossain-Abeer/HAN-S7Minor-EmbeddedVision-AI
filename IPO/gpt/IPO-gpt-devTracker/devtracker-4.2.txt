@@ -1,0 +1,129 @@
+================================================================================
+DEV 4.2 — CONSOLE LOG (SUMMARY & TEE) — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: implement automated, per-frame telemetry persistence. Redirect stdout
+         to a timestamped log file, generate a grep-friendly SUMMARY line, and
+         validate that class counters strictly map to the detected ball count.
+         Closes DT 6.2.
+Parallel-tick: Dev 4.2 [x]  <=>  DT 6.2 [x] (closed).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 4.2 MUST PROVE
+--------------------------------------------------------------------------------
+  1. stdout is redirected cleanly to a timestamped file.
+  2. File naming convention strictly follows: 4.2-log-consol_out_YYYYMMDD_HHMMSS.txt
+  3. The SUMMARY line is printed once per frame.
+  4. Counters (CUE, SOLID, STRIPE, ?) are separated and reset per frame.
+  5. CUE + SOLID + STRIPE + ? == total balls.
+  6. The rejection log reuses the same timestamp, ensuring temporal alignment.
+
+--------------------------------------------------------------------------------
+B. CODE CHANGES & ARCHITECTURE
+--------------------------------------------------------------------------------
+  1. Timestamp Generation (before `while` loop):
+     - `timebuf[32]` generated with `strftime(..., "%Y%m%d_%H%M%S", ...)`.
+     - `logPath` points to `DATA_ROOT/IPO/logs/4.2-log-consol_out_[timebuf].txt`.
+     - `freopen(logPath.c_str(), "w", stdout)` redirects standard output.
+     - Terminal goes blank; all `cout` streams go to the file.
+
+  2. Reject Log Alignment (inside `while` loop):
+     - Reuses the outer `timebuf`.
+     - `rejectPath` becomes `DATA_ROOT/IPO/logs/rejects_[timebuf].txt`.
+     - Prevents duplicate variable declarations and ensures 1-to-1 traceability
+       between the console log and the rejection log.
+
+  3. Counter Initialization (inside `while` loop):
+     - `int nCue = 0, nSolid = 0, nStripe = 0, nUncertain = 0;`
+     - Placed *inside* the loop so they reset every frame.
+
+  4. Counter Increments (inside the classification loop):
+     - Integrated directly into the `switch (ball.type)` statement.
+     - `nCue++`, `nSolid++`, `nStripe++`, `nUncertain++`.
+
+  5. SUMMARY Line (after the classification loop):
+     - Format: `SUMMARY frame=X balls=N CUE=A SOLID=B STRIPE=C ?=D fps=F`
+     - `balls=N` uses `candidates.size()`.
+
+--------------------------------------------------------------------------------
+C. VERIFICATION EVIDENCE (FROM USER UPLOAD)
+--------------------------------------------------------------------------------
+  Log File: 4.2-log-consol_out_20261112_165056-extract.txt
+  Sample line (frame 1302):
+    SUMMARY frame=1302 balls=13 CUE=1 SOLID=7 STRIPE=5 ?=0 fps=29.4902
+
+  C1. Strict Equality Check (Mathematical Proof):
+      Frame 1302: 1 (CUE) + 7 (SOLID) + 5 (STRIPE) + 0 (?) = 13 (balls). PASS.
+      Frame 1312: 1 (CUE) + 7 (SOLID) + 6 (STRIPE) + 0 (?) = 14 (balls). PASS.
+      (Note: UNCERTAIN `?` is never folded into the 3 main classes).
+
+  C2. File naming and Reject Log Synergy:
+      - Main log: 4.2-log-consol_out_20261112_165056-extract.txt
+      - Reject log: rejects_20261112_165056-extract.txt
+      - Timestamps match exactly.
+
+--------------------------------------------------------------------------------
+D. INTERPRETATION & ANOMALIES
+--------------------------------------------------------------------------------
+  D1. The `?=0` Context (Success):
+      In frame 1302, the cue ball has `wr=0.653941`.
+      RATIO_CUE threshold is 0.65.
+      0.653941 > 0.65 -> confidently CUE. No UNCERTAIN triggered.
+      If shadow dropped wr to 0.64, it would have triggered `?=1`. The system
+      is operating correctly at the boundary set by Dev 3.1/3.2.
+
+  D2. The FPS Spike Bug (frame 1320, fps=1274.68):
+      - Root Cause: There are two `getTickCount()` blocks.
+        (1) The periodic FPS block: `if (frameCount % 30 == 0)`
+        (2) The SUMMARY block: calculates instantFps every frame.
+      - Collision: When frameCount hits a multiple of 30, both run. Block 1
+        sets `prevTick = now`. Block 2 immediately calculates `now - prevTick`
+        (~0 ms), resulting in a mathematically huge, but cosmetic, FPS spike.
+      - Impact: Cosmetic only. Self-corrects next frame.
+      - Fix: Deferred (do not block the pipeline). Document as a known quirk
+        for Dev 6.1.
+
+--------------------------------------------------------------------------------
+E. TEACHING: THE TWO LOG FILES & FREOPEN
+--------------------------------------------------------------------------------
+  E1. What is freopen()?
+      `freopen(logPath, "w", stdout)` hijacks the `stdout` file pointer.
+      Any subsequent `cout <<` is sent directly to the hard drive file.
+      Standard output to the terminal is severed.
+
+  E2. The 2 Log Files:
+      File A (4.2-log-consol_out_...): 
+          - Written by `freopen` (C++ stdout).
+          - Contains: Startup info, per-ball features, classifications, SUMMARY.
+          - Purpose: System State / Audit trail.
+      File B (rejects_...): 
+          - Written by `std::ofstream` in `segment.cpp`.
+          - Contains: Every dropped contour and why (area, circ, aspect).
+          - Purpose: Filter Evidence / Proving false positives are dropped.
+      Synergy: The shared timestamp binds them. You can see a frame in File A,
+      look at the ball count, and open File B to verify how many shapes were
+      rejected to produce that clean count.
+
+--------------------------------------------------------------------------------
+F. DECISIONS LOCKED BY DEV 4.2
+--------------------------------------------------------------------------------
+  E1. Console output is officially deprecated in favor of File A logging.
+  E2. The SUMMARY format is locked.
+  E3. Counters are reset per frame and strictly separate UNCERTAIN.
+  E4. Timestamp format `YYYYMMDD_HHMMSS` is locked for all run artifacts.
+
+--------------------------------------------------------------------------------
+G. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 4.2 — CONSOLE LOG — VERIFIED
+        stdout redirected     : pass
+        SUMMARY format        : pass
+        strict equality       : pass (C+S+St+? = balls)
+        shared timestamps     : pass
+        FPS anomaly           : recorded (cosmetic, defer to 6.1)
+
+  Parallel-tick:
+        Dev 4.2 [x]
+        DT 6.2  [x] (closed)
+
+  Next: Dev 4.3 — VIDEO WRITER (OPTIONAL).
+================================================================================

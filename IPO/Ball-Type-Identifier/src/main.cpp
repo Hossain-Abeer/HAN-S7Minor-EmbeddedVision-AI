@@ -29,6 +29,17 @@ int main() {
     const int FPS_PRINT_EVERY = 30;
     Mat frame;
 
+    // 4.2 Setup log file and redirect stdout
+    char timebuf[32];
+    time_t t = time(nullptr);
+    strftime(timebuf, sizeof(timebuf), "%Y%m%d_%H%M%S", localtime(&t));
+    string logPath = string(DATA_ROOT) + "/IPO/logs/4.2-log-consol_out_" + timebuf + ".txt";
+    
+    if (!freopen(logPath.c_str(), "w", stdout)) {
+        cerr << "Failed to redirect stdout to log file!" << endl;
+        return -1;
+    }
+
     while (true) {
         cap >> frame;
         if (frame.empty()) break;
@@ -49,15 +60,15 @@ int main() {
         Mat blurred, hsv;
         applyPreprocessing(frame, blurred, hsv);
 
-        // 2. Setup rejection log path
-        char datebuf[16];
-        time_t t = time(nullptr);
-        strftime(datebuf, sizeof(datebuf), "%Y%m%d", localtime(&t));
-        string rejectPath = string(DATA_ROOT) + "/IPO/logs/rejects_" + datebuf + ".txt";
+        // 2. Setup rejection log path (reuse timebuf from 4.2 setup)
+        string rejectPath = string(DATA_ROOT) + "/IPO/logs/rejects_" + timebuf + ".txt";
 
         // 3. Segment & Extract
         Mat filtered;
-        vector<BallCandidate> candidates = extractCandidates(hsv, rejectPath, filtered);
+        vector<BallCandidate> candidates = extractCandidates(hsv, rejectPath, filtered); 
+
+        // 4.2 — Counters for SUMMARY log (UNCERTAIN is separate)
+        int nCue = 0, nSolid = 0, nStripe = 0, nUncertain = 0;
 
         //3.1. Feature extraction (white ratio)
         /*
@@ -134,7 +145,7 @@ int main() {
         
         
 
-                // 3.1, 3.2, & 3.5. Feature extraction + Classification
+        // 3.1, 3.2, & 3.5. Feature extraction + Classification
         for (auto& ball : candidates) {
             // 1. Extract features ONCE
             ball.white_ratio = computeWhiteRatio(hsv, ball.bbox); 
@@ -143,6 +154,7 @@ int main() {
             // 2. Classify
             ball.type = classifyBall(ball);
 
+            /*
             // 3. Determine label and color
             std::string label;
             cv::Scalar color;
@@ -151,6 +163,16 @@ int main() {
                 case BallType::SOLID:     label = "SOLID";  color = cv::Scalar(0, 0, 255);     break; // Red
                 case BallType::STRIPE:    label = "STRIPE"; color = cv::Scalar(255, 255, 0);   break; // Cyan
                 case BallType::UNCERTAIN: label = "?";      color = cv::Scalar(0, 255, 255);   break; // Yellow
+            }*/
+
+            // 3. Determine label and color - modded at DevTrack-4.2
+            std::string label;
+            cv::Scalar color;
+            switch (ball.type) {
+                case BallType::CUE:       label = "CUE";    color = cv::Scalar(255, 255, 255); nCue++;       break; // White
+                case BallType::SOLID:     label = "SOLID";  color = cv::Scalar(0, 0, 255);     nSolid++;     break; // Red
+                case BallType::STRIPE:    label = "STRIPE"; color = cv::Scalar(255, 255, 0);   nStripe++;    break; // Cyan
+                case BallType::UNCERTAIN: label = "?";      color = cv::Scalar(0, 255, 255);   nUncertain++; break; // Yellow
             }
 
             // 4. Debug output (single print)
@@ -166,6 +188,20 @@ int main() {
             cv::putText(frame, label, cv::Point(ball.bbox.x, ball.bbox.y - 5), 
                         cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         }
+
+        // 4.2 SUMMARY log (Tee'd via freopen)
+        int64 now = getTickCount();
+        double instantFps = getTickFrequency() / (double)(now - prevTick);
+        prevTick = now;
+
+        cout << "SUMMARY"
+             << " frame=" << frameCount
+             << " balls=" << candidates.size()
+             << " CUE=" << nCue
+             << " SOLID=" << nSolid
+             << " STRIPE=" << nStripe
+             << " ?=" << nUncertain
+             << " fps=" << instantFps << endl;
 
         // Debug visuals (SHOW THE FRAME!)
         imshow("frame", frame);
