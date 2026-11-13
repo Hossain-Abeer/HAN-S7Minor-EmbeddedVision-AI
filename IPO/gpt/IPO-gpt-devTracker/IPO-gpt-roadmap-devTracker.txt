@@ -349,3 +349,32 @@ SECTION 4 — OUTPUT
     Debug:  process hangs -> waitKey inside nested loop with no path out; break out.
 
 
+================================================================================
+SECTION 5 — RACK DETECTION (GAME START LOGIC)
+================================================================================
+
+[ ] 5.1  RACK DETECTION MODULE
+    Type: code | Design: Bridging Reports to Code (Decision Pre-5.1)
+    Action:
+      - Create src/rack-detection.h:
+          #pragma once
+          #include <vector>
+          #include "types.h"
+          bool detectRack(const std::vector<BallCandidate>& candidates);
+      - Create src/rack-detection.cpp:
+          - Check if candidates.size() >= 10.
+          - Extract centers into vector<Point>.
+          - cv::convexHull(centers, hull).
+          - cv::approxPolyDP(hull, approx, 0.04 * arcLength, true).
+          - Return true if approx.size() == 3 and contourArea > 15000.
+      - Update CMakeLists.txt to include src/rack-detection.cpp.
+      - Update main.cpp to call detectRack(candidates) after classification.
+      - If true, putText "RACK DETECTED" on the frame.
+    Verify:
+      - F7 builds clean.
+      - On a clip with a racked triangle, the text appears.
+      - On a scattered table, no text appears.
+    Debug:
+      - Always true -> lower the epsilon or raise the min area.
+      - Never true -> check if the racked balls are actually being detected by
+        the vision pipeline (check SUMMARY log for balls=15).

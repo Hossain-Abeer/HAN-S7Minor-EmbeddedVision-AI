@@ -1,0 +1,98 @@
+================================================================================
+DEV TRACKER PRE-5.1 — PROJECT SCOPE REALIGNMENT & DECISIONS
+================================================================================
+Purpose: Document the discovery, clarification, and resolution regarding the
+         relationship between the IPO (EVD1) module and the overarching Minor
+         Project. Capture the structural changes to the codebase and the
+         decision to integrate "Rack Detection" to align the code with the
+         previously submitted reports. 
+Status: COMPLETED. Clears the path for Section 5 (Rack Detection).
+================================================================================
+
+--------------------------------------------------------------------------------
+A. THE CONFUSION & ITS ORIGIN
+--------------------------------------------------------------------------------
+  Context: 
+  The student was initially under the impression that the IPO module (Period 1)
+  and the overarching Minor Project (Period 2) were assessed as completely
+  separate entities with separate deliverables.
+
+  Reasons for Confusion:
+  1. Deadline Mismatch: The IPO module's Course Manual specifies a live code 
+     defense at the end of Period 1. The overarching Project reports (Research 
+     & Functional Requirements) were previously submitted via email but 
+     appeared to be for the end-of-semester assessment.
+  2. Functional Scope: The student built "Ball-Type-Identifier" for IPO and 
+     designed "Billiards Game Recognition" (game start/counting for billing) 
+     for the Project.
+  3. Missing Templates: The EVD1 Course Manual did not explicitly list the 
+     Research and Functional Reports as HandIn deliverables.
+
+--------------------------------------------------------------------------------
+B. THE CLARIFICATION (PETER BIJL'S EMAIL)
+--------------------------------------------------------------------------------
+  Communication:
+  The examiner (Peter Bijl) clarified that Period 1 and the Minor Project are 
+  the SAME overarching endeavor, split into phased deliveries:
+  - Period 1 (NOW): Deliver Research Report & Functional Requirements Report 
+    to HandIn, followed by the live presentation/demo.
+  - Period 2 (LATER): Deliver the final Product (code/hardware) and Product 
+    Report.
+
+  The Reality:
+  The previously submitted reports describe an autonomous "Game Start Detector" 
+  via triangular racking. The live code (Ball-Type-Identifier) only does 
+  per-frame ball classification. There is a gap between the reports and the 
+  current codebase.
+
+--------------------------------------------------------------------------------
+C. THE WAY FORWARD (DECISIONS LOCKED)
+--------------------------------------------------------------------------------
+  Option 1: Gut the reports to only mention ball classification.
+  Option 2: Keep the reports, bridge the gap by adding "Rack Detection" to the
+            code. 
+  
+  DECISION: Option 2.
+  Rationale: Rack Detection (finding a triangular cluster of ball centers using 
+  cv::convexHull and cv::approxPolyDP) is mathematically simple compared to 
+  what is already built. It satisfies the Functional Requirements (FR1: Detect 
+  start of a new game) and proves the code matches the reports.
+
+  Architecture Decision:
+  - Rack Detection will NOT be mixed into the vision pipeline files.
+  - It will be a separate module: `src/rack-detection.cpp` and `src/rack-detection.h`.
+  - It will consume `vector<BallCandidate>` (from `types.h`) and return a boolean.
+  - `main.cpp` acts as the orchestrator, calling vision, then rack-detection.
+  - This demonstrates strong software engineering (Single Responsibility Principle).
+
+--------------------------------------------------------------------------------
+D. STRUCTURAL CHANGES (REPO & BINARIES)
+--------------------------------------------------------------------------------
+  To reflect the expanded scope (Vision + Game Logic), the repository and 
+  binary are being renamed.
+
+  1. Repo Folder: 
+     OLD: IPO/Ball-Type-Identifier
+     NEW: IPO/Billiard-Vision
+  2. CMakeLists.txt: 
+     project(Billiard-Vision)
+     add_executable(Billiard-Vision ...)
+  3. VS Code settings.json:
+     "cmake.sourceDirectory": "${workspaceFolder}/IPO/Billiard-Vision"
+  4. Executable:
+     OLD: Ball-Type-Identifier.exe
+     NEW: Billiard-Vision.exe
+
+  Code Contract:
+  Existing `.cpp` and `.h` files do NOT need internal `#include` changes.
+
+--------------------------------------------------------------------------------
+E. STATUS
+--------------------------------------------------------------------------------
+  [x] Scope realignment understood and accepted.
+  [x] Reports deemed mostly correct (minor updates needed post-code).
+  [x] Architecture for Rack Detection locked.
+  [x] Rename checklist generated for user execution.
+
+  Next: Execute Repo/Binary rename, then proceed to Section 5 (Rack Detection).
+================================================================================
