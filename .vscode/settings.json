@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "${workspaceFolder}/IPO/Ball-Type-Identifier", // change per exercise
+    "cmake.sourceDirectory": "${workspaceFolder}/IPO/Billiard-Vision", // change per exercise
     "cmake.buildDirectory": "${sourceDir}/build",
     "cmake.options.statusBarVisibility": "visible"
 }
