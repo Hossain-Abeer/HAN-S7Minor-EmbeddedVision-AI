@@ -323,172 +323,29 @@ SECTION 4 — OUTPUT
             Can SKIP this step if time-pressed (DT 6.3 is optional); if
             skipped, note in DT 6.3.
 
-[ ] 4.4  EXIT KEYS + CLEAN SHUTDOWN
+[ ] 4.4  CLI ACCESS / FILE PASSING
+    Type: code | Design: DT 1.1 (partial - enhancing acquisition input flexibility)
+    Action: 
+      - Modify main() signature to: int main(int argc, char** argv)
+      - Implement default fallback: if argc <= 1, use "billiards-game-clip1.mp4".
+      - If argc > 1, set clipName = argv[1].
+      - Path resolution: if clipName contains a slash ('/' or '\'), treat as absolute path. 
+        Else, prepend DATA_ROOT + "/game1/" + clipName.
+    Verify: 
+      - F7 builds clean.
+      - Launch via PS with no args -> runs clip1.
+      - Launch via PS with arg "billiards-game-clip2.mp4" -> runs clip2.
+      - Launch via PS with an absolute path -> runs the specified clip.
+    Debug: 
+      - "Failed to open" -> path concatenation is wrong or file doesn't exist.
+      - Args ignored -> signature is still int main() instead of int main(int argc, char** argv).
+
+[ ] 4.5  EXIT KEYS + CLEAN SHUTDOWN
     Type: code | Design: DT 6.4
     Action: ensure waitKey(10); 'q' and ESC both break; on break:
             writer.release(); cap.release(); destroyAllWindows(); return 0.
-    Verify: ESC exits from any window; no lock file left behind; log
-            flushed on exit.
-    Debug:  process hangs -> waitKey inside nested loop with no path out;
-            break out.
+            (Note: VideoWriter is skipped per Dev 4.3, so omit writer.release()).
+    Verify: ESC exits from any window; no lock file left behind; log flushed on exit.
+    Debug:  process hangs -> waitKey inside nested loop with no path out; break out.
 
 
-================================================================================
-SECTION 5 — ROBUSTNESS EVIDENCE
-================================================================================
-
-[ ] 5.1  F1 GLARE EVIDENCE
-    Type: run | Design: DT 7.1
-    Action: run game1, pause on a glare frame. Screenshot overlay with a
-            yellow '?' on the glinted ball.
-            Save to DATA_ROOT/IPO/screenshots/glare.png
-    Verify: screenshot exists, '?' visible, ball not mislabeled CUE/SOLID.
-    Debug:  no '?' -> UNCERTAIN band not triggering; revisit 3.6.
-
-[ ] 5.2  F2 OVERLAP EVIDENCE
-    Type: run | Design: DT 7.2
-    Action: find an overlap frame in clip1. Show rejects_*.txt contains
-            an "aspect:<val>" line for the merged blob. Screenshot with
-            merged blob unboxed, individual balls boxed.
-            Save to DATA_ROOT/IPO/screenshots/overlap.png
-    Verify: aspect reject logged for the merged blob. Screenshot matches.
-    Debug:  merged blob got a box -> aspect filter too loose (raise to
-            0.75/1.35). Document change.
-
-[ ] 5.3  F3 LIGHTING EVIDENCE
-    Type: run | Design: DT 7.3
-    Action: run clip3 and clip5 (both have different lighting). Confirm
-            similar classification behaviour vs clip1: counts within
-            ±15% per class, no mass UNCERTAIN.
-            Screenshot each to screenshots/clip3.png, screenshots/clip5.png
-    Verify: no clip-wide class shift. No balls labelled UNCERTAIN
-            systematically (would indicate HSV bound drift).
-    Debug:  clip3/clip5 mass-fail -> widen CLOTH_V_HI to 180 and
-            re-verify. Evidence update -> DT 0.5 D1.
-
-[ ] 5.4  DOCS/ROBUSTNESS.MD
-    Type: writing | Design: DT 7.4
-    Action: write docs/robustness.md:
-              F1 glare    -> screenshot + code ref (2.1, 3.6)
-              F2 overlap  -> screenshot + reject-log excerpt (2.3)
-              F3 lighting -> 3 clips + counts (5.3)
-              Accepted limits: motion blur, off-frame, hand/cue
-                occlusion, pockets — named, not solved.
-    Verify: document exists, each F has an evidence link + code ref.
-    Debug:  evidence missing -> redo 5.1-5.3. Do not invent evidence.
-
-
-================================================================================
-SECTION 6 — DEFENSE DOCS
-================================================================================
-
-[ ] 6.1  DOCS/DESIGN_RATIONALE.MD
-    Type: writing | Design: DT 8.1
-    Action: one paragraph per stage: Acquisition, Enhancement, Segmentation,
-            Features, Classification, Output. Each: what / why this method /
-            controlling config.h constants.
-    Verify: 6 paragraphs. Every constant referenced by name.
-    Debug:  prose paragraph for every stage -> knockout risk. Do not
-            leave any stage unexplained.
-
-[ ] 6.2  DOCS/PARAMETERS.MD
-    Type: writing | Design: DT 8.2
-    Action: table |name|value|why|effect-if-wrong| covering every
-            constexpr in config.h (except DATA_ROOT).
-    Verify: no constant missing. Effect-if-wrong column non-empty for all.
-    Debug:  missing constant -> re-open config.h; tick off each line.
-
-[ ] 6.3  INTERNAL CRITERION-EVIDENCE CHECK
-    Type: verification | Design: DT 8.3
-    Action: walk DT 8.3 matrix. For each criterion (Acquisition,
-            Enhancement, Segmentation, Features, Classification,
-            Complexity, Explanation): confirm at least one code file +
-            one doc file satisfies it.
-    Verify: every row populated. No row empty.
-    Debug:  row empty -> add code OR doc before proceeding. If row empty
-            at defense time = DO NOT SUBMIT.
-
-[ ] 6.4  DOCS/DEMO_SCRIPT.MD
-    Type: writing | Design: DT 8.4
-    Action: 5 beats:
-              (1) game1 success — show all 3 classes + '?'.
-              (2) glare frame — highlight '?'.
-              (3) overlap frame — merged blob dropped.
-              (4) console log — counters + FPS.
-              (5) accepted limits list — from robustness.md.
-    Verify: 5 beats listed, each beat cites a file/frame/screenshot.
-    Debug:  beat without concrete evidence -> redo corresponding evidence
-            step.
-
-
-================================================================================
-SECTION 7 — FINAL
-================================================================================
-
-[ ] 7.1  FULL RUN ACROSS ALL 5 CLIPS
-    Type: run | Design: DT 1.1, DT 6.2
-    Action: run exe against clip1..clip5 sequentially; logs written.
-            Confirm no crash, no mass-UNCERTAIN, FPS ≥ 15 average.
-    Verify: 5 log files present in IPO/logs/. No fatal error lines.
-    Debug:  crash on clipN -> check codec/dimension; some clips may be
-            different resolution; confirm cap.read returns ok.
-
-[ ] 7.2  RE-RUN SCOPE CHECK + COMMIT + PUSH
-    Type: run + submission | Design: DT 0.4 (final enforcement)
-    Action: src/scope_check.ps1 -> expect "SCOPE OK".
-            git add -A
-            git commit -m "feat(pipeline): complete 5-stage classifier +
-                             defense docs"
-            git push
-    Verify: push accepted. git log shows commit.
-    Debug:  scope HIT -> revert offending line, re-commit.
-            Push rejected -> pull --rebase then push.
-
-
-================================================================================
-DEBUG REFERENCE (ordered by likelihood)
-================================================================================
-  1. No video window / F7 builds but exe silent
-     -> waitKey(10) missing. imshow after waitKey. Cap not opened.
-
-  2. Cloth mask under-covers (cloth leaks into ball)
-     -> CLOTH_V_HI too tight. Raise to 180. Update DT 0.5 log.
-
-  3. Cloth mask over-covers (balls treated as cloth)
-     -> CLOTH_S_LO too low. Raise to 250. Update DT 0.5 log.
-
-  4. Too many bboxes per ball
-     -> MORPH_ITER=2, or MIN_CIRCULARITY 0.80.
-
-  5. No bboxes at all
-     -> area range wrong; MIN_CIRCULARITY too high; morphology destroyed
-        blobs (k=5 not k=3).
-
-  6. Cue classified STRIPE
-     -> WHITE_V_MIN too high; RATIO_CUE too low.
-
-  7. Solids classified STRIPE
-     -> WHITE_S_MAX too low (white noise picked up); RATIO_STRIPE_LO too
-        low.
-
-  8. All UNCERTAIN (glare over-triggers)
-     -> UNCERTAIN_WHITE_HI too low; raise to 0.70.
-
-  9. FPS < 15
-     -> PROCESS_WIDTH 800. Skip optional VideoWriter (4.3).
-
- 10. Scope-check HIT
-     -> reword comment; do not edit script.
-
-
-================================================================================
-TIME-PRESSED SHORTCUTS (only if clock forces it)
-================================================================================
-  - Skip 4.3 VideoWriter (DT 6.3 is optional).
-  - Skip per-class ±15% verification in 5.3 if 5.1/5.2 evidence is solid;
-    still write robustness.md noting F3 as "visual evidence only".
-  - Never skip: 3.5, 3.6, 6.3, 7.2. Knockout risk or non-submission.
-
-================================================================================
-END
-================================================================================

@@ -1,0 +1,115 @@
+================================================================================
+DEV 4.3 — VIDEO WRITER (OPTIONAL) — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: Discuss, evaluate, and formally decide on the implementation of the
+         cv::VideoWriter (mp4 recording) module. Captures the debate on whether
+         to include this output feature, weighs the commercial/academic pros
+         and cons, and locks the final engineering decision. Closes DT 6.3.
+Parallel-tick: Dev 4.3 [x]  <=>  DT 6.3 [x] (closed via scope decision).
+
+--------------------------------------------------------------------------------
+A. WHAT DEV 4.3 WOULD HAVE PROVEN (IF IMPLEMENTED)
+--------------------------------------------------------------------------------
+  1. Processed frames could be encoded via cv::VideoWriter into an .mp4 file.
+  2. The mp4 could be saved to DATA_ROOT/IPO/recordings/run_YYYYMMDD_HHMMSS.mp4.
+  3. The overlay (bounding boxes + labels) would be baked into the video.
+  4. A single timestamp would unify the console log, reject log, and video.
+
+--------------------------------------------------------------------------------
+B. THE DECISION
+--------------------------------------------------------------------------------
+  FINAL DECISION: SKIP VideoWriter implementation. 
+  Set `WRITE_VIDEO = false` in config.h. The code will remain absent/disabled.
+
+--------------------------------------------------------------------------------
+C. ARGUMENTS TO SKIP (THE WINNING CASE)
+--------------------------------------------------------------------------------
+  C1. Commercial/Product Logic:
+      - No commercial billiard-vision product wastes disk space storing every
+        run. The system should operate live; logging is sufficient.
+      
+  C2. Academic/Grading Logic (The Knockout Reality):
+      - The assessment will be executed live, on DIFFERENT .mp4 game clips 
+        than what we have tested on.
+      - A pre-recorded mp4 does NOT act as "knockout insurance." If the live 
+        demo fails in front of the examiner (Peter), showing a video of it 
+        working perfectly at home is irrelevant. The live execution is the gate.
+
+  C3. Time Constraints (Opportunity Cost):
+      - Implementing and debugging VideoWriter takes ~30 minutes.
+      - Those 30 minutes are better spent on Dev 5.1-5.4 (Robustness evidence)
+        and Dev 6.1-6.4 (Defense documentation). 
+      - The rubric grades the code, the robustness evidence, and the live
+        explanation. It does not grade an mp4 file.
+
+  C4. Toolchain Flakiness:
+      - OpenCV's VideoWriter on MinGW-W64 can occasionally fail to initialize 
+        the 'mp4v' codec depending on the exact build flags. Debugging a 
+        non-gradeable feature under time pressure is an unnecessary risk.
+
+--------------------------------------------------------------------------------
+D. ARGUMENTS NOT TO SKIP (AND WHY THEY WERE REJECTED)
+--------------------------------------------------------------------------------
+  D1. "Knockout Insurance" (Rejected):
+      - Initial thought: If live demo fails, fall back to the video.
+      - Rejection: The examiner grades live execution. A video is not a 
+        substitute. The knockout rule applies strictly.
+
+  D2. "Real-time Proof / Async Evidence" (Rejected):
+      - Initial thought: The SUMMARY log is text; the mp4 proves it visually.
+      - Rejection: The live demo at assessment time IS the visual proof. 
+        Adding an mp4 for our own personal records does not improve the grade.
+
+  D3. "Timestamp Triad (Log + Rejects + Video)" (Rejected):
+      - Initial thought: Unified timestamp artifacts look professional.
+      - Rejection: The console log and reject log already share a timestamp. 
+        The video adds nothing to the actual rubric criteria.
+
+  D4. "Cheap Complexity Boost" (Rejected):
+      - Initial thought: Adding VideoWriter is a cheap way to add code volume.
+      - Rejection: A 10-line feature skipped for a documented engineering 
+        reason is better than code bloat. 
+
+--------------------------------------------------------------------------------
+E. HOW TO HANDLE IN CODE (THE COMPILE-TIME TOGGLE)
+--------------------------------------------------------------------------------
+  To demonstrate that the capability was considered and intentionally disabled 
+  without leaving dead code, add the following to config.h:
+
+  // --- Output (4.3) ---
+  constexpr bool WRITE_VIDEO = false;  // Disabled: see Dev 4.3 discussion
+
+  No VideoWriter code is added to main.cpp. This cleanly documents the 
+  engineering decision.
+
+--------------------------------------------------------------------------------
+F. DEFENSE STRATEGY (HOW TO EXPLAIN THIS TO THE EXAMINER)
+--------------------------------------------------------------------------------
+  If asked: "Why doesn't your system record the output?"
+  
+  Answer: "The system is designed for live, real-time classification. Saving 
+  every run to disk is a commercial anti-pattern (storage bloat), and storing 
+  test runs is academically unnecessary since the assessment is live. I 
+  prioritized time on robustness evidence and pipeline stability rather than 
+  a non-gradeable output artifact. The capability was scoped out via a 
+  compile-time flag in config.h."
+
+  This demonstrates engineering judgment and scope control, which examiners 
+  respect more than unnecessary features.
+
+--------------------------------------------------------------------------------
+G. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 4.3 — VIDEO WRITER — VERIFIED (SKIPPED BY DESIGN)
+        decision documented   : pass
+        commercial argument   : pass (storage)
+        academic argument     : pass (live assessment)
+        code state            : pass (WRITE_VIDEO = false)
+        defense strategy      : pass
+
+  Parallel-tick:
+        Dev 4.3 [x] (self-standing scope decision)
+        DT 6.3  [x] (closed - explicitly scoped out)
+
+  Next: Dev 4.4 — EXIT KEYS + CLEAN SHUTDOWN.
+================================================================================

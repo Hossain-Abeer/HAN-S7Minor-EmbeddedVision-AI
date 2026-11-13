@@ -1,0 +1,34 @@
+================================================================================
+DEV 4.5 — EXIT KEYS + CLEAN SHUTDOWN — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: Ensure the user can cleanly exit the infinite while loop, flushing 
+         logs and releasing the VideoCapture handle. Closes DT 6.4.
+Parallel-tick: Dev 4.5 [x]  <=>  DT 6.4 [x] (closed).
+
+--------------------------------------------------------------------------------
+A. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  C1. Pressing ESC (ASCII 27) breaks the loop.
+  C2. Process terminates cleanly (no terminal hang).
+  C3. Logs are flushed (freopen file closes properly on normal return).
+
+--------------------------------------------------------------------------------
+B. DECISIONS LOCKED
+--------------------------------------------------------------------------------
+  E1. Exit convention (ESC / 'q') is locked.
+  E2. VideoWriter release is omitted (per Dev 4.3 skip decision).
+
+--------------------------------------------------------------------------------
+C. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 4.5 — EXIT KEYS — VERIFIED
+        ESC exits         : pass
+        clean shutdown    : pass
+
+  Parallel-tick:
+        Dev 4.5 [x]
+        DT 6.4  [x] (closed)
+
+  *** DEVELOPMENT (SECTIONS 0-4) COMPLETE ***
+  Next: Dev 5.0 — DOCUMENTATION & EVIDENCE (Phase B).
+================================================================================

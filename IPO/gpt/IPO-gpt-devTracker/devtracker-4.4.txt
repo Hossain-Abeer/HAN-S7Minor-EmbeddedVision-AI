@@ -1,0 +1,40 @@
+================================================================================
+DEV 4.4 — CLI ACCESS / FILE PASSING — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: Modify the entry point to accept terminal arguments, allowing the 
+         examiner to test the program on any .mp4 file dynamically.
+Parallel-tick: Dev 4.4 [x]  <=>  DT 1.1 [x] (Enhanced input flexibility).
+
+--------------------------------------------------------------------------------
+A. CODE DELTA
+--------------------------------------------------------------------------------
+  - Changed signature to `int main(int argc, char** argv)`.
+  - Fallback: `clipName = "billiards-game-clip1.mp4"` if no args provided.
+  - Override: `clipName = argv[1]` if args provided.
+  - Path resolution: detects absolute paths (contains slash) vs. relative names 
+    (prepends `DATA_ROOT/game1/`).
+
+--------------------------------------------------------------------------------
+B. VERIFICATION EVIDENCE
+--------------------------------------------------------------------------------
+  C1. Build (F7): exit code 0.
+  C2. Runtime (Default): `.\Ball-Type-Identifier.exe` -> opens clip1.
+  C3. Runtime (Arg): `.\Ball-Type-Identifier.exe billiards-game-clip2.mp4` -> 
+      opens clip2.
+  C4. Runtime (Absolute Path): Successfully opens clip via full path.
+
+--------------------------------------------------------------------------------
+C. STATUS
+--------------------------------------------------------------------------------
+  [x] DEV 4.4 — CLI ACCESS — VERIFIED
+        build exit 0       : pass
+        default fallback   : pass
+        arg passing        : pass
+        path resolution    : pass
+
+  Parallel-tick:
+        Dev 4.4 [x]
+        DT 1.1  [x] (re-confirmed)
+
+  Next: Dev 4.5 — EXIT KEYS + CLEAN SHUTDOWN.
+================================================================================

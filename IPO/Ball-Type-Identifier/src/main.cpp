@@ -13,8 +13,31 @@
 using namespace cv;
 using namespace std;
 
+/*
 int main() {
     string clipPath = string(DATA_ROOT) + "/game1/billiards-game-clip1.mp4";
+    VideoCapture cap(clipPath);
+    if (!cap.isOpened()) {
+        cerr << "Failed to open: " << clipPath << endl;
+        return -1;
+    }*/
+
+    //4.4 CLI access
+int main(int argc, char** argv) {
+    // Default to clip1 if no argument is provided
+    string clipName = "billiards-game-clip1.mp4"; 
+    
+    // If a filename is passed via terminal, use that instead
+    if (argc > 1) {
+        clipName = argv[1]; 
+    }
+
+    // Allow passing the full path or just the filename
+    string clipPath = clipName;
+    if (clipName.find("/") == string::npos && clipName.find("\\") == string::npos) {
+        clipPath = string(DATA_ROOT) + "/game1/" + clipName;
+    }
+
     VideoCapture cap(clipPath);
     if (!cap.isOpened()) {
         cerr << "Failed to open: " << clipPath << endl;
