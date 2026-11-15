@@ -13,11 +13,11 @@ PARALLEL-TICK CONTRACT
   - A DT subsec may only be ticked via a step here (not on its own).
 
 REPO / BUILD
-  repo        : <workspace>/IPO/Ball-Type-Identifier
+  repo        : <workspace>/IPO/Billiard-Vision
   data root   : D:/HAN/Semester 7 Minor/billiards-game-clips
   OpenCV_DIR  : C:/dev/opencv-build/opencv-install/x64/mingw/lib
   build dir   : repo/build/
-  exe         : repo/build/Ball-Type-Identifier.exe
+  exe         : repo/build/Billiard-Vision.exe
   asset path  : ../<relative> from build/  (i.e. ../.. to repo root)
 
 CONVENTIONS (inherited)
@@ -33,7 +33,7 @@ CONVENTIONS (inherited)
 SECTION 0 — PREFLIGHT (verify Phase 0 artifacts)
 ================================================================================
 
-[ ] 0.1  REPO TREE + LAYOUT
+[x] 0.1  REPO TREE + LAYOUT
     Type: verification | Design: DT 0.2
     Action: ls repo root. Confirm: src/{config.h,main.cpp,scope_check.ps1,
             cloth_sampler.py}, docs/{scope_lock.md}, CMakeLists.txt,
@@ -41,7 +41,7 @@ SECTION 0 — PREFLIGHT (verify Phase 0 artifacts)
     Verify: all present. git status clean.
     Debug:  missing -> recreate from DT 0.2 log before continuing.
 
-[ ] 0.2  CONFIG.H CONSTANTS
+[x] 0.2  CONFIG.H CONSTANTS
     Type: verification | Design: DT 0.5
     Action: open src/config.h. Confirm: #pragma once first non-comment token;
             CLOTH_*_LO/HI = 85/96 243/255 111/166; all blocks present per
@@ -50,13 +50,13 @@ SECTION 0 — PREFLIGHT (verify Phase 0 artifacts)
             constexpr declarations.
     Debug:  diff vs DT 0.5 C5. Any mismatch -> fix config.h, re-run 0.3.
 
-[ ] 0.3  SCOPE CHECK
+[x] 0.3  SCOPE CHECK
     Type: run | Design: DT 0.4
     Action: powershell -File src/scope_check.ps1
     Verify: prints "SCOPE OK".
     Debug:  HIT lines -> fix source per DT 0.4 D1/D2. Do not edit script.
 
-[ ] 0.4  CLIPS READABLE
+[x] 0.4  CLIPS READABLE
     Type: verification | Design: DT 1.1 (prep)
     Action: confirm 5 clips exist under data-root/game1/ with sizes from
             DT 0.3 B.
@@ -68,7 +68,7 @@ SECTION 0 — PREFLIGHT (verify Phase 0 artifacts)
 SECTION 1 — BUILD + ACQUISITION + ENHANCEMENT
 ================================================================================
 
-[ ] 1.1  CMAKELISTS.TXT
+[x] 1.1  CMAKELISTS.TXT
     Type: code (self-standing infra)
     Design: none — uses per-exercise template
     Action: write CMakeLists.txt at repo root:
@@ -85,7 +85,7 @@ SECTION 1 — BUILD + ACQUISITION + ENHANCEMENT
             Generating done". No generator-specific flags.
     Debug:  "OpenCV not found" -> OpenCV_DIR wrong. Confirm path exists.
 
-[ ] 1.2  MAIN SKELETON + VIDEOCAPTURE + EXIT
+[x] 1.2  MAIN SKELETON + VIDEOCAPTURE + EXIT
     Type: code | Design: DT 1.1, DT 6.4 (partial)
     Action: src/main.cpp:
               includes (opencv2/opencv.hpp, "config.h")
@@ -101,7 +101,7 @@ SECTION 1 — BUILD + ACQUISITION + ENHANCEMENT
     Debug:  no window -> imshow missing or waitKey(0). Wrong clip -> path
             concatenation off (DATA_ROOT + "/game1/" + name).
 
-[ ] 1.3  RESIZE + FPS
+[x] 1.3  RESIZE + FPS
     Type: code | Design: DT 1.3
     Action: after cap >> frame, resize to PROCESS_WIDTH preserving aspect:
               resize(frame, frame, Size(PROCESS_WIDTH,
@@ -111,7 +111,7 @@ SECTION 1 — BUILD + ACQUISITION + ENHANCEMENT
     Debug:  FPS < 15 -> lower PROCESS_WIDTH to 800 and re-verify.
             Aspect distorted -> use INTER_AREA for downscale.
 
-[ ] 1.4  BLUR -> HSV ORDER
+[x] 1.4  BLUR -> HSV ORDER
     Type: code | Design: DT 2.1, DT 2.3
     Action: after resize:
               Mat blurred; GaussianBlur(frame, blurred,
@@ -128,7 +128,7 @@ SECTION 1 — BUILD + ACQUISITION + ENHANCEMENT
 SECTION 2 — SEGMENTATION
 ================================================================================
 
-[ ] 2.1  CLOTH MASK + INVERT
+[x] 2.1  CLOTH MASK + INVERT
     Type: code | Design: DT 3.1
     Action:
               Mat cloth; inRange(hsv,
@@ -143,7 +143,7 @@ SECTION 2 — SEGMENTATION
             cloth leaks into ball (S_LO too low) -> raise CLOTH_S_LO to 250.
             Any change -> update DT 0.5 log + 0.5_cloth_samples.txt.
 
-[ ] 2.2  MORPHOLOGY
+[x] 2.2  MORPHOLOGY
     Type: code | Design: DT 3.2
     Action:
               Mat k = getStructuringElement(MORPH_RECT,
@@ -155,7 +155,7 @@ SECTION 2 — SEGMENTATION
     Debug:  merged adjacent balls -> acceptable; DT 3.4 filter will drop.
             k=5 introduced -> revert to k=3 (DT 3.2 explicit).
 
-[ ] 2.3  CONTOURS + FILTERS
+[x] 2.3  CONTOURS + FILTERS
     Type: code | Design: DT 3.3, DT 3.4
     Action:
               vector<vector<Point>> contours;
@@ -181,7 +181,7 @@ SECTION 2 — SEGMENTATION
             Log rejected bbox to DATA_ROOT/IPO/logs/rejects_YYYYMMDD.txt
             (evidence for F2, feeds DT 7.2).
 
-[ ] 2.4  BALL CANDIDATE STRUCT
+[x] 2.4  BALL CANDIDATE STRUCT
     Type: code | Design: DT 3.5
     Action: struct BallCandidate { Rect bbox; Point2f center; int area; };
             Fill vector<BallCandidate> from accepted contours.
@@ -190,7 +190,7 @@ SECTION 2 — SEGMENTATION
     Debug:  count mismatch -> filtering logic differs between c-out and
             push-back.
 
-[ ] 2.5  BBOX CHECKPOINT (visual)
+[x] 2.5  BBOX CHECKPOINT (visual)
     Type: run (self-standing, but gates DT 3.5)
     Design: none (visual checkpoint)
     Action: draw rectangle + putText "?" on each candidate; imshow "bbox".
@@ -205,7 +205,7 @@ SECTION 2 — SEGMENTATION
 SECTION 3 — FEATURES + CLASSIFICATION
 ================================================================================
 
-[ ] 3.1  WHITE RATIO
+[x] 3.1  WHITE RATIO
     Type: code | Design: DT 4.1
     Action: for each candidate:
               Rect r = bbox inset by 2 px on all sides;
@@ -220,7 +220,7 @@ SECTION 3 — FEATURES + CLASSIFICATION
             stripes read as solid -> RATIO_STRIPE_LO will handle; do not
             change here.
 
-[ ] 3.2  EDGE DENSITY
+[x] 3.2  EDGE DENSITY
     Type: code | Design: DT 4.2
     Action: for each candidate:
               Mat g; cvtColor(blurred(r), g, COLOR_BGR2GRAY);
@@ -231,7 +231,7 @@ SECTION 3 — FEATURES + CLASSIFICATION
     Debug:  all zero -> Canny on wrong channel (HSV not gray). Fix.
             all high -> CANNY_LO too low; raise to 70.
 
-[ ] 3.3  ATTACH TO CANDIDATE
+[x] 3.3  ATTACH TO CANDIDATE
     Type: code | Design: DT 4.4
     Action: extend struct with { float white_ratio; float edge_density; }.
             Feature computation remains pure (no mutation of candidate
@@ -239,7 +239,7 @@ SECTION 3 — FEATURES + CLASSIFICATION
     Verify: struct fields populated per candidate. Compiles clean.
     Debug:  none expected.
 
-[ ] 3.4  FEATURE DUMP CHECKPOINT
+[x] 3.4  FEATURE DUMP CHECKPOINT
     Type: run (gates DT 4.1, 4.2, 4.4 jointly)
     Design: DT 4.1, DT 4.2, DT 4.4
     Action: for 100 frames of clip1, print
@@ -249,7 +249,7 @@ SECTION 3 — FEATURES + CLASSIFICATION
     Debug:  NaN -> division by zero; guard with area > 0.
             out-of-range -> re-check WHITE_V_MIN / CANNY_LO.
 
-[ ] 3.5  CLASSIFICATION RULES
+[x] 3.5  CLASSIFICATION RULES
     Type: code | Design: DT 5.1, DT 5.2
     Action: per candidate, if/else in order:
               if (wr >  RATIO_CUE)                            type = CUE;
@@ -269,7 +269,7 @@ SECTION 3 — FEATURES + CLASSIFICATION
             0.07.
             Every threshold change -> cite new evidence, update DT 5.2.
 
-[ ] 3.6  UNCERTAIN BAND (glare handling)
+[x] 3.6  UNCERTAIN BAND (glare handling)
     Type: code | Design: DT 5.3, DT 2.2
     Action: keep UNCERTAIN as first-class:
               separate counter int n_uncertain;
@@ -286,7 +286,7 @@ SECTION 3 — FEATURES + CLASSIFICATION
 SECTION 4 — OUTPUT
 ================================================================================
 
-[ ] 4.1  OVERLAY
+[x] 4.1  OVERLAY
     Type: code | Design: DT 6.1
     Action: per accepted ball:
               rectangle on original frame;
@@ -299,7 +299,7 @@ SECTION 4 — OUTPUT
     Debug:  text illegible -> FONT_HERSHEY_SIMPLEX, scale 0.5, thickness 1.
             text clipped at edge -> clamp putText origin inside frame.
 
-[ ] 4.2  CONSOLE LOG
+[x] 4.2  CONSOLE LOG
     Type: code | Design: DT 6.2
     Action: per frame print:
               frame_idx, n_balls, C:<n> S:<n> St:<n> ?:<n>, fps
@@ -312,7 +312,7 @@ SECTION 4 — OUTPUT
             counter drift vs overlay -> classification called twice; call
             once per candidate.
 
-[ ] 4.3  VIDEO WRITER (OPTIONAL)
+[x] 4.3  VIDEO WRITER (OPTIONAL)
     Type: code | Design: DT 6.3
     Action: VideoWriter mp4v on DATA_ROOT/IPO/recordings/run_YYYYMMDD.mp4.
             Gate on a constexpr WRITE_VIDEO = true (add to config.h).
@@ -323,7 +323,7 @@ SECTION 4 — OUTPUT
             Can SKIP this step if time-pressed (DT 6.3 is optional); if
             skipped, note in DT 6.3.
 
-[ ] 4.4  CLI ACCESS / FILE PASSING
+[x] 4.4  CLI ACCESS / FILE PASSING
     Type: code | Design: DT 1.1 (partial - enhancing acquisition input flexibility)
     Action: 
       - Modify main() signature to: int main(int argc, char** argv)
@@ -340,7 +340,7 @@ SECTION 4 — OUTPUT
       - "Failed to open" -> path concatenation is wrong or file doesn't exist.
       - Args ignored -> signature is still int main() instead of int main(int argc, char** argv).
 
-[ ] 4.5  EXIT KEYS + CLEAN SHUTDOWN
+[x] 4.5  EXIT KEYS + CLEAN SHUTDOWN
     Type: code | Design: DT 6.4
     Action: ensure waitKey(10); 'q' and ESC both break; on break:
             writer.release(); cap.release(); destroyAllWindows(); return 0.
@@ -350,10 +350,10 @@ SECTION 4 — OUTPUT
 
 
 ================================================================================
-SECTION 5 — RACK DETECTION (GAME START LOGIC)
+SECTION 5 — GAME LOGIC (RACK + COUNTER + GUI)
 ================================================================================
 
-[ ] 5.1  RACK DETECTION MODULE
+[x] 5.1  RACK DETECTION MODULE
     Type: code | Design: Bridging Reports to Code (Decision Pre-5.1)
     Action:
       - Create src/rack-detection.h:
@@ -378,3 +378,95 @@ SECTION 5 — RACK DETECTION (GAME START LOGIC)
       - Always true -> lower the epsilon or raise the min area.
       - Never true -> check if the racked balls are actually being detected by
         the vision pipeline (check SUMMARY log for balls=15).
+
+[ ] 5.2  COUNTER MODULE (STATE MACHINE)
+    Type: code | Design: DT 5.6
+    Action:
+      - Add to src/config.h:
+          constexpr int DEBOUNCE_FRAMES = 5;
+          constexpr int COOLDOWN_FRAMES = 60;
+      - Create src/game-counter.h:
+          #pragma once
+          #include <string>
+          class GameCounter {
+          public:
+              GameCounter(const std::string& clipStem,
+                          const std::string& logPath);
+              bool update(bool rackDetected); // true on counted event
+              int  getCount() const { return m_count; }
+          private:
+              void logCount();
+              enum class State { IDLE, COUNTED };
+              State       m_state          = State::IDLE;
+              int         m_count          = 0;
+              int         m_rackStreak     = 0;
+              int         m_cooldownStreak = 0;
+              std::string m_clipStem;
+              std::string m_logPath;
+          };
+      - Create src/game-counter.cpp:
+          - update(rackDetected):
+              if rackDetected:
+                  m_rackStreak++;
+                  m_cooldownStreak = 0;
+                  if (m_state == IDLE && m_rackStreak >= DEBOUNCE_FRAMES):
+                      m_state = COUNTED; m_count++; logCount(); return true;
+              else:
+                  m_cooldownStreak++;
+                  if (m_state == COUNTED && m_cooldownStreak >= COOLDOWN_FRAMES):
+                      m_state = IDLE; m_rackStreak = 0;
+              return false;
+          - logCount():
+              append "YYYY-MM-DDTHH:MM:SS,<count>,<clipStem>\n"
+              to m_logPath via std::ofstream(..., std::ios::app).
+      - Update CMakeLists.txt to include src/game-counter.cpp.
+      - Update main.cpp:
+          - Before loop, derive clipStem from clipName:
+              std::string clipStem = clipName;
+              size_t dot   = clipStem.find_last_of('.');
+              if (dot   != std::string::npos) clipStem = clipStem.substr(0, dot);
+              size_t slash = clipStem.find_last_of("/\\");
+              if (slash != std::string::npos) clipStem = clipStem.substr(slash + 1);
+            Build countLogPath:
+              DATA_ROOT/IPO/logs/log-counted-<clipStem>-<timebuf>.txt
+            Instantiate GameCounter once:
+              GameCounter counter(clipStem, countLogPath);
+          - Inside loop, after rackDetected is computed:
+              bool counted = counter.update(rackDetected);
+              if (counted):
+                  putText "COUNT: <counter.getCount()>" at (50, 100)
+    Verify:
+      - F7 builds clean.
+      - Run clip1 (starts racked): log-counted file appears with EXACTLY 1 line.
+      - Counter does NOT increment per frame despite ~22 rack=1 frames.
+      - After break, no second count.
+      - Optional: run a second clip; log-counted file for that clip is separate.
+    Debug:
+      - Multiple counts per rack -> raise DEBOUNCE_FRAMES (5 -> 10).
+      - Zero counts -> verify DEBOUNCE_FRAMES <= visible rack duration (~22);
+                        check file path & IPO/logs/ exists.
+      - Zero-byte log -> ofstream append failed; check folder exists.
+      - Wrong stem in filename -> verify strip-extension logic.
+
+
+[ ] 5.3  GUI CALCULATOR (DEFERRED TO PERIOD 2)
+    Type: self-standing (backlog) | Design: DT 5.7
+    Status: DEFERRED — NOT implemented in Period 1. Documentation only.
+    Action:
+      - Add a "Period 2 future work" line to docs/scope_lock.md:
+          "GUI calculator (rate input, live count, bill display) — 
+           reads log-counted-*.txt; not part of Period 1 deliverable."
+      - No source changes to src/ in Period 1.
+      - Planned architecture (for defense narration, NOT implementation):
+          - Separate Python Tkinter process.
+          - Reads all DATA_ROOT/IPO/logs/log-counted-*.txt (multi-instance safe).
+          - Input box for €/game rate.
+          - Displays total games + bill, refreshed every 1s via root.after().
+          - Decoupled from vision process (crash isolation, independent updates).
+    Verify:
+      - docs/scope_lock.md contains the Period 2 GUI line.
+      - No src/ file references Tkinter, ImGui, Qt, or any GUI library.
+      - scope_check.ps1 still prints "SCOPE OK".
+    Debug:
+      - GUI temptation during demo -> answer: "The counter log IS the commercial 
+        primitive. The GUI is a Period 2 management client consuming that log."

@@ -9,6 +9,8 @@
 #include "features.h"
 #include <cstdio>
 #include "classify.h" //3.5 for classifyBallType
+#include "rack-detection.h" //5.1 rack-detection
+#include "game-counter.h" //5.2 game counter
 
 using namespace cv;
 using namespace std;
@@ -62,6 +64,18 @@ int main(int argc, char** argv) {
         cerr << "Failed to redirect stdout to log file!" << endl;
         return -1;
     }
+
+        // 5.2 — Counter module
+    std::string clipStem = clipName;
+    size_t dot = clipStem.find_last_of('.');
+    if (dot != std::string::npos) clipStem = clipStem.substr(0, dot);
+    size_t slash = clipStem.find_last_of("/\\");
+    if (slash != std::string::npos) clipStem = clipStem.substr(slash + 1);
+
+    std::string countLogPath = std::string(DATA_ROOT)
+                             + "/IPO/logs/log-counted-" + clipStem
+                             + "-" + timebuf + ".txt";
+    GameCounter counter(clipStem, countLogPath);
 
     while (true) {
         cap >> frame;
@@ -166,8 +180,6 @@ int main(int argc, char** argv) {
                         */
 
         
-        
-
         // 3.1, 3.2, & 3.5. Feature extraction + Classification
         for (auto& ball : candidates) {
             // 1. Extract features ONCE
@@ -212,6 +224,24 @@ int main(int argc, char** argv) {
                         cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         }
 
+        // 5.1 — Rack Detection
+        bool rackDetected = detectRack(candidates);
+        if (rackDetected) {
+            cv::putText(frame, "RACK DETECTED", cv::Point(50, 50),
+                        cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 0, 255), 2);
+        }
+
+    // 5.2 — Counter update
+    bool counted = counter.update(rackDetected);
+    if (counted) {
+        std::cout << "COUNTER EVENT: count=" << counter.getCount()
+                  << " at frame=" << frameCount << std::endl;
+    }
+    char countBuf[64];
+    snprintf(countBuf, sizeof(countBuf), "COUNT: %d", counter.getCount());
+    cv::putText(frame, countBuf, cv::Point(50, 100),
+                cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+
         // 4.2 SUMMARY log (Tee'd via freopen)
         int64 now = getTickCount();
         double instantFps = getTickFrequency() / (double)(now - prevTick);
@@ -224,6 +254,7 @@ int main(int argc, char** argv) {
              << " SOLID=" << nSolid
              << " STRIPE=" << nStripe
              << " ?=" << nUncertain
+             << " rack=" << (rackDetected ? 1 : 0)
              << " fps=" << instantFps << endl;
 
         // Debug visuals (SHOW THE FRAME!)

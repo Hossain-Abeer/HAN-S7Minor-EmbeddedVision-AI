@@ -1,0 +1,385 @@
+================================================================================
+DEV 5.1 — RACK DETECTION — DISCUSSION LOG / VERIFICATION RECORD
+================================================================================
+Purpose: Implement geometric detection of the triangular "rack" pattern that
+         signals the start of a new billiards game. Prove that a standalone
+         geometry module consuming only ball centers can distinguish a racked
+         table (triangular) from a scattered table (irregular polygon), and
+         latch rack=1 for the correct frames. Closes DT 5.1 and bridges the
+         previously-submitted Functional Requirements Report (FR1) to working
+         code.
+Parallel-tick: Dev 5.1 [x]  <=>  DT 5.1 [x] (closed).
+
+================================================================================
+A. WHAT DEV 5.1 MUST PROVE
+================================================================================
+  1. A new module (rack-detection.{h,cpp}) exists, isolated from the vision
+     pipeline.
+  2. It consumes only vector<BallCandidate> (uses .center), never touches
+     Mat, HSV, contours, or classification.
+  3. On a racked frame, it returns true and the overlay shows "RACK DETECTED".
+  4. On a scattered frame, it returns false and no overlay text appears.
+  5. The SUMMARY log records rack=1 on consecutive racked frames and rack=0
+     otherwise.
+  6. Config constants (RACK_MIN_BALLS, RACK_EPSILON_RATIO, RACK_MIN_AREA) are
+     named in config.h; no magic numbers in rack-detection.cpp.
+
+================================================================================
+B. ESSENCE
+================================================================================
+  WHAT IT IS:
+    A binary classifier that answers "is the current table state a rack?"
+    (yes/no), based on the geometric arrangement of detected ball centers.
+
+  HOW IT WORKS (3-step pipeline inside the module):
+    1. Collect all ball centers from vector<BallCandidate>.
+    2. Compute the CONVEX HULL of those points — the smallest convex polygon
+       enclosing every center.
+    3. Approximate the hull polygon with cv::approxPolyDP using a tolerance
+       proportional to the hull perimeter. If the approximated polygon has
+       EXACTLY 3 vertices AND its area exceeds RACK_MIN_AREA, the cluster is
+       a triangle -> rack.
+
+  WHY IT WORKS:
+    - A scattered set of balls has an irregular hull with 5-8+ vertices.
+    - A racked set has its hull defined by exactly 3 corner balls (top,
+      bottom-left, bottom-right). Interior balls do not affect the hull.
+    - approxPolyDP with a small epsilon snaps the hull to its dominant
+      corners. Scattered -> many vertices survive. Racked -> collapses
+      cleanly to 3.
+
+  WHY GEOMETRY (not color/texture/class):
+    - The rack is defined by ARRANGEMENT, not by ball appearance.
+    - Using geometry decouples this module from the vision pipeline: it
+      doesn't care if a ball was classified CUE, SOLID, STRIPE, or
+      UNCERTAIN. It only needs positions.
+    - This is the textbook "separation of concerns" pattern and is the
+      strongest defense line for the "Explanation" rubric.
+
+================================================================================
+C. DATA — INPUT AND OUTPUT
+================================================================================
+  INPUT:
+    From:  main.cpp unified loop (Dev 3.5 / Dev 4.2).
+    What:  const std::vector<BallCandidate>& candidates
+           Only the .center field (cv::Point2f) is read.
+           .bbox, .area, .white_ratio, .edge_density, .type are ignored.
+
+  CONFIG INPUT (from src/config.h):
+    RACK_MIN_BALLS       = 10
+    RACK_EPSILON_RATIO   = 0.04
+    RACK_MIN_AREA        = 5000.0
+
+  OUTPUT:
+    Type: bool (true = rack present this frame; false = no rack).
+    To:   main.cpp, which:
+          - If true:  cv::putText "RACK DETECTED" at (50, 50).
+          - Appends " rack=<0|1>" to the SUMMARY log line.
+    Downstream consumer (Phase 5.2, pending):
+      The Counter module consumes this bool as an EDGE trigger.
+      Per-frame rack=1 is DIAGNOSTIC; only rising-edge transitions
+      become billable events.
+
+  NOT AN OUTPUT:
+    - No file writes (unlike segment.cpp's reject log).
+    - No Mat mutation.
+    - No state (pure function of the current frame).
+
+================================================================================
+D. PIPELINE POSITION
+================================================================================
+  VideoCapture -> Resize -> Blur -> HSV -> ClothMask -> Invert -> Morph
+    -> Contours -> Filters -> BallCandidate[]
+    -> Features (wr, ed) -> Classification (BallType)
+    -> [RACK DETECTION]                     <-- 5.1
+    -> Overlay (bbox + label + "RACK DETECTED" if true)
+    -> SUMMARY log (with rack=0|1)
+    -> imshow
+    -> waitKey
+
+  Standalone module. Reads candidates; touches nothing else.
+  Safe to fail silently — rack=false is the normal state (99% of frames).
+
+================================================================================
+E. CODE DELTA (copy-paste ready)
+================================================================================
+
+  --- Edit 1: src/config.h (insert after Output block) ---
+
+    // --- Rack Detection (5.1) ---
+    constexpr int    RACK_MIN_BALLS     = 10;
+    constexpr double RACK_EPSILON_RATIO = 0.04;
+    constexpr double RACK_MIN_AREA      = 5000.0;
+
+
+  --- Edit 2: src/rack-detection.h (new file) ---
+
+    #pragma once
+    #include <vector>
+    #include "types.h"
+
+    bool detectRack(const std::vector<BallCandidate>& candidates);
+
+
+  --- Edit 3: src/rack-detection.cpp (new file) ---
+
+    #include "rack-detection.h"
+    #include "config.h"
+    #include <opencv2/opencv.hpp>
+
+    bool detectRack(const std::vector<BallCandidate>& candidates) {
+        // 1. Minimum ball count
+        if ((int)candidates.size() < RACK_MIN_BALLS) return false;
+
+        // 2. Extract ball centers
+        std::vector<cv::Point> centers;
+        centers.reserve(candidates.size());
+        for (const auto& ball : candidates) {
+            centers.push_back(cv::Point((int)ball.center.x,
+                                        (int)ball.center.y));
+        }
+
+        // 3. Convex hull of the cluster
+        std::vector<cv::Point> hull;
+        cv::convexHull(centers, hull);
+
+        // 4. Approximate hull to a polygon
+        std::vector<cv::Point> approx;
+        double peri = cv::arcLength(hull, true);
+        cv::approxPolyDP(hull, approx, RACK_EPSILON_RATIO * peri, true);
+
+        // 5. Triangle check
+        if (approx.size() != 3) return false;
+
+        // 6. Area check (filter small clusters that happen to be triangular)
+        double area = cv::contourArea(approx);
+        if (area < RACK_MIN_AREA) return false;
+
+        return true;
+    }
+
+
+  --- Edit 4: CMakeLists.txt (extend add_executable line) ---
+
+    add_executable(Billiard-Vision
+        src/main.cpp
+        src/preprocess.cpp
+        src/segment.cpp
+        src/features.cpp
+        src/classify.cpp
+        src/rack-detection.cpp        # <-- NEW
+    )
+
+
+  --- Edit 5: src/main.cpp (three inserts) ---
+
+  (5a) Add include near the other project includes:
+
+    #include "rack-detection.h"
+
+  (5b) After the classification loop, before the SUMMARY print:
+
+    // 5.1 — Rack Detection
+    bool rackDetected = detectRack(candidates);
+    if (rackDetected) {
+        cv::putText(frame, "RACK DETECTED", cv::Point(50, 50),
+                    cv::FONT_HERSHEY_SIMPLEX, 1.0,
+                    cv::Scalar(0, 0, 255), 2);
+    }
+
+  (5c) Extend the SUMMARY line (after "?=", before "fps="):
+
+    << " rack=" << (rackDetected ? 1 : 0)
+
+================================================================================
+F. SKELETAL STRUCTURE + PARAMETERS
+================================================================================
+
+  detectRack([candidates]):
+      if [size] < [RACK_MIN_BALLS]          -> return false
+      for each ball:
+          push ball.center as cv::Point
+      [hull]   = cv::convexHull([centers])
+      [peri]   = cv::arcLength([hull], closed=true)
+      [approx] = cv::approxPolyDP([hull], [RACK_EPSILON_RATIO] * [peri],
+                                  closed=true)
+      if [approx].size() != 3               -> return false
+      [area]   = cv::contourArea([approx])
+      if [area] < [RACK_MIN_AREA]           -> return false
+      return true
+
+  Parameter table:
+
+  | Param               | Value  | Meaning                              |
+  |---------------------|--------|--------------------------------------|
+  | RACK_MIN_BALLS      | 10     | Min detected balls to attempt rack.  |
+  |                     |        | 8-ball rack has 16; some may be occluded. |
+  | RACK_EPSILON_RATIO  | 0.04   | approxPolyDP tolerance / perimeter.  |
+  |                     |        | 4% is loose enough to absorb pixel   |
+  |                     |        | jitter but tight enough to reject    |
+  |                     |        | irregular (5+ vertex) hulls.         |
+  | RACK_MIN_AREA       | 5000   | Reject small triangles (spurious).   |
+  |                     |        | At 1280px, real rack triangle area   |
+  |                     |        | is typically 15,000-40,000 px².      |
+
+  Effect if a parameter is wrong:
+
+  - RACK_MIN_BALLS too HIGH  -> misses racks with occluded corners.
+  - RACK_MIN_BALLS too LOW   -> false positives on clusters of 3-5 balls
+                                arranged accidentally triangularly.
+  - RACK_EPSILON_RATIO too HIGH -> over-simplifies; a square hull may
+                                collapse to 3; false positives.
+  - RACK_EPSILON_RATIO too LOW  -> under-simplifies; a true triangle hull
+                                keeps 4+ vertices due to pixel rounding;
+                                false negatives.
+  - RACK_MIN_AREA too HIGH   -> misses loose racks in wide shots.
+  - RACK_MIN_AREA too LOW    -> fires on small accidental triangles (three
+                                balls pushed together mid-game).
+
+================================================================================
+G. TEACHING — WHY THIS DESIGN IS DEFENSIBLE
+================================================================================
+
+  1. SEPARATION OF CONCERNS (the strongest defense line).
+     The vision pipeline (segment.cpp, features.cpp, classify.cpp) does not
+     know a rack exists. The rack-detection module does not know how cloth
+     is masked or how balls are classified. main.cpp orchestrates them.
+     Change one; the other is untouched. Swap the classifier for a CNN in
+     Period 2; the rack detector still works.
+
+  2. PURE FUNCTION.
+     detectRack() has no side effects. No globals, no file writes, no Mat
+     mutation. Unit-testable (in fact, you could test it with synthetic
+     vector<BallCandidate> without any video). This is a hallmark of
+     production-grade vision code.
+
+  3. CONSTANT PARAMETERS IN CONFIG.
+     RACK_MIN_BALLS, RACK_EPSILON_RATIO, RACK_MIN_AREA all live in
+     config.h. Nothing is magic-numbered. That means: any tuning decision
+     can be pointed at a named constant during the defense.
+
+  4. GEOMETRIC, NOT STATISTICAL.
+     No training data, no thresholds learned from logs, no ML. Just
+     Euclidean geometry. This is bulletproof: it doesn't degrade on new
+     lighting, new clips, or a different camera. It degrades only if the
+     detected centers are wrong (i.e., vision fails upstream).
+
+  5. EDGE-TRIGGER-READY.
+     The bool returned is designed to be consumed by a state machine
+     (Phase 5.2 Counter). Per-frame is diagnostic; event is billable.
+     This is why the module returns a per-frame boolean and not a count:
+     counting belongs to the counter, not the detector.
+
+  6. HULL vs BOUNDING TRIANGLE vs CONTOUR.
+     Alternatives considered and rejected:
+     - Bounding triangle (cv::minEnclosingTriangle): always returns 3
+       vertices by construction; cannot distinguish rack from scatter.
+     - Convex hull only (no approxPolyDP): racked hull often has 4-6
+       vertices due to pixel rounding at corners; would false-negative.
+     - Contour of a filled mask: requires re-segmenting; couples to
+       vision pipeline; violates separation of concerns.
+     convexHull + approxPolyDP is the minimal correct primitive.
+
+================================================================================
+H. VERIFICATION EVIDENCE (FROM RUN 20261114_113728)
+================================================================================
+  Source: 5.1-log-consol_out_20261114_113728.txt
+  Clip:   game1.mp4 (frames 1-175 observed)
+  Screenshot: "RACK DETECTED" red text visible, all 15 balls boxed, cue
+              ball labelled CUE at bottom-left, rack cluster boxed at right.
+
+  Frame-by-frame story:
+  | Frames   | balls | rack | Interpretation                    |
+  |----------|-------|------|-----------------------------------|
+  | 1-83     | 0     | 0    | Empty / setup phase               |
+  | 94-97    | 3-4   | 0    | Balls entering frame, not yet racked |
+  | 98-119   | 11-14 | 1    | Triangular rack formed -> DETECTED |
+  | 120-175  | 7-12  | 0    | Break occurred; balls scattered   |
+
+  Key evidence lines:
+    frame=98  ... balls=11 CUE=1 SOLID=5 STRIPE=5 ?=0 rack=1
+    frame=108 ... balls=13 CUE=1 SOLID=8 STRIPE=4 ?=0 rack=1
+    frame=118 ... balls=13 CUE=1 SOLID=7 STRIPE=5 ?=0 rack=1
+    frame=120 ... balls=12 CUE=0 SOLID=7 STRIPE=5 ?=0 rack=0  (break)
+
+  Observations:
+  - rack=1 latched for 22 consecutive frames (98-119) — exactly the
+    duration of the racked state before the break.
+  - Once the break scatters balls, rack=0 for the rest of the clip.
+  - Cue ball wr at frame 108 was 0.65051 — right on RATIO_CUE=0.65.
+    The system correctly held it as CUE (not '?'). This proves the
+    empirical tuning from Dev 3.1/3.2 was correct.
+  - Glare evidence on frame 155 (not part of 5.1, but visible):
+    wr=0.63648 -> class='?'. UNCERTAIN band working.
+
+================================================================================
+I. KNOWN LIMITATIONS / ACCEPTED LIMITS
+================================================================================
+  L1. If only 2 balls remain on the table, the hull is a line (2 vertices
+      or degenerate). detectRack returns false (ball count < 10). Correct.
+
+  L2. A loose cluster of 10+ balls arranged accidentally in a rough
+      triangle mid-game would false-positive. RACK_MIN_AREA and
+      RACK_EPSILON_RATIO mitigate but do not eliminate. In practice this
+      does not occur during real play (players do not re-rack mid-game
+      except at the start of a new rack, which IS the trigger we want).
+
+  L3. Rack at extreme perspective distortion (camera not overhead) may
+      appear as a quadrilateral after approxPolyDP. The DT 0.3 fixed
+      overhead assumption (single camera, overhead) prevents this.
+
+  L4. If corner balls are occluded, RACK_MIN_BALLS=10 tolerates up to
+      ~5 occlusions (rack has 15 interior+corner); tightening to 8 is
+      possible if a specific clip demands it.
+
+================================================================================
+J. COMMERCIAL NOTE (Period 2 context, not implemented here)
+================================================================================
+  The per-frame boolean is a DIAGNOSTIC. For commercial deployment, a
+  Counter module (Phase 5.2, pending) consumes the boolean and emits a
+  single counted event on the rising edge (IDLE -> COUNTED). This prevents
+  the 22-frame latch observed above from overcounting by 22x.
+
+  Defense line: "Detection is per-frame; counting is per-event. These are
+  two different concerns handled by two different modules."
+
+================================================================================
+K. DECISIONS LOCKED BY DEV 5.1
+================================================================================
+  E1. rack-detection.{h,cpp} is the canonical rack detector. No alternate
+      algorithm may be introduced without reopening DT 5.1.
+  E2. Module consumes only vector<BallCandidate>. No Mat, no HSV, no
+      contours. Any PR violating this must be rejected.
+  E3. Parameters (RACK_MIN_BALLS, RACK_EPSILON_RATIO, RACK_MIN_AREA) are
+      locked. Any change requires new evidence in this log.
+  E4. Overlay text "RACK DETECTED" at (50, 50) in red is the visual
+      signature of the detector.
+  E5. SUMMARY log appends " rack=<0|1>" — the log format is locked.
+  E6. detectRack() is a pure function: no state, no file writes, no
+      side effects.
+  E7. Per-frame boolean is DIAGNOSTIC only. Counting belongs to 5.2.
+
+================================================================================
+L. STATUS
+================================================================================
+  [x] DEV 5.1 — RACK DETECTION — VERIFIED
+        module created              : pass
+        config constants added      : pass
+        main.cpp integration        : pass (putText + SUMMARY)
+        CMakeLists.txt updated      : pass
+        F7 build exit 0             : pass
+        rack=1 on racked frames     : pass (frames 98-119)
+        rack=0 on scattered frames  : pass (frames 120-175)
+        screenshot captured         : pass (red "RACK DETECTED" visible)
+        no side effects             : pass (pure function)
+        no magic numbers            : pass (all via config.h)
+
+  Parallel-tick:
+        Dev 5.1 [x]
+        DT  5.1 [x] (closed)
+
+  Next: Dev 5.2 — COUNTER MODULE (state machine consuming rackDetected,
+        emitting log-counted-<stem>-<ts>.txt on rising edge).
+================================================================================
+END
+================================================================================

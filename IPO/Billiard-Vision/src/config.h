@@ -11,6 +11,9 @@ enum class BallType { CUE, SOLID, STRIPE, UNCERTAIN };
 constexpr int NUM_GAME_CLASSES = 3;   // CUE, SOLID, STRIPE
 constexpr int NUM_LABELS       = 4;   // + UNCERTAIN
 
+// --- Acquisition (1.3) ---
+constexpr int PROCESS_WIDTH = 1280;
+
 // --- Enhancement (2.1) ---
 constexpr int    BLUR_KSIZE  = 5;
 constexpr double BLUR_SIGMA  = 0.0;
@@ -40,7 +43,7 @@ constexpr int WHITE_V_MIN = 200;
 constexpr int CANNY_LO    = 50;
 constexpr int CANNY_HI    = 150;
 
-// --- Classification rules (5.2) ---
+// --- Classification rules (3.1/3.2) ---
 // AMENDED via Dev 3.1/3.2 empirical evidence
 constexpr double RATIO_CUE          = 0.65; // was 0.80
 constexpr double UNCERTAIN_WHITE_HI = 0.60;
@@ -50,5 +53,12 @@ constexpr double UNCERTAIN_WHITE_LO = 0.05;
 constexpr double EDGE_SOLID_MIN     = 0.10;
 constexpr double EDGE_CUE_MAX       = 0.15; // was 0.04
 
-// --- Acquisition (1.3) ---
-constexpr int PROCESS_WIDTH = 1280;
+// --- Rack Detection (5.1) ---
+constexpr int    RACK_MIN_BALLS     = 13;        // was 10; rack has 15, allow 2 occlusions
+constexpr double RACK_EPSILON_RATIO = 0.035;    // was 0.025
+constexpr double RACK_MIN_AREA      = 12000.0;   // was 5000; real rack ~18k px² @ 1280
+
+// --- Counter (5.2) ---
+constexpr int DEBOUNCE_FRAMES = 10;   // was 15; 0.33s @ 30fps
+constexpr int COOLDOWN_FRAMES = 45;   // was 90; 1.5s @ 30fps
+constexpr int ABSENCE_TOLERANCE = 3;  // NEW: tolerate 3-frame detection gaps

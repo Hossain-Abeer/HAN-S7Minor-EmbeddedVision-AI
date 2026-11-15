@@ -1,0 +1,328 @@
+================================================================================
+IPO (EVD1) FINAL ASSIGNMENT — DESIGN TRACKER v2.0 (REPRINT)
+================================================================================
+Purpose: decide WHAT/WHY/PARAMS. Mirrors DevTracker structure 1:1.
+Derivation: reprinted from DevTracker v1 + code reality. Supersedes DT v1.
+Pipeline: VideoCapture -> Resize -> Blur -> HSV -> ClothMask(inRange) ->
+          Invert -> Morph -> Contours -> Filters -> BBox ->
+          WhiteRatio + EdgeDensity -> Rules -> Overlay ->
+          Rack Detection -> Counter -> Log
+Classes: CUE, SOLID, STRIPE (+ UNCERTAIN). 8-ball = SOLID. No OCR.
+Repo: <workspace>/IPO/Billiard-Vision
+================================================================================
+
+
+================================================================================
+PHASE 0 — SETUP, SCOPE, ENVIRONMENT
+================================================================================
+
+[x] 0.1 TOOLCHAIN
+    Decision: OpenCV 4.12.0 + opencv_contrib, MinGW-w64, CMake 4.4.3,
+              g++ 16.2.0 at C:/msys64/ucrt64/bin/, Ninja generator.
+    Why: pre-installed toolchain; per-course manual; no redesign needed.
+    Params: OpenCV_DIR = C:/dev/opencv-build/opencv-install/x64/mingw/lib
+
+[x] 0.2 GIT + LAYOUT
+    Decision: repo at <workspace>/IPO/Billiard-Vision (renamed from
+              Ball-Type-Identifier at Dev-4.4 to reflect expanded scope).
+    Layout:
+      src/  main.cpp, config.h, preprocess.{h,cpp}, segment.{h,cpp},
+            features.{h,cpp}, classify.{h,cpp}, types.h,
+            rack-detection.{h,cpp}, [game-counter.{h,cpp} pending],
+            scope_check.ps1, cloth_sampler.py
+      docs/ scope_lock.md, [robustness.md, design_rationale.md,
+            parameters.md, demo_script.md pending]
+      CMakeLists.txt, README.md, .gitignore, assets/
+    Why: single-responsibility modules; easy to demo & defend.
+    Contract: no data inside repo; no code inside data root.
+
+[x] 0.3 DATA LOCATIONS
+    Decision: DATA_ROOT = "D:/HAN/Semester 7 Minor/billiards-game-clips"
+              single absolute path in src/config.h; no other abs paths.
+    Reads (runtime): DATA_ROOT/game1/billiards-game-clip{1..5}.mp4
+    Writes: DATA_ROOT/IPO/logs/, /screenshots/, /recordings/
+            [count log: /logs/log-counted-<stem>-<timestamp>.txt pending]
+    Why: portable, single source of truth, syncable across workstations.
+
+[x] 0.4 SCOPE LOCK
+    Decision: exactly 3 game classes + UNCERTAIN (first-class).
+              8-ball -> SOLID. No OCR (IAI owns). No camera source.
+              No temporal voting. No surface-colour feature.
+              VideoWriter = skipped by design (see Dev-4.3).
+              GUI calculator = deferred to Period 2 (see Dev-5.3).
+    Why: rubric scope; prevents scope creep; keeps pipeline debuggable.
+
+[x] 0.5 CONSTANTS (actual, evidence-based)
+    Enhancement:
+      BLUR_KSIZE=5, BLUR_SIGMA=0.0
+    Segmentation (AMENDED in Dev-2.1, video frames ≠ PNG sample):
+      CLOTH_H_LO=35,  CLOTH_H_HI=100
+      CLOTH_S_LO=50,  CLOTH_S_HI=255
+      CLOTH_V_LO=50,  CLOTH_V_HI=220
+      MORPH_KERNEL_SIZE=3, MORPH_ITER=1
+      MIN_BALL_AREA=200 (AMENDED from 1500 in Dev-2.3; ball ~800px²)
+      MAX_BALL_AREA=60000
+      MIN_CIRCULARITY=0.75
+      ASPECT_MIN=0.70, ASPECT_MAX=1.40
+    Features:
+      WHITE_S_MAX=40, WHITE_V_MIN=200
+      CANNY_LO=50, CANNY_HI=150
+    Classification (AMENDED in Dev-3.5):
+      RATIO_CUE=0.65            (was 0.80; cue wr drops to ~0.62 in shadow)
+      UNCERTAIN_WHITE_HI=0.60
+      RATIO_STRIPE_LO=0.15
+      SOLID_WHITE_LO=0.05
+      UNCERTAIN_WHITE_LO=0.05
+      EDGE_SOLID_MIN=0.10
+      EDGE_CUE_MAX=0.15         (was 0.04; actual cue ed ≈0.13)
+    Acquisition:
+      PROCESS_WIDTH=1280        (was 960; FPS > 15 at 1280 verified)
+    Rack Detection:
+      RACK_MIN_BALLS=10, RACK_EPSILON_RATIO=0.04, RACK_MIN_AREA=5000
+    Counter (pending):
+      DEBOUNCE_FRAMES=5, COOLDOWN_FRAMES=60
+    Verify: no magic numbers in main.cpp / any src/.
+
+[x] 0.6 COMPLEXITY CLAIM (defense)
+    F1 Glare    -> blur + tight white mask + UNCERTAIN band + '?' overlay
+    F2 Overlap  -> aspect-ratio filter + RETR_LIST (drops merged blobs)
+    F3 Lighting -> widened HSV + area-invariant ROI ratio + CLI clips
+    Accepted limits: motion blur, off-frame, hand/cue occlusion, pockets,
+                     green-on-green camouflage (mitigated but not eliminated).
+    Evidence: devtracker-2.x / 3.x logs + docs/robustness.md (Phase 6).
+
+
+================================================================================
+PHASE 1 — BUILD + ACQUISITION + ENHANCEMENT
+================================================================================
+
+[x] 1.1 CMAKE + TOOLCHAIN
+    Decision: CMake >=3.10, Ninja, single exe target `Billiard-Vision`,
+              src files: main.cpp preprocess.cpp segment.cpp features.cpp
+              classify.cpp rack-detection.cpp [game-counter.cpp pending].
+    Why: one binary; distinct modules; easy to demo.
+
+[x] 1.2 ACQUISITION
+    Decision: cv::VideoCapture on DATA_ROOT/game1/*.mp4.
+              CLI arg passing (argc/argv); default fallback clip1.
+              Path resolution: absolute if contains '/' else prepend game1/.
+    Why: examiner can test any clip without rebuild; zero-code-change demos.
+
+[x] 1.3 RESIZE
+    Decision: resize to PROCESS_WIDTH=1280 preserving aspect with INTER_AREA.
+    Why: 1080p clips -> 1280px keeps feature detail (stripe boundaries,
+         numeral rings) while FPS ~30 (≥15 threshold).
+
+[x] 1.4 BLUR -> HSV ORDER
+    Decision: BGR -> GaussianBlur -> cvtColor(HSV). Never blur HSV.
+    Why: blurring HSV wraps hue at 179/0; hue artefacts destroy cloth mask.
+    Verify: H channel visually clean (no salt-pepper around cloth).
+
+
+================================================================================
+PHASE 2 — SEGMENTATION
+================================================================================
+
+[x] 2.1 CLOTH MASK + INVERT
+    Decision: inRange(hsv, CLOTH_LO, CLOTH_HI) -> bitwise_not -> ball_mask.
+    Why: HSV is lighting-tolerant for the green cloth; inversion isolates
+         balls/rails/pockets/HUD as white blobs.
+    AMENDED VALUES (see 0.5): widened from PNG-derived 85/96 243/255 111/166
+         to 35/100 50/255 50/220 because actual video has shadows and glare.
+    Evidence: Dev-2.1 C — original bounds → black mask on real video.
+
+[x] 2.2 MORPHOLOGY
+    Decision: MORPH_OPEN then MORPH_CLOSE, k=3, iter=1.
+    Why: open removes specks; close fills pinholes; k=5 destroys small balls.
+    Accepted: thin wires (cue stick) survive — dropped by 2.4 filters.
+
+[x] 2.3 CONTOUR MODE
+    Decision: findContours(RETR_LIST, CHAIN_APPROX_SIMPLE).
+    Why: RETR_EXTERNAL ignored balls because they live INSIDE the rail ring.
+         RETR_LIST retrieves all contours without hierarchy constraint.
+    Evidence: Dev-2.3 C — first attempt with RETR_EXTERNAL returned 1 contour.
+
+[x] 2.4 FILTERS (area + circularity + aspect)
+    Decision: accept if 200 ≤ area ≤ 60000, circ ≥ 0.75, aspect in [0.7,1.4].
+    Why: area drops rail fragments and noise; circularity drops cue-sticks
+         and merged blobs; aspect catches elongated merged pairs.
+    Evidence: Dev-2.3 D — MIN_BALL_AREA 1500 → 200 (ball area ≈750px²).
+
+[x] 2.5 BALL CANDIDATE STRUCT
+    Decision: BallCandidate { Rect bbox; Point2f center; int area;
+                              float white_ratio; float edge_density;
+                              BallType type; }
+    Why: single struct carries geometry + features + label downstream.
+
+[x] 2.6 GREEN BALL FIX (segment.cpp)
+    Decision: OR a dedicated greenBall HSV mask (H 40-75, S 150-255) back
+              into the ball mask.
+    Why: solid 6-ball blends with cloth when stationary; motion keeps it
+         visible only because of blur. Explicit green mask recovers it.
+    Accepted limit: stationary green ball may still drop below MIN_BALL_AREA.
+
+
+================================================================================
+PHASE 3 — FEATURES + CLASSIFICATION
+================================================================================
+
+[x] 3.1 WHITE RATIO (feature F1, primary)
+    Decision: on bbox inset 2px, HSV inRange white ([0,0,V_MIN]..[179,S_MAX,255]),
+              ratio = white / roi.area.
+    Empirical ranges (Dev-3.1):
+      CUE    ≈ 0.58–0.72
+      STRIPE ≈ 0.15–0.50
+      SOLID  ≈ 0.00–0.10
+    Why primary: cleanest separation between the three game classes.
+
+[x] 3.2 EDGE DENSITY (feature F2, tie-breaker)
+    Decision: Canny(gray, 50, 150) on bbox inset 2px, ratio = edges / area.
+    Empirical ranges (Dev-3.2):
+      CUE    ≈ 0.11–0.15
+      SOLID  ≈ 0.08–0.27  (numeral ring spikes it)
+      STRIPE ≈ 0.11–0.24
+    Why secondary: overlaps heavily between SOLID and STRIPE (both have
+                   edges at stripe/numeral boundaries); cannot separate on
+                   its own; used only to sanity-check the SOLID branch.
+
+[x] 3.3 FEATURE DUMP (stability)
+    Decision: features are deterministic per ball; stable to ±0.005 across
+              consecutive frames.
+    Why: confirms bbox geometry + feature computation are correct.
+
+[x] 3.4 CLASSIFICATION RULES (order matters)
+    Decision: if/else chain (NOT SimpleBlobDetector; NOT template matching).
+    Why: interpretable, tunable per threshold, defensible in viva.
+    Rules:
+      wr >  RATIO_CUE            -> CUE
+      wr >  UNCERTAIN_WHITE_HI   -> UNCERTAIN  (glare/shadow band 0.60-0.65)
+      wr >= RATIO_STRIPE_LO      -> STRIPE
+      wr >= SOLID_WHITE_LO && ed > EDGE_SOLID_MIN  -> SOLID
+      wr <  UNCERTAIN_WHITE_LO && ed < EDGE_CUE_MAX -> UNCERTAIN
+      else                       -> SOLID
+
+[x] 3.5 UNCERTAIN BAND (glare)
+    Decision: UNCERTAIN is first-class; separate counter; yellow '?';
+              NEVER folded into CUE/SOLID/STRIPE totals.
+    Why: glare/glint makes cue wr drop to ~0.62 (would misclassify STRIPE);
+         dropping solids' wr to ~0.62 would misclassify them as CUE.
+         Explicit '?' is honest — the system refuses to guess.
+
+[x] 3.6 TEMPORAL VOTING
+    Decision: NOT implemented (mention in defense only).
+    Why: real-time single-frame decisions are sufficient given empirical
+         separability; voting adds latency and complexity beyond scope.
+    Period 2: optional if live demo shows jitter.
+
+
+================================================================================
+PHASE 4 — OUTPUT
+================================================================================
+
+[x] 4.1 OVERLAY
+    Decision: rectangle + putText per ball.
+              CUE=white, SOLID=red, STRIPE=cyan, UNCERTAIN=yellow '?'.
+    Why: matches examiner mental model; yellow '?' is visually distinct
+         from white CUE (both would otherwise be "light" colors).
+
+[x] 4.2 CONSOLE LOG (SUMMARY)
+    Decision: per-frame SUMMARY line:
+              SUMMARY frame=N balls=X CUE=A SOLID=B STRIPE=C ?=D rack=0|1 fps=F
+              stdout redirected to DATA_ROOT/IPO/logs/4.2-log-consol_out_<ts>.txt
+              via freopen.
+    Why: persistent audit trail; strict invariant C+S+St+? = balls.
+         Grep-friendly; timestamp unifies with reject log + count log.
+
+[x] 4.3 VIDEO WRITER
+    Decision: SKIPPED. WRITE_VIDEO=false in config.h.
+    Why:
+      - Assessment is live on different clips -> recording adds no grade.
+      - Commercial: no product stores every run (storage bloat).
+      - Time better spent on Phase 6 + 7.
+    Defense line: "compile-time-optional feature, deliberately disabled;
+                   capability scoped out via WRITE_VIDEO constexpr."
+
+[x] 4.4 CLI ACCESS
+    Decision: int main(int argc, char** argv); argv[1] = clip name or path.
+    Why: examiner can test any clip without rebuild; enables multi-instance
+         runs from one terminal (multiple .exe invocations in parallel).
+
+[x] 4.5 EXIT KEYS
+    Decision: waitKey(10); ESC or 'q' exits; cap.release();
+              destroyAllWindows(); return 0.
+    Why: deterministic, clean shutdown; no writer to flush (4.3 skipped).
+
+
+================================================================================
+PHASE 5 — GAME LOGIC (RACK + COUNTER + GUI)
+================================================================================
+
+[x] 5.1 RACK DETECTION
+    Decision: standalone module `rack-detection.{h,cpp}`, pure function
+              bool detectRack(const vector<BallCandidate>&).
+    Algorithm:
+      1. if size < RACK_MIN_BALLS (10) -> false
+      2. collect centers into vector<Point>
+      3. cv::convexHull(centers)
+      4. cv::approxPolyDP(hull, approx, RACK_EPSILON_RATIO * peri, true)
+      5. return approx.size()==3 && contourArea(approx) >= RACK_MIN_AREA
+    Why:
+      - Consumes only geometry; no Mat; no HSV; no contours. Full separation
+        of concerns -> the vision pipeline doesn't know about game rules.
+      - Triangle-only test is robust to ball count (10-15), orientation, and
+        occlusion of interior balls (hull is defined by outer 3 corners).
+      - RACK_EPSILON_RATIO=0.04 tolerates pixel jitter on hull vertices.
+    Evidence (Dev-5.1): clip1 rack frames 98-119 -> rack=1 for 22 consecutive
+                        frames; after break -> rack=0. Screenshot logged.
+    Defense line: "Vision does the seeing; game-logic does the deciding.
+                   Rack detection is 30 lines of pure geometry."
+    Note: emit-per-frame is DIAGNOSTIC only. Counter (5.2) converts to
+          events.
+
+[ ] 5.2 COUNTER (STATE MACHINE)
+    Decision: standalone module `game-counter.{h,cpp}` consuming a per-frame
+              boolean `rackDetected`. Emits a counted event on RISING EDGE
+              only (not per-frame).
+    State machine:
+      IDLE       -> rack present for [DEBOUNCE_FRAMES] consecutive frames
+                    -> COUNTED; count++; log; return true
+      COUNTED    -> rack absent for [COOLDOWN_FRAMES] consecutive frames
+                    -> IDLE (re-armed)
+    Params:
+      DEBOUNCE_FRAMES=5   (rejects 2-3 frame camera glitches)
+      COOLDOWN_FRAMES=60  (2 s at 30 FPS; rejects fast re-racks)
+    Output:
+      Append "<ISO_ts>,<count>,<clipStem>" to
+        DATA_ROOT/IPO/logs/log-counted-<clipStem>-<timestamp>.txt
+    Why state machine:
+      - Naive `if (rack) count++` overcounts 22x per rack.
+      - Debounce tolerates transient detection gaps (one dropped ball).
+      - Cooldown prevents duplicate counts if rack briefly re-forms.
+      - Log-per-event is the commercial primitive: decouples vision from
+        billing. Multi-instance safe (per-clip log file).
+    Commercial rationale:
+      Billable events, not frame states. One rack = one bill. This is the
+      same pattern used in industrial inspection lines (each part = one
+      count) and ANPR (each vehicle = one count).
+
+[ ] 5.3 GUI CALCULATOR
+    Decision: DEFERRED to Period 2. Documentation only in Period 1.
+    Planned architecture (for defense narration, NOT implemented):
+      - Separate Python Tkinter process (not embedded in C++).
+      - Reads all DATA_ROOT/IPO/logs/log-counted-*.txt (multi-instance safe).
+      - Input box for €/game rate; live count + bill display.
+      - Poll every 1s via root.after(); no socket required.
+    Why separate process:
+      - Crash isolation: vision crash does not kill billing; billing update
+        does not require rebuilding vision.
+      - Correct architecture: embedded GUI inside a real-time vision loop
+        conflicts with cv::waitKey's message pump; multi-thread workarounds
+        are fragile.
+      - Standard commercial pattern (Grafana, Prometheus, industrial HMIs
+        all run management UIs as separate clients reading event logs).
+    Defense line: "The counter log is the commercial primitive. The GUI is
+                   a Period 2 management client consuming that log. This
+                   separation lets the camera box and the billing box be
+                   different machines."
+
+
