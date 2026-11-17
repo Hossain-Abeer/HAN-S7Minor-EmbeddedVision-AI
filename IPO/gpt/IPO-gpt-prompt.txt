@@ -25,6 +25,42 @@ we are really short on time, possible to complete designtracker's phase 0, one s
 
 
 
+
+I will need you to walk me through. when discussed enough about a particular stage in the pipeline, i'll prompt a .md writeup, save it in the /docs. We proceed one stage of the pipeline at a time, sequentially. 
+
+start off with a tree of the pipeline, each stage in the pipeline, like a flow verticle, from up to down. if valid, i'll prompt for your next task
+
+
+
+
+ok, now for each of the stages, include things related to it, such as but not limited to:
+1. data in (what type, from where, how it is taken in); process (functions or series of functions being carried out here, sequence of actions); data out  (what type, to where, how it is piped out). 
+2. codebase, libraries, code blocks, imports 
+3. what gets printed to a window, and what didn't.
+4. what gets logged as a log file, and interpretation of the a log snippet. 
+
+note, this will be saved as 'overview.md'; details are not expected here. you'll detail information for each of the .md file corresponding to each of the stage later.
+
+
+
+
+
+[stage1] 
+teach me in details. include things related to it, such as but not limited to:
+1. data in (what type, from where, how it is taken in); process (functions or series of functions being carried out here, sequence of actions); data out  (what type, to where, how it is piped out). 
+2. codebase, libraries, code blocks, imports 
+3. what gets printed to a window, and what didn't.
+4. what gets logged as a log file, and interpretation of the a log snippet. 
+5. skeletals of code; then params used; effects of increase/decrease in params. 
+6. ASCII diagram expressing journey of data through different codesnippets/functions/classes; linking them & mapping them
+7. generate Q/As or FAQs.
+
+
+
+
+
+
+
 prepare the devTracker. notes:
 1. it must align wth designTracker, and hence the assessment criterion of IPO (ruberic whatever). 
 2. upon validating a subsec of devTracker, it's corresponding one of designTracker also gets validated. ie, decision being made as we proceed & gets implemented. Validation of both taking place in parallel. 
