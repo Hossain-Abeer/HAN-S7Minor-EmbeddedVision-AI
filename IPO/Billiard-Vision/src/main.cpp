@@ -65,7 +65,33 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-        // 5.2 — Counter module
+    // ─── 4.3 — VideoWriter (demo clip recorder) ───
+    int    outW     = PROCESS_WIDTH;
+    int    outH     = (int)(cap.get(CAP_PROP_FRAME_HEIGHT) * PROCESS_WIDTH
+                            / cap.get(CAP_PROP_FRAME_WIDTH));
+    double srcFps   = cap.get(CAP_PROP_FPS);
+    if (srcFps <= 0.0 || srcFps > 120.0) srcFps = 30.0;   // sanity fallback
+
+    std::string videoOutPath = std::string(DATA_ROOT)
+                             + "/IPO/logs/5.2-log-vids-processedClip.mp4";
+    cv::VideoWriter writer(
+        videoOutPath,
+        cv::VideoWriter::fourcc('m','p','4','v'),
+        srcFps,
+        cv::Size(outW, outH),
+        true                                    // isColor
+    );
+    if (!writer.isOpened()) {
+        std::cerr << "WARNING: VideoWriter failed to open "
+                  << videoOutPath
+                  << " — codec 'mp4v' unavailable. Recording disabled." << std::endl;
+    } else {
+        std::cout << "Recording to: " << videoOutPath
+                  << " (" << outW << "x" << outH << " @ "
+                  << srcFps << " fps)" << std::endl;
+    }
+
+    // 5.2 — Counter module
     std::string clipStem = clipName;
     size_t dot = clipStem.find_last_of('.');
     if (dot != std::string::npos) clipStem = clipStem.substr(0, dot);
@@ -257,6 +283,11 @@ int main(int argc, char** argv) {
              << " rack=" << (rackDetected ? 1 : 0)
              << " fps=" << instantFps << endl;
 
+                // 4.3 — write the fully-overlaid frame to the video file
+        if (writer.isOpened()) {
+            writer.write(frame);
+        }
+
         // Debug visuals (SHOW THE FRAME!)
         imshow("frame", frame);
 
@@ -281,6 +312,12 @@ int main(int argc, char** argv) {
         int k = waitKey(10);
         if (k == 27 || k == 'q') break;
     }
+
+    if (writer.isOpened()) {
+        writer.release();
+        std::cout << "Recording finalised." << std::endl;
+    }
+    
 
     cap.release();
     destroyAllWindows();
