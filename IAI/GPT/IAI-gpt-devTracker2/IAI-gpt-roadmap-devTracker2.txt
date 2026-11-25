@@ -1,0 +1,325 @@
+`roadmap-devtracker2.0.txt`
+
+```
+================================================================================
+IAI-GPT ROADMAP - DEVTRACKER 2.0 - PHASE 2 (FULL ML REPORT DEVELOPMENT)
+================================================================================
+
+PURPOSE
+  Sole authority for the development that produces Full ML report Sections
+  6, 7, 8 and code appendices. Classical ML only. No CNN, no augmentation,
+  no TFLite. Those belong to the DL devtracker (later).
+  Extends IAI-gpt-roadmap-devtracker.txt from 10.6 onward.
+
+PREREQ ON ENTRY
+  - 9.1-9.4 complete (dataset_clean.csv, retained 15 features, pipeline.py).
+  - 10.6 open (Jeroen's feedback not yet incorporated).
+  - dataset_clean.csv: 245 train / 128 val / 119 test.
+
+RULES
+  - Test set touched ONCE, at 3.2. No exceptions.
+  - All fitting inside build_pipeline(). Never pre-scale outside it.
+  - class_weight='balanced' on SVC and RF (8.1 verdict SEVERE).
+  - Every run tees stdout to logs/.
+  - One artefact per step, named per convention.
+
+NUMBERING
+  Numerals only. 1 / 1.1 / 1.1.1.
+
+CONVENTIONS
+  repo  D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI
+  ~     D:\HAN\Semester 7 Minor\billiards-game-clips
+  Activate venv before every session.
+  Run from repo root: python src/<script>.py
+
+================================================================================
+SECTION 1 - PREFLIGHT
+================================================================================
+
+[ ] 1.1  VERIFY ARTEFACTS
+    Type: verification
+    Prereq: none
+    Action: Confirm presence:
+              ~\dataset_clean.csv
+              ~\retained_features_correlations.txt (15 lines)
+              ~\splits.csv
+              src\pipeline.py
+    Verify: All four present. retained list = 15 names.
+    Debug:  Missing -> halt, resolve before Section 2.
+
+[ ] 1.2  WRITE load_dataset.py
+    Type: code
+    Prereq: 1.1
+    Deliver: src/load_dataset.py
+    Content: One function, load_splits(), returning:
+               X_train, X_val, X_test   (numeric only, 15 cols, named)
+               y_train, y_val, y_test
+               feature_names
+             Reads dataset_clean.csv + retained_features_correlations.txt.
+             Drops filename/label/role. Asserts role counts 245/128/119.
+    Verify: Imports cleanly.
+
+[ ] 1.3  RUN loader sanity check
+    Type: run
+    Prereq: 1.2
+    Action: python src/load_dataset.py  (main prints shapes + class sets)
+    Verify: Shapes 245x15 / 128x15 / 119x15. All 15 classes in each y.
+    Save:   logs/2.1.3_loader_check.txt
+    Debug:  Class missing in val/test -> split broken, re-check 5.3.
+
+================================================================================
+SECTION 2 - MODEL TRAINING, CV, TUNING
+================================================================================
+
+[ ] 2.1  WRITE train_models.py
+    Type: code
+    Prereq: 1.3
+    Deliver: src/train_models.py
+    Content: CANDIDATES dict of 3 untuned estimators:
+               svc  -> SVC(kernel='rbf', class_weight='balanced',
+                          probability=True, random_state=SEED)
+               knn  -> KNeighborsClassifier()
+               rf   -> RandomForestClassifier(class_weight='balanced',
+                          n_estimators=300, random_state=SEED)
+             Each wrapped via build_pipeline().
+             Function cv_report(model, X, y, cv=5) ->
+               StratifiedKFold, scoring='f1_macro' + 'accuracy'.
+    Verify: Imports cleanly.
+
+[ ] 2.2  RUN baseline cross-validation
+    Type: run
+    Prereq: 2.1
+    Action: python src/train_models.py
+    Verify: Per model: mean/std macro-F1 and accuracy over 5 folds.
+            Three rows printed.
+    Save:   logs/2.2_cv_baseline.txt, figures/cv_baseline.png
+    Record: Table feeds Full ML Section 6 (model comparison).
+
+[ ] 2.3  WRITE grid_search.py
+    Type: code
+    Prereq: 2.2
+    Deliver: src/grid_search.py
+    Content: Small grids only (time budget):
+               svc: C [1,10,100], gamma ['scale',0.01], kernel ['rbf']
+               knn: n_neighbors [3,5,7,11], weights ['uniform','distance']
+               rf : n_estimators [300], max_depth [None,10,20],
+                    min_samples_leaf [1,2]
+             GridSearchCV(cv=5, scoring='f1_macro', n_jobs=-1,
+                          refit=False) per model.
+             Saves best_params per model + full cv results CSV.
+    Verify: Imports cleanly.
+
+[ ] 2.4  RUN grid search
+    Type: run
+    Prereq: 2.3
+    Action: python src/grid_search.py
+    Verify: best_params_{svc,knn,rf}.json written.
+            cv_results per model saved.
+    Save:   ~\models\best_params_*.json,
+            logs/2.4_grid_search.txt,
+            ~\figures\grid_svc.png (parallel coords optional, skip if time)
+    Debug:  f1_macro identical across all params -> param names wrong.
+
+[ ] 2.5  WRITE AND RUN evaluate_val.py
+    Type: code + run
+    Prereq: 2.4
+    Deliver: src/evaluate_val.py
+    Content: For each model: rebuild pipeline with best_params, fit on
+             train, predict val.
+             Emits per model:
+               confusion_matrix PNG (labels 1-15)
+               classification_report (precision/recall/F1/support)
+               macro-F1, accuracy
+             Writes one summary table across 3 models.
+    Verify: 3 confusion matrices, 3 reports, 1 summary table.
+    Save:   ~\figures\cm_val_<model>.png
+            logs/2.5_val_reports.txt
+            ~\val_summary.csv
+    Record: Feeds Full ML Section 6 (model comparison + selection).
+
+[ ] 2.6  SELECT BEST MODEL
+    Type: decision
+    Prereq: 2.5
+    Action: Rank by val macro-F1. Tie-break order:
+              1. fewer per-class F1 zeros
+              2. higher min per-class F1
+              3. lower model complexity
+            Write selection rationale (3-5 lines).
+    Verify: chosen model named in a selection note.
+    Deliver: logs/2.6_selection_note.txt
+    Record: Feeds Full ML Section 6 (argued choice).
+
+[ ] 2.7  OVERFIT / UNDERFIT CHECK
+    Type: run
+    Prereq: 2.6
+    Deliver: src/learning_curve.py
+    Content: sklearn learning_curve (cv=5, f1_macro) for selected model
+             + one runner-up. Plots train vs CV score vs training size.
+    Verify: Two learning-curve figures. Gap noted in log.
+    Save:   ~\figures\lc_<model>.png, logs/2.7_learning_curves.txt
+    Record: Feeds Full ML Section 6 (overfitting discussion).
+
+[ ] 2.8  ALTERNATIVE SCALER COMPARISON
+    Type: run
+    Prereq: 2.6
+    Deliver: src/scaler_compare.py
+    Content: Selected model, two pipelines: StandardScaler vs
+             MinMaxScaler. Same CV, same params. Compare mean macro-F1.
+    Verify: One comparison table + one bar figure.
+    Save:   logs/2.8_scaler_compare.txt, figures/scaler_compare.png
+    Record: Feeds Full ML Section 3.7 + Section 6 (Jeroen S6).
+
+================================================================================
+SECTION 3 - FINAL MODEL AND TEST
+================================================================================
+
+[ ] 3.1  RETRAIN FINAL PIPELINE
+    Type: code + run
+    Prereq: 2.8
+    Deliver: src/finalize_model.py
+    Content: build_pipeline(best estimator with best_params).
+             fit(X_train, y_train). Persist with joblib to
+             ~\models\final_pipeline.joblib. Save feature_names list.
+             Assert reload predicts identical on 5 sample rows.
+    Verify: joblib file exists, reload check PASS.
+    Save:   ~\models\final_pipeline.joblib, logs/3.1_finalize.txt
+    Debug:  Reload mismatch -> wrong sklearn version, re-check pins.
+
+[ ] 3.2  TEST-SET EVALUATION (ONE SHOT)
+    Type: run
+    Prereq: 3.1
+    Deliver: src/evaluate_test.py
+    Content: Load joblib, predict X_test ONCE.
+             Emits confusion matrix, classification_report, macro-F1,
+             accuracy. Compares macro-F1 against SMART target 0.50.
+             Records pass/fail line.
+    Verify: Test artefacts exist. Result vs 0.50 stated.
+    Save:   ~\figures\cm_test_final.png
+            logs/3.2_test_report.txt
+            ~\test_summary.csv
+    Record: Feeds Full ML Section 6 + Section 8 (results vs SMART).
+    NOTE:   No re-tuning after this line. If result is poor, document,
+            do not re-open.
+
+[ ] 3.3  PER-CLASS ERROR ANALYSIS
+    Type: manual + run
+    Prereq: 3.2
+    Deliver: src/error_analysis.py
+    Content: From test confusion matrix, list top-10 off-diagonal cells.
+             Flag known pairs: 6/9, 4/9, 11/1, 2/5.
+             Count test samples per class that were unseen.
+    Verify: Table printed, known-pair flags present.
+    Save:   logs/3.3_error_analysis.txt
+    Record: Feeds Full ML Section 6 + 8 (bias/variance + limitations).
+
+================================================================================
+SECTION 4 - DEPLOY AND TEST (Full ML Section 7)
+================================================================================
+
+[ ] 4.1  WRITE predict.py
+    Type: code
+    Prereq: 3.1
+    Deliver: src/predict.py
+    Content: load_model() -> joblib pipeline.
+             predict_crop(path) -> (label, proba_vector).
+             predict_batch(dir) -> CSV of filename,label,proba_*.
+             Preprocessing chain: crop -> mask -> 15 features ->
+             pipeline.predict. Reuse mask.py + features.py helpers.
+             Rejects crops where mask_is_usable() == False (FR4 path).
+    Verify: Imports cleanly.
+
+[ ] 4.2  RUN inference smoke test
+    Type: run
+    Prereq: 4.1
+    Action: predict_batch on ~\unsorted_png\1\ (small subset, 10 crops).
+    Verify: 10 rows out, proba vectors sum to 1, labels plausible.
+    Save:   logs/4.2_inference_smoke.txt
+
+[ ] 4.3  WRITE test_plan.md
+    Type: writing
+    Prereq: 4.2
+    Deliver: repo\IAI\Docs\test_plan.md
+    Content: Table per requirement (FR1-FR7, TR1-TR8):
+               ID | target | measurement method | pass criterion
+             Explicit tests for TR1-TR3 (Critical) and FR4.
+    Verify: All Critical rows have a named test.
+    Record: Feeds Full ML Section 7 (test plan) + Section 2 (Jeroen S2).
+
+[ ] 4.4  RUN deployment tests
+    Type: run
+    Prereq: 4.3
+    Deliver: src/deploy_test.py
+    Content: For each requirement: execute the planned measurement.
+             Timing: time.perf_counter over N=50 crops, report mean/median
+             ms per crop (TR5 target <=1 s).
+             Reject path: feed 5 non-numeral crops, count rejects (FR4).
+             Batch accuracy: re-run test split through predict_crop path,
+             compare against 3.2 (consistency check, TR7).
+    Verify: All rows filled with measured value + pass/fail.
+    Save:   logs/4.4_deploy_results.txt, ~\deploy_results.csv
+    Record: Feeds Full ML Section 7 (results vs targets).
+
+[ ] 4.5  RECORD UNEXPECTED BEHAVIOUR
+    Type: writing
+    Prereq: 4.4
+    Deliver: append to logs/4.4_deploy_results.txt
+    Content: Any deviation between predict-path accuracy and direct test
+             accuracy, any reject-path surprise, any timing outlier.
+             One paragraph. Honest.
+    Record: Feeds Full ML Section 7 + 8.
+
+================================================================================
+SECTION 5 - PIPELINE UNIT TEST (Jeroen S7)
+================================================================================
+
+[ ] 5.1  WRITE test_pipeline.py
+    Type: code
+    Prereq: 3.1
+    Deliver: src/test_pipeline.py
+    Content: pytest-style asserts:
+               build_pipeline returns 2 steps in order scaler -> clf
+               step names correct
+               scaler is unfitted on construction
+               fit on synthetic X refits scaler (mean ~0 after fit)
+               GridSearchCV over the pipeline uses prefixed param names
+    Verify: python -m pytest src/test_pipeline.py -> all pass.
+    Save:   logs/5.1_unit_test.txt
+    Record: Feeds Full ML Section 6 + code appendix (level 5).
+
+================================================================================
+SECTION 6 - REPORT ARTEFACT INDEX
+================================================================================
+
+[ ] 6.1  WRITE artefact_index.md
+    Type: writing
+    Prereq: 3.3, 4.4, 5.1
+    Deliver: repo\IAI\Docs\artefact_index.md
+    Content: Table: artefact path -> Full ML report section -> what it
+             proves. One row per figure/CSV/log produced in Sections 2-5.
+    Verify: Every artefact from 2.2-5.1 listed exactly once.
+    Record: Writing aid only. Not submitted.
+
+================================================================================
+DEFERRED - NOT IN THIS DEVTRACKER
+================================================================================
+  - Flask / Docker packaging. predict.py is the deployment form.
+  - SBC deployment, TFLite, quantization, pruning.
+  - CNN, augmentation, transfer learning, Grad-CAM.
+  - DL report sections.
+  These belong to the next devtracker. Do not start them here.
+
+================================================================================
+CRITICAL PATH (if time collapses)
+================================================================================
+  1.1 -> 1.2 -> 1.3 -> 2.1 -> 2.2 -> 2.3 -> 2.4 -> 2.5 -> 2.6
+  -> 3.1 -> 3.2 -> 4.1 -> 4.3 -> 4.4 -> 6.1
+
+  Deferrable under pressure: 2.7, 2.8, 3.3, 4.2, 4.5, 5.1.
+  Non-deferrable: 3.2 (test), 4.4 (deploy results), 4.3 (test plan).
+
+================================================================================
+END OF DEVTRACKER 2.0
+================================================================================
+```
+
+Validate or amend. First step to write: 1.2 load_dataset.py — say "go" and I produce code.

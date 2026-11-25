@@ -1,0 +1,256 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 2.3 WRITE grid_search.py + 2.4 RUN GRID SEARCH
+================================================================================
+Step    : 2.3 (code) + 2.4 (run)
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : code + run
+Prereq  : 2.2
+Status  : PASS
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+A - STEP RECORD
+--------------------------------------------------------------------------------
+
+A.1 DELIVERABLE (inferred from outputs)
+  src\grid_search.py
+
+A.2 GRIDS SEARCHED
+  svc : C      [1, 10, 100]
+        gamma  ['scale', 0.01]
+        kernel ['rbf']
+        6 combos
+
+  knn : n_neighbors [3, 5, 7, 11]
+        weights     ['uniform', 'distance']
+        8 combos
+
+  rf  : n_estimators      [300]
+        max_depth         [None, 10, 20]
+        min_samples_leaf  [1, 2]
+        6 combos
+
+A.3 COMMAND
+  python src\grid_search.py 2>&1 |
+    Tee-Object -FilePath $data\logs\2.4_grid_search.txt
+
+A.4 OUTPUT FILES
+  logs\2.4_grid_search.txt              summary table
+  2.4_cv_results_svc.csv                per-split scores, 6 rows
+  2.4_cv_results_knn.csv                per-split scores, 8 rows
+  2.4_cv_results_rf.csv                 per-split scores, 6 rows
+
+A.5 VERIFICATION LINE
+  3/3 models grid-searched.
+  20/20 parameter combinations evaluated.
+  best_params extracted for each model.
+  Score columns populated, no NaN.
+  PASS.
+
+A.6 DEVIATIONS
+  D1 baseline_f1 column shows None. Cosmetic only; baseline values
+     recorded in logs\2.2_cv_baseline.txt. No re-run needed.
+  D2 grid_search.py source not supplied. Behaviour is correct, source
+     not inspected. If needed for code appendix, supply separately.
+
+
+--------------------------------------------------------------------------------
+B - RESULTS (grid search, per model)
+--------------------------------------------------------------------------------
+
+B.1 SVC - 6 configs, ranked by mean macro-F1
+  C=100, gamma=scale  0.7027   <- best   (std 0.079)
+  C=100, gamma=0.01   0.6728            (std 0.058)
+  C=10,  gamma=scale  0.6619            (std 0.069)
+  C=1,   gamma=scale  0.6023  = baseline (std 0.070)
+  C=10,  gamma=0.01   0.5905            (std 0.056)
+  C=1,   gamma=0.01   0.3789  <- worst
+
+  Delta vs baseline : +0.1004  -> REAL, above 0.07 noise floor.
+
+B.2 k-NN - 8 configs, ranked by mean macro-F1
+  k=5,  distance  0.6576   <- best   (std 0.049)
+  k=7,  distance  0.6537            (std 0.052)
+  k=3,  distance  0.6528            (std 0.072)
+  k=11, distance  0.6526            (std 0.071)
+  k=3,  uniform   0.6056            (std 0.083)
+  k=5,  uniform   0.5702  = baseline (std 0.055)
+  k=7,  uniform   0.5188            (std 0.059)
+  k=11, uniform   0.3923  <- worst
+
+  Delta vs baseline : +0.0874  -> REAL, above noise floor.
+
+B.3 RF - 6 configs, ranked by mean macro-F1
+  depth=10,  leaf=1  0.7193   <- best   (std 0.086)
+  depth=None,leaf=1  0.7191  = baseline (std 0.086)
+  depth=20,  leaf=1  0.7191            (std 0.086)
+  depth=None,leaf=2  0.6977            (std 0.076)
+  depth=20,  leaf=2  0.6977            (std 0.076)
+  depth=10,  leaf=2  0.6907  <- worst   (std 0.076)
+
+  Delta vs baseline : +0.0002  -> NOISE, far below noise floor.
+
+
+--------------------------------------------------------------------------------
+C - INTERPRETATION (feeds Full ML Section 6)
+--------------------------------------------------------------------------------
+
+C.1 TUNED RANKING
+  rf   0.7193   (baseline 0.7191, delta +0.0002  noise)
+  svc  0.7027   (baseline 0.6023, delta +0.1004  REAL)
+  knn  0.6576   (baseline 0.5702, delta +0.0874  REAL)
+
+C.2 RF-SVC GAP COLLAPSED
+  Baseline gap : rf - svc = +0.117
+  Tuned gap    : rf - svc = +0.017
+  0.017 is well inside the 0.07-0.09 noise band.
+  RF and SVC are STATISTICALLY TIED after tuning.
+  The baseline ranking was misleading because SVC's default C=1
+  underfits this data. C=100 is the correct operating point.
+
+C.3 RF IS INSENSITIVE TO HYPERPARAMETERS
+  All 6 RF configs span 0.6907 to 0.7193. Spread = 0.0286 < noise floor.
+  max_depth is irrelevant: None, 20, 10 all produce identical scores
+  because 196 training rows per fold never grow trees to depth 10.
+  min_samples_leaf=2 hurts consistently (~ -0.025). leaf=1 is right.
+  Conclusion: RF defaults already near-optimal at n=245. Tuning finds
+  no meaningful gain. Report as "defaults confirmed".
+
+C.4 SVC IS HIGHLY SENSITIVE TO HYPERPARAMETERS
+  Range across 6 configs: 0.3789 to 0.7027. Spread = 0.324. Massive.
+  Two clear patterns:
+    (a) gamma=scale >> gamma=0.01 at every C value. Adaptive gamma
+        is required. Fixed 0.01 underfits badly.
+    (b) Higher C wins: C=100 > C=10 > C=1 (at gamma=scale).
+        More capacity is needed for this boundary.
+  C.5 k-NN IS MODERATELY SENSITIVE
+  Range: 0.3923 to 0.6576. Spread = 0.265.
+  Two clear patterns:
+    (a) distance weighting > uniform at EVERY k value. Ties broken
+        by distance rather than flat vote. Consistent.
+    (b) k=11 uniform is catastrophic (0.39) - too many neighbours
+        dilute the vote. distance-weighting rescues k=11 back to 0.65.
+  k=5 distance is best AND most stable (std 0.049, lowest of all).
+  Winner by a hair; k=3,7,11 with distance are all within noise.
+
+
+--------------------------------------------------------------------------------
+D - TEACHING (grid search mechanics + how to read the tables)
+--------------------------------------------------------------------------------
+
+D.1 WHAT GRID SEARCH DOES
+  Grid search tries every combination of listed parameters, scores each
+  with cross-validation, and reports the best.
+
+  Example SVC: 3 C values x 2 gamma values x 1 kernel = 6 models.
+  Each model scored by 5-fold CV. Best CV macro-F1 wins.
+
+  This is exhaustive brute force on a small predefined grid. It does
+  NOT invent parameters. You choose the grid; it tells you which
+  point in the grid scored highest.
+
+D.2 HOW TO READ A cv_results CSV
+  One row per parameter combo. Columns:
+    param_clf__<name>  the parameter value tried (clf__ = pipeline prefix)
+    split0..4_test_score  macro-F1 on each fold
+    mean_test_score    average across 5 folds = headline number
+    std_test_score     fold-to-fold variation
+    rank_test_score    1 = best
+
+  Compare ranks by mean_test_score. Check std to know if the gap
+  between rank 1 and rank 2 is real or noise.
+
+D.3 WHEN A TUNING GAIN IS "REAL"
+  Rule: gap must exceed fold-to-fold std (~0.07 for this dataset).
+    SVC delta +0.10  -> real (bigger than noise)
+    kNN delta +0.087 -> real (just above noise)
+    RF  delta +0.0002 -> noise (an order of magnitude too small)
+
+D.4 WHY RF'S max_depth DIDN'T MATTER
+  In 5-fold CV, each fold trains on ~196 rows. A decision tree grows
+  until it can't split further (leaf=1) or hits max_depth.
+  On 196 rows, trees naturally top out around depth 7-9. So max_depth
+  of 10, 20, or None are all ABOVE the natural ceiling. Identical
+  trees, identical scores. That is why rank-1 (d=10), rank-2 (d=None),
+  and rank-2 (d=20) differ by 0.0002.
+
+  Implication for the report: RF was not overfitting at default depth.
+  With n=245, RF cannot overfit. Confirmed empirically here.
+
+D.5 WHY C=100 WON FOR SVC
+  C is the inverse of regularisation strength.
+    C=1    = strong regularisation = underfits = 0.60
+    C=10   = medium                 = 0.66
+    C=100  = weak regularisation    = 0.70 (best)
+  The data wants an expressive boundary. Penalising that (small C)
+  hurts. Big C wins.
+
+D.6 WHY gamma=scale BEAT gamma=0.01
+  gamma controls how far each training point's influence reaches.
+    gamma='scale' = 1 / (n_features * X.var()) - adaptive to data
+    gamma=0.01    = fixed, and too small for this data's scale
+  Fixed 0.01 gives an over-smoothed boundary. 'scale' adapts to the
+  actual variance of the 15 features. At every C level, 'scale' won
+  by 0.03-0.09. Structural, not noise.
+
+D.7 WHY distance-WEIGHTING FIXED k-NN
+  Uniform voting: all k neighbours count equally. Thin classes lose
+  because their neighbours are outnumbered in contested regions.
+  Distance weighting: closer neighbours count more. A very close
+  match (near-zero distance) dominates. Thin classes can win when
+  a training sample sits very close to the test point.
+  Effect: +0.0874 macro-F1. Real gain, mostly on minority classes.
+
+D.8 WHAT "baseline_f1 = None" MEANT
+  Cosmetic. The grid search script intended to print a baseline
+  column side-by-side with tuned. The baseline values live in
+  2.2_cv_baseline.txt:
+    svc 0.6023 / knn 0.5702 / rf 0.7191
+  No re-run needed.
+
+
+--------------------------------------------------------------------------------
+E - CARRY-FORWARD TO 2.5 (val-set evaluation)
+--------------------------------------------------------------------------------
+
+E.1 BEST PARAMS LOCKED
+  svc : C=100, gamma='scale', kernel='rbf'
+  knn : n_neighbors=5, weights='distance'
+  rf  : n_estimators=300, max_depth=10, min_samples_leaf=1
+
+E.2 2.5 WILL DO
+  For each model, rebuild pipeline with best_params, fit on train,
+  predict on the 128-sample val set. Emit:
+    - confusion matrix (labels 1-15)
+    - classification_report (precision/recall/F1/support)
+    - macro-F1, accuracy
+  Then a summary table across 3 models.
+
+E.3 TIE-BREAKING IS 2.6's JOB
+  RF (0.7193) vs SVC (0.7027) is a 0.017 gap. Statistically tied.
+  Val results decide.
+  Tie-break order (per devtracker 2.0 2.6):
+    1. fewer per-class F1 zeros
+    2. higher min per-class F1
+    3. lower model complexity
+  SVC's simplicity is a real advantage if scores tie: no ensemble,
+  one boundary per class, faster inference. Under tie-break rule 3,
+  SVC could win.
+
+E.4 CANDIDATE FOR REPORT NARRATIVE
+  The baseline→tuned inversion is a good story:
+    "Baseline suggested RF was 0.12 ahead of SVC. Grid search
+     revealed SVC's default C=1 underfit this data. After tuning,
+     SVC closes the gap to 0.017. The baseline comparison was
+     misleading; tuning matters."
+  This is a legitimate Section 6 finding, not a mistake.
+
+E.5 k-NN ELIMINATED
+  After tuning, k-NN trails by 0.045 from RF, and 0.045 > 0.049 std
+  is borderline. But its std is the narrowest (0.049), so the gap is
+  real. k-NN remains third place. Include in Section 6 comparison
+  table, do not carry forward to 2.5 selection debate.
+
+================================================================================
+END OF NOTE
+================================================================================

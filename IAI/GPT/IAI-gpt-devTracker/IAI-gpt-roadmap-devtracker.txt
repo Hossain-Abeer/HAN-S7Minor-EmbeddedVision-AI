@@ -639,7 +639,7 @@ SECTION 9 - PREPROCESSING
 SECTION 10 - PRELIMINARY ML REPORT
 ================================================================================
 
-[ ] 10.1  DRAFT SECTIONS 1-3
+[x] 10.1  DRAFT SECTIONS 1-3
     Type: writing
     Design: report template in support materials
     Prereq: Sections 1 through 9 complete
@@ -662,12 +662,12 @@ SECTION 10 - PRELIMINARY ML REPORT
         - Projection invariant note (from 7.1 and 9.2)
         - NDA statement (features + crops not published)
 
-[ ] 10.2  SUBMIT PRELIMINARY REPORT (wk 40)
+[x] 10.2  SUBMIT PRELIMINARY REPORT (wk 40)
     Type: submission
     Prereq: 10.1
     Action: Email to instructor AND peer-review partner team.
 
-[ ] 10.3  PEER REVIEW ANOTHER TEAM (wk 41)
+[x] 10.3  PEER REVIEW ANOTHER TEAM (wk 41)
     Type: manual
     Prereq: 10.2
     Action: Use Excel template. Comment on:
@@ -678,12 +678,12 @@ SECTION 10 - PRELIMINARY ML REPORT
                 visualisation selection
             Sharp but constructive.
 
-[ ] 10.4  PROVIDE FEEDBACK VIA EXCEL TEMPLATE
+[x] 10.4  PROVIDE FEEDBACK VIA EXCEL TEMPLATE
     Type: submission
     Prereq: 10.3
     Action: Send completed Excel sheet to the other team.
 
-[ ] 10.5  REVIEW RECEIVED FEEDBACK
+[x] 10.5  REVIEW RECEIVED FEEDBACK
     Type: manual
     Prereq: 10.4
     Action: Read critically. Do not adopt blindly.

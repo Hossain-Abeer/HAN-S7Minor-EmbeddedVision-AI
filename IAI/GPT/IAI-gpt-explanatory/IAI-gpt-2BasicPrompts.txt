@@ -41,12 +41,12 @@ sufficient discussion. do the txt writeup of all that's being discussed, includi
 
 
 [9.2] 
-validate. interpret. teach
+validate. if not valid, ask. if valid - interpret & teach in the form of a .txt writeup
 
 
 
 [9.2]
-sufficient discussion. do the txt writeup of all that's being discussed about & related to the subsection, EVERY SINGLE thing
+sufficient discussion. do the txt writeup of all that's being discussed about & related to the subsections including all that was explained as a part of teaching me, EVERY SINGLE thing
 
 
 [5.1] 
@@ -115,3 +115,9 @@ I will be uploading the project's gitlab (material), src & gpt files in batches.
 of the template, we do  things one section/subsection at a time. not sure if uploading of images and codesnippets are required, but if not, sometimes images could help explain better. I am not sure if, in case of images & codesnippets, appendix is where they go. in such instances, you tell me where to insert what. 
 
 starting off with the first, produce and wait for validation
+
+
+
+
+
+we first proceed through the devtracker, until we have enough data to complete the Full ML report. of course, we implement Jeroen's feedback of the prelim ML report in full ML report, and I have a feedback that I made for another team (it's not yet uploaded to you).

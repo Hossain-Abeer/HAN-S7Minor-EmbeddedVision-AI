@@ -1,0 +1,317 @@
+================================================================================
+IAI-GPT-PRE-FULL-ML-REPORT: CURRENT STATE - HAVE VS NEED
+================================================================================
+
+PURPOSE
+-------
+Single reference listing every artefact required to complete the Full ML
+report, split into HAVE (available on disk or in prior notes) and NEED
+(not yet produced or not yet supplied to this thread).
+
+Authority for section requirements:
+  {GROUP}_final_ML_report_{NAME}_{NUM}.docx (Catalog 1, Batch 6)
+Feedback source:
+  FT-8_preliminary_ML_report feedback.xlsx + Jeroen's prose verdict
+
+--------------------------------------------------------------------------------
+1. TOP-LEVEL VERDICT
+--------------------------------------------------------------------------------
+
+  Sections 1, 2, 3, 9      : iterable from Preliminary report + feedback.
+  Sections 4, 5            : PARTIAL - peer-review sheets unclear.
+  Sections 6, 7, 8         : BLOCKED - Phase 2 and Phase 3 not executed.
+  Code appendices          : PARTIAL - source exists, curation not done.
+
+  Report cannot be completed end-to-end until Phase 2 (classical ML
+  model) and Phase 3 (deploy + test) have run and produced artefacts.
+
+--------------------------------------------------------------------------------
+2. WHAT WE HAVE - BY REPORT SECTION
+--------------------------------------------------------------------------------
+
+  2.1 Section 1 - Introduction
+  -----------------------------
+    HAVE:
+      - Prior prelim Sec 1 (fit-within-minor, relation-to-project,
+        learning objectives).
+      - Project scope lock (0.4): 1-15, cue out, snooker out.
+      - Module detail (weeks, phases, assessment structure).
+      - Project relation doc (FR1-FR7, TR1-TR9 source material).
+    NEED:
+      - None. Draftable now.
+
+  2.2 Section 2 - Problem statement
+  --------------------------------
+    HAVE:
+      - Prior prelim Sec 2: SMART, FR1-FR7, TR1-TR8, basis-for-eval.
+      - Jeroen feedback: add test per Critical TR; concrete FR4 test;
+        argue why 0.50 macro-F1 suffices.
+      - Full-ML template asks "update objective" + "update requirements
+        table and prioritise".
+    NEED:
+      - Written paragraph arguing 0.50 macro-F1 justification.
+      - Test-per-Critical-TR table (TR1-TR3).
+      - Concrete FR4 test definition.
+      - Diff-note: what changed since prelim and why.
+
+  2.3 Section 3 - Data acquisition and exploration
+  ------------------------------------------------
+    HAVE:
+      - Prior prelim Sec 3: source, protocol, 25,141 -> 1,438 -> 513
+        -> 505; quality table (rep / suf / bal / unbiased); split
+        integrity; feature table (23 -> 15); dead-feature root cause;
+        MI top-4; correlation claim; cleaning + scaling prose;
+        before/after scaling figures; pipeline prose.
+      - Devtracker facts: 4.2/4.4 counts, post-4.2 breakdown, 5.3 split
+        matrix, 8.1 imbalance (8.60), 9.1 cleaning (0 NaN, 0 outliers),
+        9.2 scaling parameters, 9.3 pipeline.
+      - Figures on disk: class_balance.png, corr_heatmap.png,
+        feature_dist_GRID.png, scaling_*.png x 15.
+      - Logs on disk: 1.3.5_class_count.txt, 1.4.2_stratification.txt,
+        1.6.1_balance_report.txt, 1.6.3_redundancy_flags.txt,
+        1.7.1_cleaning_report.txt, 1.7.2_scaling_report.txt,
+        9.4_smoke_test.txt.
+      - Source: src/clean.py, scale.py, pipeline.py, mask.py,
+        features.py, assemble.py, correlations.py, distributions.py.
+    NEED:
+      - Code snippets pasted into Sec 3.7 (BLOCKING level 2 -> 3).
+      - Alternative scaler comparison (MinMaxScaler vs StandardScaler)
+        for level 3 -> 4.
+      - Unit-test framing of DummyClassifier smoke test (level 4 -> 5).
+      - Regenerated Fig 3.2 (higher DPI or split into 2 figures).
+      - Scatter plot: blob_area_ratio vs proj_y_2, coloured by class.
+      - Example-crops montage: 15 crops, one per class.
+
+  2.4 Section 4 - Feedback FROM another team
+  ------------------------------------------
+    HAVE:
+      - FT-8_preliminary_ML_report feedback.xlsx (Jeroen's instructor
+        feedback, NOT a peer team's).
+      - Jeroen's prose verdict: "You are on the right track."
+    NEED:
+      - Clarify: is FT-8 the "FROM another team" sheet, or is this
+        instructor feedback that sits outside Sections 4-5?
+      - If a peer team's filled Excel exists, supply it.
+      - If not, Section 4 becomes "instructor feedback" and Section 5
+        becomes the sheet we sent (if any).
+
+  2.5 Section 5 - Feedback TO another team
+  ----------------------------------------
+    HAVE:
+      - Empty template: {GROUP}_preliminary_ML_report_feedback.xlsx.
+      - Rubric structure (3 sheets).
+    NEED:
+      - The COMPLETED sheet we filled for another team.
+      - If we did not peer-review a team, state so and note the
+        module-lead's alternative arrangement.
+      - Acceptance criterion for Sec 5 is "Feedback quality" - cannot
+        be scored on an empty sheet.
+
+  2.6 Section 6 - Model selection, training, validation  (BLOCKED)
+  ---------------------------------------------------------------
+    HAVE:
+      - Selection candidates named (9.3): SVC, KNeighborsClassifier,
+        RandomForestClassifier.
+      - Preprocessing Pipeline (9.3) ready: scaler -> clf.
+      - Split integrity (5.3): 245 / 128 / 119, group-by-clip.
+      - Imbalance verdict (8.1): SEVERE 8.60 -> class_weight='balanced'
+        for SVC and RF (not k-NN, which has no such arg).
+      - Feature set (8.3): 15 retained.
+    NEED (all Phase 2 execution artefacts):
+      - Comparison of at least 2-3 candidate models with justification
+        for the chosen one.
+      - Stratified CV report per model (cross_val_score or
+        GridSearchCV results).
+      - Hyperparameter grid or search log with best params per model.
+      - Overfitting / underfitting evidence (learning curves or
+        train-vs-val gap).
+      - Confusion matrix on val and on test.
+      - Per-class precision / recall / F1 (classification_report).
+      - Macro-F1 vs the 0.50 target (SMART objective measurement).
+      - Trade-off discussion (precision vs recall, bias vs variance).
+      - Optional but level-4: alternative preprocessing comparison
+        integrated with the chosen model.
+
+  2.7 Section 7 - Deploy and test  (BLOCKED)
+  -----------------------------------------
+    HAVE:
+      - Persisted Pipeline design (9.3 docstring: Phase 3 reuses
+        build_pipeline shape).
+      - FR / TR table from Sec 2 (basis to test against).
+      - Inference target: CPU-only, no cloud.
+    NEED (all Phase 3 execution artefacts):
+      - Deployment form decision (Flask / FastAPI / local script /
+        TFLite-not-applicable-here).
+      - Deployment code or script.
+      - Inference timing measurement (per-crop latency).
+      - Test plan against SMART + FR + TR, with pass/fail per item.
+      - Test results recorded.
+      - Differences between target and result explained.
+      - One unexpected behaviour or limitation noted.
+
+  2.8 Section 8 - Conclusion  (BLOCKED, depends on 6-7)
+  ----------------------------------------------------
+    HAVE:
+      - Devtracker record of decisions, deviations, limitations.
+      - Documented limitations: 8.60 imbalance, 5 dead hole features,
+        8 dead total, source-resolution ceiling, 6/9 rotation
+        ambiguity, class 7 test = 1 crop, class 10 val = 2 crops.
+    NEED:
+      - Results vs SMART objectives table.
+      - Generalisation discussion (train / val / test gap).
+      - ML vs DL preview sentence (hook to Term-2).
+      - Reflective analysis (what worked, what did not, what to change).
+
+  2.9 Section 9 - References
+  --------------------------
+    HAVE:
+      - 10 references from prelim (SMART, Géron, scikit-learn, OpenCV,
+        Google ML crash course, sklearn user guide, course material).
+    NEED:
+      - Additions only if new sources cited in 6-8.
+
+  2.10 Code appendices
+  --------------------
+    HAVE:
+      - Full src/ tree (20+ files) from Catalog 3 Batch 2.
+      - config.py, constants.py with all parameters.
+    NEED:
+      - Selection of "key code snippets" per template:
+          data preprocessing   -> clean.py / scale.py / pipeline.py
+          model creation       -> Phase 2 script (not written)
+          training process     -> Phase 2 script (not written)
+          evaluation methods   -> Phase 2 script (not written)
+      - Comments added per snippet (PEP 8, per template).
+
+--------------------------------------------------------------------------------
+3. HARD BLOCKERS - WHAT MUST HAPPEN FIRST
+--------------------------------------------------------------------------------
+
+  B1. Phase 2 executes
+      - A script exists that trains SVC, k-NN, RF via build_pipeline.
+      - Cross-validation run.
+      - Grid search run.
+      - Held-out test evaluation.
+      - Confusion matrix + classification report saved to disk.
+      - Without this, Section 6 is empty.
+
+  B2. Phase 3 executes
+      - Deployment artefact exists (script, Flask app, or batch
+        inference wrapper).
+      - Test plan is written and executed against FR/TR.
+      - Timing measured.
+      - Without this, Section 7 is empty.
+
+  B3. Peer-review sheets clarified
+      - The Excel we filled for another team (Sec 5) must exist.
+      - The Excel filled for us (Sec 4) must exist, unless FT-8
+        substitutes by instructor arrangement.
+      - Without this, Sections 4-5 cannot be scored.
+
+  B4. Sec 3.7 code snippets pasted
+      - Text-only fix. Blocks level 3 regardless of model results.
+
+--------------------------------------------------------------------------------
+4. SOFT BLOCKERS - LIFTING MARKS WITHIN EXISTING SECTIONS
+--------------------------------------------------------------------------------
+
+  S1. Argue 0.50 macro-F1 is the correct bar (Sec 2).
+  S2. Add test-per-Critical-TR table (Sec 2).
+  S3. Regenerate Fig 3.2 legibly (Sec 3).
+  S4. Scatter blob_area_ratio x proj_y_2 (Sec 3).
+  S5. Example-crops montage, one per class (Sec 3).
+  S6. Alternative scaler comparison (Sec 3, level 3 -> 4).
+  S7. Reframe DummyClassifier smoke as unit test (Sec 3, level 4 -> 5).
+  S8. Code snippets into 3.7 (Sec 3, level 2 -> 3; blocking).
+
+  Effort estimate: ~5-6 hours total, sequential.
+
+--------------------------------------------------------------------------------
+5. UNBLOCKED WORK AVAILABLE RIGHT NOW
+--------------------------------------------------------------------------------
+
+  Without waiting for Phase 2 or Phase 3:
+
+    - Sec 1 draft (copy from prelim, minor polish).
+    - Sec 2 draft + S1 + S2.
+    - Sec 3 draft + S3-S8.
+    - Sec 9 draft (copy from prelim).
+    - Code-appendix skeleton (preprocessing snippets already exist).
+
+  With Phase 2 available (before Phase 3):
+
+    - Sec 6 draft.
+    - Sec 8 partial (results vs goals for model, but not deploy).
+
+  Only after Phase 3:
+
+    - Sec 7 draft.
+    - Sec 8 complete.
+
+--------------------------------------------------------------------------------
+6. OPEN QUESTIONS FOR THE LEARNER
+--------------------------------------------------------------------------------
+
+  Q1. Are the peer-review sheets (FROM and TO) available?
+      - If yes, supply them.
+      - If no, does the module accept "instructor feedback only"
+        for Sections 4-5?
+
+  Q2. Phase 2 classifiers
+      - Confirm: SVC, KNeighborsClassifier, RandomForestClassifier.
+      - Any preference on grid ranges?
+      - class_weight='balanced' on SVC and RF per 8.1 SEVERE? Confirm.
+
+  Q3. Phase 3 deployment
+      - Target form: local Python script / Flask / batch mode / other?
+      - Test plan driven by FR/TR from Sec 2, or a smaller subset?
+
+  Q4. Sequencing
+      - Option A: unblock soft fixes first (Sec 1-3 + 9), then Phase 2,
+        then Phase 3, then Sec 6-8. Serial, lower risk.
+      - Option B: run Phase 2 in parallel with soft fixes, merge at
+        end. Faster, higher context-switch cost.
+      - Recommendation: Option A.
+
+--------------------------------------------------------------------------------
+7. SUMMARY TABLE - BY SECTION
+--------------------------------------------------------------------------------
+
+  Section  Reusable  Fixable    Blocked   Estimated effort to close
+           from     by text    by exec
+           prelim?  edits?     artefacts?
+  -------  -------- ---------- ---------  ---------------------------
+  1        yes      minor      no         ~15 min
+  2        yes      yes        no         ~1-2 h
+  3        yes      yes        no         ~3-4 h (incl. code snippets)
+  4        partial  ?          maybe      depends on Q1
+  5        no       ?          yes        depends on Q1
+  6        no       no         yes        4-6 h (execution) + 3-4 h
+                                          (write-up)
+  7        no       no         yes        2-3 h (execution) + 2-3 h
+                                          (write-up)
+  8        no       no         yes        1-2 h (write-up, after 6-7)
+  9        yes      minor      no         ~15 min
+  Code     partial  curation   partial    ~1-2 h
+
+--------------------------------------------------------------------------------
+8. DECISION RECOMMENDATION
+--------------------------------------------------------------------------------
+
+  Proceed in this order:
+
+    1. Answer Q1 (peer review status).
+    2. Execute soft fixes S1-S8 (Sec 1-3 + 9 close).
+    3. Execute Phase 2 (Section 6 opens).
+    4. Execute Phase 3 (Section 7 opens).
+    5. Draft Section 8 (conclusion).
+    6. Curate code appendices.
+    7. Final integration + proof.
+
+  This is the only order that does not rework text after execution.
+  Drafting Sec 6/7 prose before Phase 2/3 exist would be fabrication
+  and cannot be reconciled with the acceptance criteria.
+
+================================================================================
+END OF NOTE
+================================================================================

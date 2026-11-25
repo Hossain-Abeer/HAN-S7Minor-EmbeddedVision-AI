@@ -1,0 +1,338 @@
+```
+================================================================================
+IAI-GPT-DEVTRACKER - 2.1 WRITE train_models.py + 2.2 BASELINE CROSS-VALIDATION
+================================================================================
+Step    : 2.1 (code) + 2.2 (run)
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : code + run
+Prereq  : 1.3
+Status  : PASS
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+SECTION A - STEP RECORD (what was built and run)
+--------------------------------------------------------------------------------
+
+A.1 DELIVERABLE
+  src\train_models.py
+
+A.2 CONTENT
+  CANDIDATES dict, 3 untuned estimators:
+    svc : SVC(kernel='rbf', class_weight='balanced',
+              probability=True, random_state=42)
+    knn : KNeighborsClassifier()   (defaults, k=5)
+    rf  : RandomForestClassifier(n_estimators=300,
+              class_weight='balanced', random_state=42, n_jobs=-1)
+
+  SCORING = {"f1_macro": "f1_macro", "accuracy": "accuracy"}
+
+  cv_report(name, estimator, X, y, cv=5):
+    - builds Pipeline via build_pipeline(estimator)
+      = [("scaler", StandardScaler()), ("clf", estimator)]
+    - StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    - cross_validate(cv=skf, scoring=SCORING, n_jobs=-1)
+    - returns mean/std per metric
+
+  main():
+    - loads X_train, y_train via load_splits()
+    - runs cv_report per candidate
+    - prints 3-row table
+
+A.3 COMMAND
+  cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI"
+  python src\train_models.py 2>&1 |
+    Tee-Object -FilePath "D:\HAN\Semester 7 Minor\
+                          billiards-game-clips\IAI\logs\2.2_cv_baseline.txt"
+
+A.4 OBSERVED OUTPUT
+         f1_macro_mean  f1_macro_std  accuracy_mean  accuracy_std
+  model
+  svc           0.6023        0.0699         0.6939        0.0563
+  knn           0.5702        0.0546         0.7102        0.0507
+  rf            0.7191        0.0865         0.8327        0.0746
+
+A.5 VERIFICATION LINE
+  3/3 models ran without error.
+  4/4 metric columns populated.
+  All 3 clear SMART macro-F1 >= 0.50 floor at CV stage.
+  Ranking by macro-F1 : rf > svc > knn.
+  Ranking by accuracy : rf > knn > svc.
+  No warnings. No crashes.
+  PASS.
+
+A.6 INPUTS CONSUMED
+  dataset_clean.csv                     (492 rows, 15 features + label + role)
+  retained_features_correlations.txt    (15 feature names, 4 comment lines)
+
+  Loaded via load_dataset.load_splits() into:
+    X_train : (245, 15)
+    X_val   : (128, 15)
+    X_test  : (119, 15)
+    y_train : (245,) labels 1..15, all 15 classes present
+    y_val   : (128,) all 15 classes present
+    y_test  : (119,) all 15 classes present
+
+A.7 OUTPUTS PRODUCED
+  Console table (3 rows x 4 metric columns).
+  Log copy at logs\2.2_cv_baseline.txt.
+  No trained model saved.
+  No confusion matrices.
+  No per-class reports.
+  No predictions CSV.
+
+  Rationale: 2.2 is a COMPARISON step only. The persisted model is
+  built later at 3.1, after tuning at 2.4 and validation at 2.5.
+
+A.8 DEVIATIONS
+  None.
+
+A.9 CARRY-FORWARD
+  - rf is the reference candidate entering 2.3.
+  - svc and knn retained for comparison, not for final selection.
+  - class_weight='balanced' locked on svc and rf (per 8.1 SEVERE verdict).
+  - Grid sizing in 2.3 must clear the 0.07 CV noise floor (see B.6).
+
+
+--------------------------------------------------------------------------------
+SECTION B - INTERPRETATION (feeds Full ML Section 6)
+--------------------------------------------------------------------------------
+
+B.1 RANKING BY MACRO-F1
+  rf  0.7191  <- winner
+  svc 0.6023  +0.117 behind rf
+  knn 0.5702  +0.149 behind rf
+
+B.2 RANKING BY ACCURACY
+  rf  0.8327  <- winner
+  knn 0.7102  +0.016 AHEAD of svc
+  svc 0.6939
+
+B.3 K-NN ANOMALY - ACCURACY HIGHER THAN SVC, MACRO-F1 LOWER
+  |        | accuracy | macro-F1 |
+  | svc    | 0.694    | 0.602    |
+  | knn    | 0.710    | 0.570    |
+  | delta  | +0.016   | -0.032   |
+
+  Mechanism:
+    - Train set imbalance 8.6:1. Class 1 has 43, class 5 and 10 have 5.
+    - k-NN votes by 5 nearest neighbours. Densest cluster (class 1)
+      dominates contested regions.
+    - k-NN rarely predicts minority classes.
+    - Accuracy rises because majority-class hits increase.
+    - Macro-F1 drops because per-class F1 for thin classes collapses.
+
+  This is the exact scenario macro-F1 was chosen to expose.
+  It is a WORKED EXAMPLE of why the SMART objective is macro-F1 >= 0.50,
+  not accuracy >= 0.50.
+  Must appear in Section 6 as the justification for the metric choice.
+
+B.4 WHY RF WINS ON THIS DATA (3 concrete reasons, no general claim)
+
+  Reason 1 - Correlated features neutralised.
+    The 15 retained features include 13 projection bins.
+    Projection bins are structurally correlated: the 8 x-bins sum to 1,
+    the 8 y-bins sum to 1. Pairwise |r| up to 0.77 observed at 8.3.
+    SVC and k-NN measure distance in all 15 dims jointly -> correlated
+    bins effectively double-count.
+    RF samples a random feature subset per split -> correlation is
+    neutralised. Some trees see proj_x_2, others see proj_y_3.
+    This is the dominant reason.
+
+  Reason 2 - Sparse extreme values defanged.
+    proj_x_0 and proj_y_6 have training std ~0.01.
+    After StandardScaler, several rows reach |scaled| > 5.
+    RBF-SVC is heavily sensitive to extreme coordinates (kernel is
+    exp(-gamma * dist^2)). One coordinate at 5 dominates the kernel.
+    k-NN distance is equally distorted.
+    RF only uses a feature at a split if it produces a clean gain.
+    Outlier coordinates are effectively ignored unless useful.
+
+  Reason 3 - Class_weight='balanced' applies per-tree.
+    300 trees, each bootstrap-sampled with class reweighting.
+    Minority classes (C5, C10 at 5 samples each) still appear as
+    splits across the forest. Class 5's 5 samples are seen by many
+    trees, not just one boundary.
+    SVC's balanced weighting affects one global boundary per class;
+    k-NN has no such mechanism.
+
+B.5 RF IS NOT UNIVERSALLY BEST
+  The choice is data-specific. State in Section 6 as:
+    "RF is the right choice for small-n (245), imbalanced (8.6:1),
+     correlated-feature, 15-class numeric data. It is not a claim
+     that RF is universally superior to SVC or k-NN."
+
+B.6 CV NOISE FLOOR
+  fold-to-fold std ranges 0.055-0.087.
+  Implication: any tuning gain < ~0.07 macro-F1 is indistinguishable
+  from CV noise with 5 folds on 245 rows.
+  Rule for 2.3: grid search must either
+    (a) produce a gain > 0.07, in which case report it, OR
+    (b) produce gain < 0.07, in which case report defaults-preferred.
+
+B.7 BASELINE PASSES SMART BEFORE TUNING
+  All 3 models clear macro-F1 >= 0.50 on training CV.
+  SMART objective is achievable with defaults.
+  Tuning is a refinement, not a rescue.
+
+B.8 WHAT STILL NEEDS TO HAPPEN BEFORE FINAL REPORT
+  - tuning (2.4) to find best params per model
+  - validation-set scoring with best params (2.5)
+  - model selection note (2.6)
+  - final retrain + test (3.1, 3.2)
+
+
+--------------------------------------------------------------------------------
+SECTION C - TEACHING RECORD (foundations explained during 2.1/2.2)
+--------------------------------------------------------------------------------
+
+C.1 WHAT A MODEL IS
+  A model is a RULE. Training adjusts the rule's internal parameters
+  so it answers correctly on training data. Prediction applies the
+  rule to new data.
+
+  Every model type is a different SHAPE of rule:
+    SVC  : curved boundary through 15-D space; params = kernel
+           centre + width + class weights
+    k-NN : "compare to k nearest stored rows, vote"; params = the
+           stored rows themselves (memorisation)
+    RF   : 300 decision trees, majority vote; params = every threshold
+           in every tree
+
+C.2 WHAT TRAINING DOES
+  Training = search for parameter values that make the rule answer
+  correctly on the training data.
+  With 245 rows x 15 features, the search space is huge. The training
+  algorithm navigates it. After training, parameters are fixed and the
+  rule is finished.
+
+C.3 WHY 3 MODELS, AND WHY THESE 3
+  Rubric requires model comparison. 3 different philosophies:
+    k-NN : instance-based (memorise, then nearest-neighbour vote)
+    SVC  : boundary-based (draw cleanest curved separator)
+    RF   : ensemble-based (300 trees voting)
+  All handle 15 classes natively, all CPU-cheap, no GPU.
+  Rejected alternatives: decision tree alone (high variance),
+  logistic regression (linear boundary - insufficient),
+  naive Bayes (assumes feature independence - false here).
+
+C.4 ACCURACY
+  accuracy = correct predictions / total predictions
+  Single number. Simple. MISLEADING under class imbalance.
+  A model that always predicts class 1 gets 43/245 = 17.5% accuracy
+  on your train set. Zero information, non-zero score.
+
+C.5 PRECISION AND RECALL (per class)
+  precision_X = TP / (TP + FP)
+      "when model says X, how often is it right?"
+  recall_X    = TP / (TP + FN)
+      "of all true X, how many did the model find?"
+  Trade-off: high precision = few false alarms; high recall = few misses.
+
+C.6 F1 (per class)
+  F1_X = 2 * precision_X * recall_X / (precision_X + recall_X)
+  Harmonic mean. Punishes imbalance between precision and recall.
+  One number per class. Computed 15 times for this project.
+
+C.7 MACRO-F1
+  macro-F1 = (F1_1 + F1_2 + ... + F1_15) / 15
+  Plain average across all 15 classes.
+  Rewards every class equally, including the thin ones (C5, C10).
+  This is the SMART objective metric.
+
+  Alternatives:
+    weighted-F1 = averages weighted by class size -> hides thin-class
+                  failure. NOT used.
+    micro-F1    = global TP/FP/FN -> basically accuracy for single-
+                  label problems. NOT used.
+
+C.8 WORKED EXAMPLE (small, conceptual)
+  Assume 3 classes, 6 test rows:
+    True:  [1, 1, 1, 2, 2, 3]
+    Pred:  [1, 1, 2, 2, 3, 1]
+  Class 1: TP=2, FN=1, FP=1 -> P=0.667, R=0.667, F1=0.667
+  Class 2: TP=1, FN=1, FP=1 -> P=0.5,   R=0.5,   F1=0.5
+  Class 3: TP=0, FN=1, FP=1 -> P=0.0,   R=0.0,   F1=0.0
+  macro-F1 = (0.667 + 0.5 + 0.0) / 3 = 0.389
+  F1 is arithmetic on the prediction table, not a stored entity.
+
+C.9 CROSS-VALIDATION
+  One split -> one roll of the dice. Lucky/unlucky folds give
+  misleading scores.
+  k-fold CV: split training rows into k folds. Train on k-1, validate
+  on held-out. Rotate. Each row gets exactly one turn as validation.
+
+  STRATIFIED k-fold: each fold preserves class proportions.
+  Critical under 8.6:1 imbalance - plain k-fold might put both C10
+  samples in one fold, starving the other folds of that class.
+
+  In this run: StratifiedKFold(n_splits=5, shuffle=True, random_state=42).
+  Each fold ~49 rows from the 245-row training set.
+
+C.10 WHAT std MEANS
+  std = fold-to-fold variation of the metric.
+  f1_macro = 0.7191 +/- 0.0865:
+    mean = typical performance across folds
+    std  = how much folds disagree
+  Wide std on small data is expected. 245 rows total, 5 folds of ~49.
+  One fold with a bad thin-class draw moves the mean.
+
+  Practical consequence: tuning improvements below std are noise, not
+  signal. Applies to 2.3 grid search sizing (see B.6).
+
+C.11 DATA FLOW LINKING F1 AND RF
+  Train phase:
+    245 rows (15 numbers + true label) -> feed to RF -> parameters
+    adjusted -> trained model in memory.
+
+  CV score phase:
+    For fold 1..5:
+      train model on 4 folds (~196 rows)
+      predict labels for held-out fold (~49 rows)
+      compare predictions to true labels -> prediction table
+      compute per-class precision, recall, F1 -> 15 numbers
+      average those 15 numbers -> macro-F1 for this fold
+    Collect 5 macro-F1s -> mean, std.
+
+  Chain:
+    training rows -> model -> predictions on held-out rows
+                  -> comparison to truth
+                  -> per-class F1 -> macro-F1 -> one number per model.
+
+  RF PRODUCES predictions. F1 SCORES them. They are not linked in any
+  stored artefact - F1 is computed at fold end and discarded.
+
+C.12 WHAT 2.2 DELIBERATELY DOES NOT SAVE
+  - No .joblib model.
+  - No confusion matrices.
+  - No per-class reports.
+  - No predictions CSV.
+  These arrive at 2.5 (val) and 3.2 (test). 2.2's only output is the
+  3-row comparison table.
+
+
+--------------------------------------------------------------------------------
+SECTION D - CARRY-FORWARD TO NEXT STEPS
+--------------------------------------------------------------------------------
+
+D.1 2.3 grid_search.py
+  - Grid sizes anchored to the 0.07 CV noise floor.
+  - rf is the reference model to tune.
+  - svc and knn tuned for completeness (comparison requirement).
+  - class_weight='balanced' locked on svc and rf.
+  - refit=False in GridSearchCV (final refit at 3.1).
+
+D.2 For Full ML Section 6, this note directly supplies:
+  - Table of 3 candidate models with CV scores (B.1, B.2)
+  - Justification for choosing macro-F1 (B.3)
+  - Justification for choosing RF (B.4, B.5)
+  - Overfitting/stability discussion seed (B.6)
+  - Metric choice illustration (C.4-C.8)
+  - Cross-validation methodology (C.9)
+
+D.3 For Full ML code appendix:
+  - train_models.py is a key-snippet candidate (data -> CV -> compare).
+
+================================================================================
+END OF NOTE
+================================================================================
+```

@@ -1,0 +1,107 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 1.1 VERIFY ARTEFACTS
+================================================================================
+Step    : 1.1
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : verification
+Prereq  : none
+Status  : PASS
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+COMMANDS RUN
+--------------------------------------------------------------------------------
+Activate venv, cd repo.
+$data = D:\HAN\Semester 7 Minor\billiards-game-clips\IAI
+
+Test-Path "$data\dataset_clean.csv"
+Test-Path "$data\splits.csv"
+Test-Path "$data\retained_features_correlations.txt"
+Test-Path "src\pipeline.py"
+
+(Get-Content "$data\retained_features_correlations.txt"
+  | Where-Object { $_.Trim() -ne "" }).Count
+
+Get-Content "$data\retained_features_correlations.txt"
+  | Where-Object { $_.Trim() -ne "" }
+
+(Get-Content "$data\dataset_clean.csv" | Measure-Object -Line).Lines
+
+python -c "import sys; sys.path.insert(0,'src');
+  from pipeline import build_pipeline;
+  from sklearn.dummy import DummyClassifier;
+  print(build_pipeline(DummyClassifier()))"
+
+Tee to $data\logs\2.1_verify.txt
+
+--------------------------------------------------------------------------------
+OBSERVED OUTPUT
+--------------------------------------------------------------------------------
+dataset_clean.csv                   True
+splits.csv                          True
+retained_features_correlations.txt  True
+src\pipeline.py                     True
+
+Raw line count (retained file)      19
+  - 4 comment lines (start with #)
+  - 15 feature lines
+Feature names printed:
+  connected_component_count
+  blob_area_ratio
+  proj_x_0 .. proj_x_6        (7)
+  proj_y_1 .. proj_y_6        (6)
+  Total: 15. Correct.
+
+dataset_clean.csv line count       493
+  1 header + 492 rows. Matches dataset.csv record (Section 7.3).
+
+Pipeline smoke output:
+  Pipeline(steps=[('scaler', StandardScaler()),
+                  ('clf', DummyClassifier())])
+  Two steps, correct order, correct names.
+
+Log written:
+  D:\HAN\Semester 7 Minor\billiards-game-clips\IAI\logs\2.1_verify.txt
+
+--------------------------------------------------------------------------------
+VERIFICATION LINE
+--------------------------------------------------------------------------------
+4/4 artefacts present.
+15/15 retained features listed.
+492/492 dataset rows present.
+Pipeline assembles with correct step names.
+PASS.
+
+--------------------------------------------------------------------------------
+DEVIATIONS
+--------------------------------------------------------------------------------
+D1. Raw line count 19, not 15.
+    Cause: 4 comment lines documenting dropped features.
+    Resolution: counted 15 feature lines after filtering comments.
+    No action.
+
+D2. Data root relocated from
+      D:\HAN\Semester 7 Minor\billiards-game-clips
+    to
+      D:\HAN\Semester 7 Minor\billiards-game-clips\IAI
+    Cause: shared project data, IAI artefacts moved into subfolder.
+    Impact: src\config.py DATA_ROOT still points to old path.
+    Action: patch config.py before 1.2 (see 1.2 preflight sub-step).
+
+--------------------------------------------------------------------------------
+ARTEFACTS PRODUCED
+--------------------------------------------------------------------------------
+$data\logs\2.1_verify.txt
+
+--------------------------------------------------------------------------------
+CARRY-FORWARD
+--------------------------------------------------------------------------------
+1.2 load_dataset.py:
+  - Must read $data\dataset_clean.csv (new DATA_ROOT).
+  - Must patch or bypass config.DATA_ROOT.
+  - Expected shapes: 245x15 / 128x15 / 119x15.
+  - Feature order from retained_features_correlations.txt.
+
+================================================================================
+END OF NOTE
+================================================================================

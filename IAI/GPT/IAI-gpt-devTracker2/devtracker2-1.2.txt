@@ -1,0 +1,71 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 1.2 WRITE load_dataset.py
+================================================================================
+Step    : 1.2
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : code
+Prereq  : 1.1
+Status  : PASS
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+COMMANDS RUN
+--------------------------------------------------------------------------------
+Patch src\config.py:
+  Split input vs output roots.
+    CLIP_ROOT  = D:\HAN\Semester 7 Minor\billiards-game-clips\game1
+    DATA_ROOT  = D:\HAN\Semester 7 Minor\billiards-game-clips\IAI
+  Added: DATASET_CLEAN_CSV, RETAINED_TXT constants.
+
+Preflight:
+  Test-Path "$clip\billiards-game-clip1.mp4"     -> True
+  Test-Path "$data\dataset_clean.csv"            -> True
+
+Write src\load_dataset.py.
+Run:
+  python src\load_dataset.py 2>&1 |
+    Tee-Object -FilePath "$data\logs\1.2_loader_check.txt"
+
+--------------------------------------------------------------------------------
+OBSERVED OUTPUT
+--------------------------------------------------------------------------------
+features: 15
+train   : (245, 15)  classes=15
+val     : (128, 15)  classes=15
+test    : (119, 15)  classes=15
+
+--------------------------------------------------------------------------------
+VERIFICATION LINE
+--------------------------------------------------------------------------------
+15/15 features loaded in retained-file order.
+Role shapes 245/128/119 match 5.3 split matrix.
+All 15 classes present in each role.
+PASS.
+
+--------------------------------------------------------------------------------
+DEVIATIONS
+--------------------------------------------------------------------------------
+D1. Loader resolves retained-feature file via
+      Path(config.DATA_ROOT) / "retained_features_correlations.txt"
+    not via config.RETAINED_TXT.
+    Works. Non-blocking. Flag for consistency pass.
+
+D2. config.py patched to separate input root (CLIP_ROOT) from
+    output root (DATA_ROOT), per 1.1 D2.
+    Existing path constants rebased onto DATA_ROOT.
+
+--------------------------------------------------------------------------------
+ARTEFACTS PRODUCED
+--------------------------------------------------------------------------------
+src\config.py              (patched)
+src\load_dataset.py        (new)
+$data\logs\1.2_loader_check.txt
+
+--------------------------------------------------------------------------------
+CARRY-FORWARD
+--------------------------------------------------------------------------------
+2.1 train_models.py consumes load_splits() as the sole data entry.
+No pre-scaled CSVs may be fed. Scaling lives in build_pipeline().
+================================================================================
+END OF NOTE
+================================================================================

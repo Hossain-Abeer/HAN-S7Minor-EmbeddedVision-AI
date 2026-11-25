@@ -1,6 +1,9 @@
-# ===== Paths =====
-DATA_ROOT    = r"D:\HAN\Semester 7 Minor\billiards-game-clips"
-CLIP_DIR     = DATA_ROOT + r"\game1"
+# ===== inputs =====
+CLIP_ROOT    = r"D:\HAN\Semester 7 Minor\billiards-game-clips\game1"
+
+# ===== outputs =====
+DATA_ROOT    = r"D:\HAN\Semester 7 Minor\billiards-game-clips\IAI"
+CLIP_DIR     = CLIP_ROOT
 CROP_ROOT    = DATA_ROOT + r"\unsorted_png"
 MASK_ROOT    = DATA_ROOT + r"\mask_png"
 LOGS_DIR     = DATA_ROOT + r"\logs"
@@ -8,8 +11,8 @@ FIGURES_DIR  = DATA_ROOT + r"\figures"
 SPLITS_CSV   = DATA_ROOT + r"\splits.csv"
 FEATURES_CSV = DATA_ROOT + r"\features.csv"
 DATASET_CSV  = DATA_ROOT + r"\dataset.csv"
-REJECT_LOG      = LOGS_DIR + r"\rejects_extract.csv"
-MASK_REJECT_LOG = LOGS_DIR + r"\rejects_mask.csv"
+DATASET_CLEAN_CSV = DATA_ROOT + r"\dataset_clean.csv"
+RETAINED_TXT = DATA_ROOT + r"\retained_features_correlations.txt"
 
 # ===== Extraction (1.2.3 + 1.2.4) =====
 N_CLIPS = 5                          # Number of source clips to process.

@@ -1,0 +1,1377 @@
+================================================================================
+GPT CONTEXT HANDOFF - UNTIL PRELIM ML REPORT
+================================================================================
+File:       gpt-until-prelimMLreport.txt
+Purpose:    Full context transfer to a new GPT chat.
+            A fresh GPT reading only this file must be able to continue
+            the next task without access to the prior conversation.
+Scope:      Sections 0 through 9 of the IAI devtracker: COMPLETE.
+            Section 10 (Prelim ML report lifecycle): NEXT.
+            Full ML and DL reports: NOT STARTED.
+Author:     Hossain Abeer
+Module:     IAI (EVML-EVD3), 7th semester minor
+            Embedded System & Vision with Deep & Machine Learning
+Date:       Snapshot taken at completion of devtracker 9.4.
+================================================================================
+
+
+================================================================================
+0. HOW TO USE THIS FILE
+================================================================================
+Read sections in order on first load. After that, use as reference:
+
+  Section 1   -> Project identity (who, what, why)
+  Section 2   -> Two-roadmap structure (designtracker vs devtracker)
+  Section 3   -> Current state (frontier, next task)
+  Section 4   -> Domain facts (constants.py content)
+  Section 5   -> Program parameters (config.py content)
+  Section 6   -> Codebase inventory (every .py file, purpose, key fns)
+  Section 7   -> Pipeline walkthrough (step-by-step, what each does)
+  Section 8   -> Output artefacts (every CSV, figure, log)
+  Section 9   -> Design decisions ledger (why each choice was made)
+  Section 10  -> Limitations and deviations ledger
+  Section 11  -> Working style / interaction rules
+  Section 12  -> What's next (Section 10 / Prelim ML report)
+  Section 13  -> File paths and environment
+  Section 14  -> Version pins and dependencies
+  Section 15  -> Glossary of project-specific terms
+
+Tone:       Terse. Tables and bullets over prose. This file is the
+            authority on state. Do not invent steps. Do not skip
+            ahead. Section 12 is the only live work item.
+================================================================================
+
+
+================================================================================
+1. PROJECT IDENTITY
+================================================================================
+
+INSTITUTION
+  HAN University of Applied Sciences.
+  4th year BEng Electrical & Electronics Engineering (EE).
+  Minor: Embedded System & Vision with Deep & Machine Learning.
+
+MODULE
+  IAI (course code EVML-EVD3).
+  Hands-on ML/DL for (embedded) computer vision.
+  Assessed via three reports + quizzes:
+    Prelim ML report   (week 40)    ~40% of ML grade content
+    Full ML report     (week 45)
+    DL report          (week 2.9)
+  Quizzes 4 (weeks 40-ish) + 1 (DL period) = 20% each period.
+
+LARGER PROJECT (S7 Minor Project)
+  Full system: overhead camera + SBC detects game start, counts games,
+  optionally bills, distinguishes ball types, applies rules, outputs.
+  NDA-restricted. Only functional exhibition to assessors.
+
+IAI SUBCOMPONENT (this work)
+  OCR of numerals on billiard balls.
+  In scope:   balls numbered 1-15.
+  Out of scope: cue ball (no numeral; resolved by parent project),
+                snooker (no numerals), game rule logic, tracking,
+                billing, table geometry, external integration.
+  Fits IAI project option 3: "ML objective in your EVML project
+  (replace the classifier in step 5 of the conventional vision train)."
+
+THREE DELIVERABLES = ONE WORKFLOW
+  The three reports are iterations of the SAME project at different
+  semester stages, not three separate projects.
+  Prelim ML  -> data + features + EDA + preprocessing
+  Full ML    -> + model selection, training, deployment, comparison
+  DL report  -> + augmentation, custom CNN, transfer learning,
+                deployment, comparison back to ML approach
+  Single improvement narrative across all three: classical features
+  plateau at X%; CNN with augmentation reaches Y%.
+
+DATA SOURCE - SCREEN RECORDING PIVOT
+  Original plan: overhead camera over a physical billiard table.
+  Actual source: screen recording of a billiard graphics/video game.
+  Approved by IAI module lead (Jeroen Veen).
+  Consequences:
+    - "Virtual camera" is fixed (top-down, 1080p, 30 fps).
+    - Lighting mode fixed.
+    - Cloth colour fixed.
+    - Angle, distance, lighting, background are CONSTANTS, not axes.
+    - Only variation: ball positions, orientations, rack layouts, clip
+      length.
+    - Augmentation (Phase 4) carries the variation burden.
+    - This is documented in Preliminary ML section 3.
+================================================================================
+
+
+================================================================================
+2. TWO-ROADMAP STRUCTURE
+================================================================================
+
+Two tracking documents exist. They are NOT the same. Each has a job.
+
+DESIGNTRACKER - "WHY"
+  File:        IAI-gpt-roadmap-designtracker.txt
+  Format:      One IAI-gpt-designtracker-<step>.txt per step.
+  Content:     The design DECISION, rationale, considered alternatives,
+               rejected alternatives, downstream implications, skeletal
+               code with [PARAMS] placeholders.
+  Extends to:  Phase 3 (Full ML Model & Report) + Phase 6 (Final DL
+               Report).
+  Purpose:     Traceable decision record. Report-writing raw material.
+
+DEVTRACKER - "WHAT WAS DONE"
+  File:        IAI-gpt-roadmap-devtracker.txt
+  Format:      One IAI-gpt-devtracker-<step>.txt per substep.
+  Content:     The EXECUTION record: commands run, output captured,
+               verification line (checks passed/failed), artefacts
+               produced, deviations from design.
+  Stops at:    Section 10 = Preliminary ML Report (10.1 draft through
+               10.6 incorporate). No Full ML or DL section yet.
+  Purpose:     Progress ledger. What is actually done vs pending.
+
+MAPPING - DESIGNTRACKER TO DEVTRACKER
+  Both share substep numbers (e.g. 1.2.3 in both). But ORDER differs:
+  design puts concept-first, dev puts execution-first. See devtracker
+  9.1-9.4 for example: dev runs cleaning->scale->pipeline->smoke, which
+  in design was written 1.7.1->1.7.2->1.7.3->test.
+
+INCONSISTENT RENUMBERING NOTICE
+  Some earlier .txt files use the design numbering (1.5.x, 1.6.x, 1.7.x)
+  while the devtracker notes use the execution numbering (7.x, 8.x,
+  9.x). The mapping is:
+    design 1.5.1  -> dev 6.1  (mask extraction)
+    design 1.5.2  -> dev 7.1  (feature extraction)
+    design 1.5.3  -> dev 7.3  (assemble dataset)
+    design 1.6.1  -> dev 8.1  (class balance)
+    design 1.6.2  -> dev 8.2  (feature distributions)
+    design 1.6.3  -> dev 8.3  (correlations + retained features)
+    design 1.7.1  -> dev 9.1  (cleaning)
+    design 1.7.2  -> dev 9.2  (scaling)
+    design 1.7.3  -> dev 9.3  (build pipeline)
+    design test   -> dev 9.4  (smoke test)
+  This file uses DEV numbers unless specified. Assume dev numbering.
+
+THREAD STRUCTURE (interaction rule)
+  Thread A (Teaching):  Learner + GPT learns a concept, produces a .txt
+                        note. Not visible to Thread B.
+  Thread B (Consultant): Note pasted here for validation.
+  Rule: Thread B must not assume prior teaching. Signal words:
+    "teach"    -> Thread B teaches this subtopic
+    "validate" -> note is pasted, Thread B reviews
+  See IAI-gpt-explains-approach_method-teaching_n_consult.txt for full
+  method.
+================================================================================
+
+
+================================================================================
+3. CURRENT STATE - FRONTIER
+================================================================================
+
+COMPLETED IN DEVTRACKER
+  Section 0  Environment setup, Git, IDE, scope lock. 0.1-0.4 all PASS.
+  Section 1  Environment verify, data paths, repo layout. 1.1-1.3 PASS.
+  Section 2  Cloth colour lock, module structure, constants.py,
+             config.py. 2.1-2.3b PASS.
+  Section 3  extract_crop.py + dry run + full run. 3.1-3.3 PASS.
+             Motion-gated pipeline. 1438 crops from 5 clips.
+  Section 4  Sort (keyboard_sorter.py) + audit.py + audit run.
+             4.2-4.4 PASS. 505 kept after 64% cull. 14/15 classes below
+             50/class floor. Documented deviation.
+  Section 5  split.py + split run + verify_split.py. 5.1-5.3 PASS.
+             val=clip5, test=clip1, train=clips2+3+4. Matrix
+             train=255 / val=128 / test=122. Two soft misses:
+             val C10=2, test C7=1.
+  Section 6  mask.py. 6.1 PASS (code written and run; rejection
+             produced reject log).
+  Section 7  features.py + features run + assemble.py. 7.1-7.3 PASS.
+             7.2 revealed semantic failure: 5/23 features constant zero
+             (see Section 10). 7.3 dataset.csv = 492 rows.
+  Section 8  balance.py + distributions.py + correlations.py. 8.1-8.3
+             PASS. Retained features after 8.3 = 15.
+  Section 9  clean.py + scale.py + pipeline.py + smoke test. 9.1-9.4
+             PASS. StandardScaler on 245 train rows. Pipeline
+             assembly confirmed.
+
+FRONTIER MARKER
+  Last completed: devtracker 9.4 (smoke test pipeline.py) - PASS.
+  Next open:      devtracker Section 10 / 1.8 - Preliminary ML Report
+                  lifecycle (see Section 12 of this file).
+
+DOWNSTREAM PENDING
+  Phase 2 (Classical ML training: SVM, k-NN, RF) - after Prelim ML
+      report is submitted.
+  Phase 3 (Full ML report: model selection, training, deployment).
+  Phase 4 (DL: custom CNN + transfer learning).
+  Phase 5 (DL deployment + comparison).
+  Phase 6 (Final DL report).
+
+SECTIONS 0-9 = "PIPELINE COMPLETE THROUGH PREPROCESSING".
+  No model has been trained yet. All work so far is data + features +
+  EDA + preprocessing. That is exactly what the Preliminary ML report
+  requires. Model training starts AFTER 10.x.
+================================================================================
+
+
+================================================================================
+4. DOMAIN FACTS - constants.py CONTENT
+================================================================================
+
+File: src/constants.py
+Purpose: Facts about the world. Not program parameters (those in config).
+
+NUM_CLASSES = 15
+CLASS_IDS   = [1..15]
+
+# Cloth colour locked at 2.1 (from clothColor_noAspectRatio.png,
+# sampled via clothColor_sampler.py, widened per widening_rules.md):
+CLOTH_H_LO = 80      # Hue
+CLOTH_H_HI = 100
+CLOTH_S_LO = 100     # Saturation
+CLOTH_S_HI = 255
+CLOTH_V_LO = 30      # Value (brightness)
+CLOTH_V_HI = 255
+
+# Data targets:
+MIN_CROPS_PER_CLASS = 50
+TARGET_TOTAL_CROPS  = 750
+
+WHY THESE HSV BOUNDS
+  Cloth is teal (H~90). Raw pixel sample from the dark shadow region:
+  H(89-92), S(163-255), V(39-77).
+  Widening rules (widening_rules.md):
+    H: center 90, +/- 10  -> 80-100. Rejects wood rails and ball hues.
+    S: floor 100          -> rejects white cue ball (S~0) and white
+                             stripe bands while keeping cloth (S>160).
+    V: floor 30           -> captures shadow (V=39) but stops before
+                             pure black (V=0), which would include the
+                             8-ball and pockets.
+================================================================================
+
+
+================================================================================
+5. PROGRAM PARAMETERS - config.py CONTENT
+================================================================================
+
+File: src/config.py
+Purpose: How the program runs. Not world facts (those in constants.py).
+
+PATH GROUP
+  DATA_ROOT    = D:\HAN\Semester 7 Minor\billiards-game-clips
+  CLIP_DIR     = DATA_ROOT\game1        (raw .mp4 clips)
+  CROP_ROOT    = DATA_ROOT\unsorted_png (sorted class folders 1-15)
+  MASK_ROOT    = DATA_ROOT\mask_png     (parallel mask tree)
+  LOGS_DIR     = DATA_ROOT\logs
+  FIGURES_DIR  = DATA_ROOT\figures
+  SPLITS_CSV   = DATA_ROOT\splits.csv
+  FEATURES_CSV = DATA_ROOT\features.csv
+  DATASET_CSV  = DATA_ROOT\dataset.csv
+  REJECT_LOG      = LOGS_DIR\rejects_extract.csv
+  MASK_REJECT_LOG = LOGS_DIR\rejects_mask.csv
+
+EXTRACTION GROUP (1.2.3 + 1.2.4)
+  N_CLIPS          = 5
+  FRAME_STRIDE     = 1     # every frame (motion gate does the filtering)
+  BLUR_THRESHOLD   = 75.0  # Laplacian variance floor
+  DUP_THRESHOLD    = 3.0   # mean abs pixel diff floor to last kept
+  DUP_RESIZE_W     = 160   # downsample width before diff
+  DUP_RESIZE_H     = 90    # downsample height before diff
+  MOTION_THRESHOLD = 4.0   # motion state machine threshold
+
+DETECTION GROUP (1.3.1)
+  MIN_BALL_AREA    = 800   # px^2
+  MAX_BALL_AREA    = 6000  # px^2
+  MIN_CIRCULARITY  = 0.7   # 4*pi*area / perimeter^2
+  DET_MORPH_KERNEL = 5
+  DET_MORPH_OPEN   = 2
+  DET_MORPH_CLOSE  = 2
+
+CROP GROUP (1.3.2)
+  PADDING_PCT      = 0.15  # 15% margin on all sides
+
+MASK GROUP (1.5.1)
+  MASK_S_MAX         = 60    # max saturation for "white" numeral pixels
+  MASK_V_MIN         = 180   # min brightness for "white" numeral pixels
+  MASK_MORPH_KERNEL  = 3
+  MASK_MORPH_OPEN    = 1
+  MASK_MORPH_CLOSE   = 0     # CRITICAL: must stay 0
+  MIN_MASK_AREA      = 30    # pixels
+
+FEATURES GROUP (1.5.2)
+  USE_FEATURES      = [hole_count, connected_component_count,
+                       blob_area_ratio, hole_area_ratio, hole_aspect,
+                       hole_centroid, projections]
+  PROJ_BINS         = 8
+  KEEP_HU_MOMENTS   = False
+  MIN_HOLE_AREA_PX  = 5
+
+WHY MOTION GATE INSTEAD OF STRIDE
+  Stride-based extraction (original design) wasted frames on static
+  aiming phases and motion blur. Replaced with a state machine that
+  only triggers extraction after the scene has been still for >=3
+  consecutive frames.
+  Consequence: FRAME_STRIDE=1 (check every frame), motion gate does
+  the filtering. Yield is governed by shot-settle count, not stride.
+
+WHY MASK_MORPH_CLOSE = 0
+  MORPH_CLOSE (dilate then erode) FILLS holes. Numerals 0/6/8/9 are
+  defined by their holes. Closing would destroy the very feature that
+  1.5.2 relies on. OPEN (erode then dilate) is safe - removes specks.
+
+WHY PADDING = 15%
+  Smallest padding that guarantees full ball + antialiased edge + a
+  thin cloth ring. The cloth ring is USEFUL: downstream masking at
+  1.5.1 uses the same CLOTH_* HSV range to strip it out, leaving a
+  clean ball-only region.
+================================================================================
+
+
+================================================================================
+6. CODEBASE INVENTORY
+================================================================================
+
+All .py files in src/. Each entry: filename, purpose, key functions,
+which tracker step it implements.
+
+src/config.py           (2.3b)
+  Parameters. See Section 5.
+
+src/constants.py        (2.3a)
+  Domain facts. See Section 4.
+
+src/clothColor_sampler.py  (2.1 tool)
+  Interactive OpenCV GUI. Left-click samples a pixel; drag samples a
+  rectangle and prints H/S/V min/max. Used to derive CLOTH_* bounds.
+  One-shot tool, not part of pipeline.
+
+src/widening_rules.md   (2.1 doc)
+  Documents how raw HSV bounds were widened to final values.
+
+src/extract_crop.py     (3.1)
+  FUSED EXTRACTION SCRIPT. Motion-gated. Combines 1.2.3 + 1.2.4 +
+  1.3.1 + 1.3.2 in one loop.
+  Key functions:
+    main()                  - loops over clips, state machine for
+                              motion gate, calls passes_filter then
+                              detect_balls then crop_and_save.
+    passes_filter(frame, clip_id, frame_idx)
+                            - blur gate (Laplacian variance) + duplicate
+                              gate (mean abs diff to last kept).
+    detect_balls(frame)     - cloth HSV mask inverted, morphology,
+                              contours, area+circularity filter.
+                              Uses RETR_LIST (not RETR_EXTERNAL).
+    crop_and_save(frame, regions, clip_id, frame_idx)
+                            - padded crop, writes to CROP_ROOT.
+    log_reject(reason, clip_id, frame_idx, metric_value)
+                            - appends to REJECT_LOG.
+  Output: unsorted_png\clip{id}_frame{idx:06d}_ball{k}.png
+  Env vars for dry run: EVML_DRY_RUN_CLIPS, EVML_DRY_RUN_FRAMES.
+
+src/debug_mask.py       (3.1 diagnostic)
+  Saves debug_mask.png + prints contour stats. One-shot diagnostic.
+
+src/extract_dry_run.ps1 (3.2 tool)
+  PowerShell wrapper for dry run.
+
+src/keyboard_sorter.py  (4.2 tool)
+  Tkinter GUI. Displays one crop at a time, user presses a key to
+  move it to the matching class folder or delete it.
+  Key map:
+    1-9       -> classes 1-9
+    q,w,e     -> classes 10,11,12
+    a,s,d     -> classes 13,14,15
+    x         -> DELETE
+    space     -> SKIP
+    ESC       -> QUIT
+  Uses shutil.move (preserves filenames).
+
+src/audit.py            (4.3)
+  Counts PNGs per class folder under CROP_ROOT, prints table, flags
+  SHORT classes (<MIN_CROPS_PER_CLASS). Tee stdout to log.
+  Key functions:
+    count_per_class(crop_root, class_ids)
+    report_counts(counts, min_per_class)
+    _tee_stdout(log_path)
+
+src/split.py            (5.1)
+  Group-by-clip split. Deterministic. No random seed.
+  Key functions:
+    scan_crops(crop_root, class_ids)      -> (rel_path, label, clip_id)
+    score_clips_by_coverage(records)      -> {clip: (covered, min_count)}
+    assign_roles(scores)                  -> {clip: role}
+    write_splits_csv(records, roles, out) -> splits.csv
+    coverage_matrix(records)              -> diagnostic
+  Assignment rule: rank 0 -> val, rank 1 -> test, ranks 2+ -> train.
+  Tie-break: clip_id ascending.
+  Output: splits.csv with columns filename, role.
+
+src/verify_split.py     (5.3)
+  Reads splits.csv, prints matrix, checks floors.
+  HARD_FLOOR_TRAIN   = 5
+  HARD_FLOOR_VALTEST = 1
+  SOFT_TARGET_VALTEST = 3
+  Key functions: _tee_stdout, load_splits, class_from_filename,
+                 build_matrix, print_matrix, check_floors,
+                 report_failures, main.
+
+src/mask.py             (6.1)
+  Extracts numeral-region mask per crop. HSV high-V low-S threshold,
+  intersect with non-cloth, morphology OPEN only.
+  Key functions:
+    extract_numeral_mask(crop_bgr)
+    mask_is_usable(mask)
+    log_reject(class_id, filename, n_pixels)
+    build_masks(crop_root, mask_root, class_ids, dry_run_crops=0)
+  Output: mask_png\<class>\<crop>_mask.png
+  Reject log: MASK_REJECT_LOG (rejects_mask.csv).
+  Env var: EVML_DRY_RUN_CROPS.
+
+src/mask_dry_run.ps1    (6.2 tool)
+  PowerShell wrapper (sets EVML_DRY_RUN_CROPS=20).
+
+src/mask_diagnose_thresholds.py  (7.2 diagnostic, named .ps1 in file
+                                    but is Python source)
+  Tests six (V_MIN, S_MAX) threshold pairs across five representative
+  crops. Root-cause tool for the 7.2 semantic failure (hole_count=0).
+  THIS IS THE KEY DIAGNOSTIC for the 5-dead-features finding.
+
+src/mask_diagnostic_5x5.ps1  (7.2 diagnostic)
+  Tests whether MORPH_CLOSE=5x5 would recover holes. One-liner Python
+  invoked via PowerShell. Result contributed to 7.2 conclusion.
+
+src/features.py         (7.1)
+  Feature extraction from masks. 23 features in 7 categories.
+  Key functions:
+    largest_blob(mask)              - largest non-background CC
+    find_holes(blob_mask, min_area_px) - background CCs not touching
+                                        border, area >= min
+    projections_binned(blob_mask, n_bins, blob_area)
+                                    - column/row sums split into
+                                      n_bins, normalised by blob_area
+    features_from_mask(mask, use_features, proj_bins, keep_hu,
+                       min_hole_area)  - main feature vector builder
+    build_features(mask_root, class_ids, out_csv, ...)
+                                    - walks mask folders, writes CSV
+  Output: features.csv
+  columns: filename (crop name, _mask suffix stripped) + 23 features.
+
+src/assemble.py         (7.3)
+  Inner-joins features.csv with splits.csv on filename, extracts label
+  from filename prefix, writes dataset.csv.
+  FEATURE_COLUMNS = 23 in canonical order.
+  Key functions:
+    assemble_dataset(features_csv, splits_csv, dataset_csv,
+                     feature_columns)
+    main()
+  Output: dataset.csv
+  columns: filename | label | role | <23 features>
+  Zero-cell detection post-join built in.
+
+src/balance.py          (8.1)
+  Loads dataset.csv. Per-class counts, per-role counts, train max/min
+  ratio, verdict (BALANCED / MODERATE / SEVERE).
+  Thresholds: MODERATE_RATIO = 1.5, SEVERE_RATIO = 3.0
+  Verdict branches:
+    SEVERE   -> class_weight='balanced' in Phase 2 for SVC and RF.
+    MODERATE -> document, no correction.
+    BALANCED -> document.
+  Saves class_balance.png, logs/1.6.1_balance_report.txt.
+
+src/distributions.py    (8.2)
+  Loads dataset.csv, filters to role=='train'. Boxplot per feature
+  (feature vs class 1-15) plus a grid overview.
+  FEATURE_COLUMNS = 23 (same canonical order as assemble.py).
+  Saves figures to FIGURES_DIR\feature_dist\.
+
+src/correlations.py     (8.3)
+  Feature-feature Pearson correlation + feature-label relevance
+  (ANOVA F + mutual information).
+  REDUNDANCY_THR = 0.9 (flag pairs with |r| >= 0.9).
+  Saves corr_heatmap.png and feature_label_relevance.csv.
+  NOTE: does NOT write retained_features_correlations.txt. That is a
+  HUMAN-WRITTEN config file per design 1.6.3 §11. Human reads the
+  heatmap + relevance table + 8.2 verdicts, then writes the retained
+  list manually.
+
+src/clean.py            (9.1)
+  Loads dataset.csv + retained_features_correlations.txt.
+  NaN check, IQR outlier detection on TRAIN ONLY, clip outliers.
+  CLIP_OR_REMOVE = "clip".
+  IQR_K = 1.5, MIN_IQR_FLOOR = 1e-6.
+  EXCLUDED_FEATURES = [connected_component_count, proj_x_0..6,
+                       proj_y_1..6] - 14 of the 15 retained features.
+  Only blob_area_ratio is "cleanable".
+  Post-clip: verifies projection sum-to-1 invariant.
+  Output: dataset_clean.csv, logs/1.7.1_cleaning_report.txt.
+
+src/scale.py            (9.2)
+  Loads dataset_clean.csv + retained_features_correlations.txt.
+  StandardScaler fit on train rows only. Transform all 3 roles.
+  SAVE_SCALED_CSV = True (inspection only, not re-fed into pipeline).
+  Saves before/after histograms (one per feature) and 3 CSVs.
+  Outputs: dataset_train_scaled.csv, dataset_val_scaled.csv,
+           dataset_test_scaled.csv, figures/scaling/scaling_<feature>.png,
+           logs/1.7.2_scaling_report.txt.
+
+src/pipeline.py         (9.3 + 9.4)
+  Factory function build_pipeline(classifier).
+  Returns sklearn Pipeline: [StandardScaler, classifier].
+  SCALER_CLASS = StandardScaler, FEATURE_STEP_NAME = "scaler",
+  CLASSIFIER_STEP_NAME = "clf".
+  Smoke test under __main__ prints Pipeline + grid keys.
+  No data loaded, no file written.
+================================================================================
+
+
+================================================================================
+7. PIPELINE WALKTHROUGH - STEP BY STEP
+================================================================================
+
+0.1.1  Python 3.11.9 installed at C:\dev\python311\
+       Reason: TensorFlow 2.15 / PyTorch 2.2 wheels only build against
+       3.11. 3.14 is incompatible.
+       Gotcha: py launcher does not register --target installs. Use
+       `python` directly.
+
+0.1.2  venv created at C:\dev\envs\IAI-env\
+       Gotcha: in PowerShell, activate via .\Scripts\Activate.ps1
+       (explicit .ps1). `activate` (no ext) is bash.
+
+0.1.3  requirements.txt installed.
+       Total ~700 MB. Key pins see Section 14.
+       opencv-python backtracked from 5.x to 4.11 (numpy<2.0 pin).
+       tf-keras backtracked to 2.15.1 (tf 2.15 pin).
+
+0.2.1  EVML_DATA env var set to C:\dev\IAI-data. Course convention.
+       NOT USED by this project (paths hardcoded in config.py).
+       Left set for course compliance.
+
+0.3    Git two repos: course mirror + own project. HTTPS + PAT.
+       VS Code interpreter pinned to venv via .vscode/settings.json.
+
+0.4    Scope locked: billiard balls 1-15 + cue excluded from OCR.
+
+1.1    Environment verified: cv2 4.11.0, sklearn 1.4.2, tf 2.15.1,
+       torch 2.2.2+cpu, numpy 1.26.4, pandas 2.1.4.
+
+1.2    5 clips present in game1/ (originally 5 min each; trimmed later).
+       Trim decision: post-break window, lossless stream copy (-c copy).
+       Positional shortcut risk flagged: staggered start offsets
+       recommended to prevent position-from-class leakage.
+
+1.3    Repo layout verified.
+
+2.1    Cloth colour locked: H(80-100), S(100-255), V(30-255).
+       Method: interactive sampler on clothColor_noAspectRatio.png,
+       raw values sampled, widened per widening_rules.md.
+
+2.2    Module structure: src/ + models/ created, 15 .py placeholders.
+
+2.3a   constants.py written. See Section 4.
+
+2.3b   config.py written. See Section 5. 5 groups.
+
+3.1    extract_crop.py written. FUSED extract+filter+detect+crop.
+       Motion-gate state machine implemented (frames_since_move >= 3).
+       First contour bug: RETR_EXTERNAL treated white UI border as the
+       only object. Fixed to RETR_LIST.
+
+3.2    Dry run. Three parameter tunings:
+       - BLUR_THRESHOLD 100->50 (later 75) due to Clipchamp re-encoding
+         softening.
+       - DUP_THRESHOLD 5.0->3.0 to allow slow ball motion.
+       - MIN_BALL_AREA 2000->800 after ball pixel size measured.
+
+3.3    Full run. Deviations from devtracker verify line documented.
+       First run (3.3 original): 377 crops across 4/5 clips, one clip
+       missing. Escalation triggered: pre-3.3 re-record at 3 min per
+       clip under "no pot, hit around" protocol (Option 4).
+       Re-record produced: clip1=4587 frames, kept=31, crops=367;
+       clip2=3545, kept=14, crops=163; clip3=5784, kept=24, crops=284;
+       clip4=5486, kept=25, crops=296; clip5=5739, kept=28, crops=328.
+       Total: 1438 crops from 25141 raw frames. ~98% frame rejection
+       rate (motion gate dominant filter).
+
+       IMPORTANT: pre-3.3 Option 4 was chosen over Option 5 (add clip6)
+       because DL report headroom was the deciding factor. Pre2-3.3
+       records the choice.
+
+4.2    Sort via keyboard_sorter.py. 1438 processed, 513 kept (35.6%),
+       925 deleted (64.3%). Deletion categories (estimated, post-4.2
+       note): severe blur ~370, cue balls ~140, merged blobs ~140,
+       HUD artifacts ~140, clipped edges ~135.
+       Per-class kept: C1=83, C2=24, C3=32, C4=37, C5=26, C6=36,
+                       C7=24, C8=34, C9=26, C10=12, C11=36, C12=45,
+                       C13=24, C14=36, C15=38. Total 513.
+       CnOCR was attempted as an OCR-assisted pre-sort. It broke the
+       environment (numpy upgrade to 2.4.6, opencv 5.0). Uninstalled;
+       re-pinned; rebuilt. Final decision: custom Tkinter GUI only.
+       NEVER INSTALL CnOCR OR SAME-LAYER ML OCR LIBS AGAIN.
+
+4.3    audit.py written. Idempotent, no external writes.
+
+4.4    Audit run. Authoritative numbers:
+         total = 505 (4.2's 513 was live-sort tally before final cull)
+         min = 12 (C10), max = 82 (C1)
+         14/15 SHORT below 50/class floor.
+       Decision: proceed with documented imbalance.
+       FRAME_STRIDE is already 1. Escalation path is dead.
+
+5.1    split.py written. Group-by-clip, deterministic, no random seed.
+       Score = (classes_covered, min_count). Rank 0 -> val, 1 -> test,
+       rest -> train.
+
+5.2    Split run. Output:
+         clip 5: covered=15, min_count=2, role=val
+         clip 1: covered=15, min_count=1, role=test
+         clip 2: covered=14, min_count=1, role=train
+         clip 3: covered=14, min_count=1, role=train
+         clip 4: covered=13, min_count=1, role=train
+       splits.csv written: 505 rows.
+
+5.3    Verify split. Matrix:
+                 train  val  test
+         C1      43     22   17
+         C2      14      5    5
+         C3      15      3   14
+         C4      16     10   10
+         C5       5     14    7
+         C6      18      8   10
+         C7      15      8    1    <- SOFT MISS (test)
+         C8      15      6   13
+         C9      12      6    7
+         C10      5      2    5    <- SOFT MISS (val)
+         C11     25      7    5
+         C12     28     11    6
+         C13      7      3   13
+         C14     16     13    5
+         C15     21     10    4
+         total  255    128  122
+       Hard floors PASS (all classes >= 1 in val/test; train >= 5).
+       Two soft misses flagged. NON-BLOCKING.
+
+6.1    mask.py written and run. Rejection log produces reject log
+       only. The masked tree lives at mask_png/.
+
+7.1    features.py written. 23-feature vector per mask.
+
+7.2    features.py run. MECHANICAL PASS but SEMANTIC FAIL.
+       5/23 features are CONSTANT ZERO across all 492 rows:
+         hole_count, hole_area_ratio, hole_aspect,
+         hole_centroid_dx, hole_centroid_dy.
+       Root cause (confirmed by mask_diagnose_thresholds.py):
+         Source is 1080p screen recording of a 720p-effective game.
+         Numeral patch (white disk with numeral) is too small /
+         fragmented at this resolution. Threshold MASK_V_MIN=180 /
+         MASK_S_MAX=60 collapses the patch into specks. The numeral
+         becomes a NOTCH (open to background), not an ENCLOSED HOLE.
+         find_holes() correctly rejects notches -> returns 0 holes.
+       This is a SOURCE-DATA LIMITATION, not a pipeline defect.
+       Tested threshold relaxation (V_MIN 180->100, S_MAX 60->120):
+       patches grow but numerals still do not enclose.
+       MORPH_CLOSE=5x5 tested: merges patches but creates false holes
+       (fills real gaps) - unusable.
+
+post-7.2  DECISION RECORD. Key points:
+          - Do NOT re-record. Volume does not fix resolution ceiling.
+          - Do NOT re-run for 4, 7, 11. Data-starvation vs feature-
+            overlap distinction: 4/11 fail on feature overlap (volume
+            won't help), 7 fails only on test report thinness (1 crop,
+            val=8 already fine).
+          - Proceed with 18 live features (23 minus 5 dead).
+          - Phase 4 CNN is the actual recovery mechanism. Time
+            reallocated there.
+          - Masking path is still justified: required by Prelim ML
+            rubric, is the ML baseline Phase 4 must be compared
+            against, and its failure IS a finding.
+          - Devtracker stops at Section 10. Extension deferred.
+
+7.3    assemble.py run. Inner join features.csv + splits.csv.
+       Result: dataset.csv, 492 rows x 26 cols
+       (filename | label | role | 23 features).
+       492 (not 505) because 13 crops were rejected at 6.1 (mask too
+       small). Zero-cell check: PASS (all classes still present in all
+       roles after join).
+
+8.1    balance.py run. Train max/min ratio detected as SEVERE
+       (8.6:1 -> 43/5). class_weight='balanced' scheduled for Phase 2.
+
+8.2    distributions.py run. 23 individual boxplots + 1 grid.
+       Verdict: hole_count, hole_area_ratio, hole_aspect,
+       hole_centroid_dx, hole_centroid_dy are FLAT (confirming 7.2).
+       Others show separation.
+
+8.3    correlations.py run. Heatmap + relevance table.
+       HUMAN STEP: retained_features_correlations.txt written manually.
+       Retained set = 15 features (down from 23):
+         connected_component_count, blob_area_ratio,
+         proj_x_0, proj_x_1, proj_x_2, proj_x_3, proj_x_4, proj_x_5,
+         proj_x_6,
+         proj_y_1, proj_y_2, proj_y_3, proj_y_4, proj_y_5, proj_y_6.
+       Dropped 8:
+         - 5 dead features (from 7.2)
+         - 3 more from 8.3 correlation: proj_x_7, proj_y_0, proj_y_7.
+         (Exact drop reasons are recorded in 8.3's log/report file;
+          not re-listed here. Current fact: retained = 15.)
+
+9.1    clean.py run. 0 NaNs. 0 outliers in blob_area_ratio (the only
+       cleanable feature - the other 14 are excluded by design because
+       they are discrete or structural).
+       Projection sum-to-1 invariant verified post-clip.
+       dataset_clean.csv = dataset.csv (no changes made).
+
+9.2    scale.py run. StandardScaler fit on 245 train rows.
+       Transformed 245+128+119 = 492 rows.
+       15 before/after histograms saved.
+       3 scaled CSVs written (inspection only; NOT re-fed into
+       pipeline.py).
+       Observation: 4 rows show |scaled| > 5 on proj_x_0 or proj_y_6.
+       Classified as legitimate sparse signal, not outlier contamination.
+       Accepted and documented.
+       Caveat 1: projection sum-to-1 broken after scaling.
+       Caveat 2: connected_component_count becomes non-integer.
+
+9.3    pipeline.py written. Factory returns
+       Pipeline([("scaler", StandardScaler()), ("clf", classifier)]).
+       No data loaded, no file written.
+
+9.4    Smoke test PASS. Output:
+         Pipeline(steps=[('scaler', StandardScaler()),
+                         ('clf',    DummyClassifier())])
+       Two steps, correct order, correct names.
+================================================================================
+
+
+================================================================================
+8. OUTPUT ARTEFACTS INVENTORY
+================================================================================
+
+All located under D:\HAN\Semester 7 Minor\billiards-game-clips\
+except source code (which lives in the repo).
+
+RAW INPUT
+  game1\billiards-game-clip1.mp4 ... clip5.mp4
+    ~3 min each. Overhead view. 1080p. 30 fps.
+
+CROPS
+  unsorted_png\1\ ... 15\
+    505 crops total after cull at 4.2.
+    Filenames: clip{id}_frame{idx:06d}_ball{k}.png
+
+MASKS
+  mask_png\1\ ... 15\
+    Parallel tree. Filenames: <crop_basename>_mask.png.
+    492 masks (13 crops rejected at 6.1).
+
+CSVs (top-level)
+  splits.csv                  505 rows. cols: filename, role.
+  features.csv                492 rows. cols: filename + 23 features.
+  dataset.csv                 492 rows. cols: filename, label, role
+                              + 23 features.
+  dataset_clean.csv           492 rows. Same as dataset.csv (no
+                              changes made at 9.1).
+  dataset_train_scaled.csv    245 rows. (inspection only)
+  dataset_val_scaled.csv      128 rows.
+  dataset_test_scaled.csv     119 rows.
+  retained_features_correlations.txt
+                              15 lines (human-written config).
+  feature_label_relevance.csv Report artefact from 8.3.
+
+LOGS
+  logs\rejects_extract.csv            from 3.1/3.3 (frame-level)
+  logs\rejects_mask.csv               from 6.1 (mask-level)
+  logs\audit_class_count.txt          from 4.3/4.4
+  logs\1.4.2_stratification.txt       from 5.3
+  logs\1.5.3_join_report.txt          from 7.3
+  logs\1.6.1_balance_report.txt       from 8.1
+  logs\1.6.3_redundancy_flags.txt     from 8.3
+  logs\1.7.1_cleaning_report.txt      from 9.1
+  logs\1.7.2_scaling_report.txt       from 9.2
+  logs\9.4_smoke_test.txt             from 9.4 (optional)
+  logs\debug_mask.png                 from 3.1 diagnostic
+  logs\whiteness_diag\                from 7.2 diagnostic
+
+FIGURES
+  figures\class_balance.png           from 8.1
+  figures\feature_dist\               from 8.2 (23 + grid)
+  figures\corr_heatmap.png            from 8.3
+  figures\scaling\                    from 9.2 (15 before/after)
+
+REPORT SURFACE - WHICH ARTEFACTS GO WHERE
+  Prelim ML section 3 (data acquisition + exploration):
+    - class_balance.png              (8.1)
+    - feature_dist\ curated 5-10     (8.2)
+    - corr_heatmap.png + relevance   (8.3)
+    - scaling\ curated 3-5           (9.2)
+    - Count tables from 4.4, 5.3
+    - reject logs as evidence
+  Not the full set - CURATE for the report. Storage is cheap, report
+  space is not (5 A4 max for section 3).
+================================================================================
+
+
+================================================================================
+9. DESIGN DECISIONS LEDGER - WHY EACH CHOICE
+================================================================================
+
+DATA SOURCE
+  Screen recording of billiard game (not physical camera).
+  Reason: approved by module lead; avoids rig setup; deterministic
+  (same game build = same cloth, lighting, resolution across clips).
+  Cost: 720p-effective render, hence the 7.2 semantic failure.
+
+MOTION GATE OVER STRIDE
+  State machine fires extraction only after scene still for >=3 frames.
+  Reason: eliminates aiming-phase frames and motion blur without
+  manual trim. Yield becomes shot-count-proportional, not stride-
+  proportional.
+
+PADDING 15%
+  Smallest padding that guarantees full ball + antialiased edge + a
+  useful cloth ring. Cloth ring is stripped downstream.
+
+MASK_MORPH_CLOSE = 0
+  Closing fills holes. Must not do that for numerals 0/6/8/9.
+
+CROP-LEVEL BLUR FILTER: SKIPPED
+  Frame-level blur filter at 3.1 handles it. Manual audit at 4.2
+  removes residual bad crops. Second threshold would need second
+  justification.
+
+CROP FORMAT: PNG
+  Lossless. Small file size at ball radius. Matches course scripts.
+
+SORTING: SCRIPTED CROP + MANUAL KEYBOARD GUI
+  Scripted extraction + cropping (reproducible, unbiased). Manual
+  keyboard sort (Tkinter GUI) - forces visual inspection of every
+  crop, which is the audit anyway. Rejected: drag-and-drop in
+  Explorer (slow), OCR-assisted pre-sort (circular, and CnOCR broke
+  env).
+
+SPLIT: GROUP-BY-CLIP
+  Frames 5 apart within a clip are near-identical. Group-by-clip
+  prevents leakage. Rejected: file-level random (leaks frames across
+  roles).
+
+SPLIT RATIO: 3/1/1 = 60/20/20
+  With 5 clips, only partition. Rejected 2/1/2 (val too small),
+  4/1/0 (no test), 2/1/1 (one clip homeless).
+
+SPLIT ASSIGNMENT: BEST COVERAGE -> VAL, NEXT -> TEST, REST -> TRAIN
+  Val looked at repeatedly during training; needs most coverage.
+  Deterministic (no random seed).
+
+FEATURE CHOICE (23 engineered -> 15 retained)
+  Engineered: hole geometry + projections. See Section 6 (features.py).
+  Rejected: raw pixels (curse of dimensionality), colour histograms
+  (weak signal - solids share colour with stripes), Hu moments on ball
+  outline (destroys rotation info needed for 6/9), ORB (weak on small
+  low-contrast numerals).
+
+CLEANING: IQR K=1.5 ON TRAIN ONLY, CLIP NOT REMOVE
+  Thresholds from train -> applied to all. Rejected: z-score
+  (non-normal features). Rejected: remove (breaks class balance).
+  Excluded from cleaning:
+    - discrete features (IQR=0 kills minority values)
+    - projection bins (bounded sum-to-1 breaks under clip)
+  Only blob_area_ratio is cleaned.
+
+SCALING: StandardScaler FIT ON TRAIN ONLY
+  SVM RBF and k-NN are distance-based. RF is scale-invariant but
+  shared pipeline keeps uniformity. Rejected: MinMax (sensitive to
+  tails), Robust (9.1 already handled tails).
+
+PIPELINE: [StandardScaler, Classifier]
+  Refits per CV fold. Prevents leakage. Rejected: pre-scaled
+  dataset outside pipeline (leaks). Cleaning kept OUTSIDE pipeline
+  (accepted simplification - marginal benefit, real complexity cost).
+
+CLASS IMBALANCE: class_weight='balanced' IN PHASE 2
+  Not resampling. Weighting preserves data integrity. Rejected:
+  resampling (distorts distribution), document-only (weakest).
+
+TEST/TRAIN MODEL SPLIT
+  Test set held out. Looked at ONCE. Train only for fit. Val for
+  tuning. No exceptions.
+
+AUGMENTATION (Phase 4, planned)
+  Needed: brightness/contrast/perspective, NOT blanket rotation (6/9
+  ambiguity requires careful rotation design). Aggressive on minority
+  classes (10, 2, 7, 13, 5).
+================================================================================
+
+
+================================================================================
+10. LIMITATIONS AND DEVIATIONS LEDGER
+================================================================================
+
+Every known limitation. Each must appear in Preliminary ML section 3
+(or Full ML section 8 / DL section 6 if relevant).
+
+L1  DATASET SIZE - 505 CROPS / 15 CLASSES
+    Average ~33/class. Only C1 (82) exceeds 50/class floor.
+    14/15 classes are SHORT vs design target of 50/class.
+    Cause: motion-gated extraction yields ~1 crop per ball per shot.
+    Mitigated by: assessed as functional-pipeline bar (Jeroen Veen
+    prioritises working end-to-end over dataset size). Documented.
+
+L2  CLASS IMBALANCE - 8.6:1 TRAIN
+    Train max=43 (C1), min=5 (C5, C10). Verdict SEVERE.
+    Mitigated by: class_weight='balanced' in Phase 2.
+    Consequence: minority classes will still underperform. Document.
+
+L3  TEST THINNESS - C7 = 1 CROP
+    Class 7 test set is 1 crop. Test accuracy for class 7 will be
+    0% or 100% - statistically meaningless.
+    Not fixable by re-recording (same 4-6 h cost). Documented as
+    known limitation.
+
+L4  VAL THINNESS - C10 = 2 CROPS
+    Class 10 val set is 2 crops. Val accuracy for class 10 noisy.
+    Lower risk than L3. Documented.
+
+L5  5 DEAD FEATURES (7.2 SEMANTIC FAILURE)
+    hole_count, hole_area_ratio, hole_aspect, hole_centroid_dx,
+    hole_centroid_dy are constant zero across all 492 samples.
+    Cause: 720p-effective source resolution fragments the numeral
+    patch; numerals become notches, not enclosed holes.
+    Status: DOCUMENTED, not fixable. Phase 4 CNN recovers via learned
+    features. This failure IS a report finding - establishes the
+    classical ceiling the CNN is compared against.
+
+L6  6/9 ROTATION AMBIGUITY
+    A 6 rotated 180deg is visually identical to a 9. Projections are
+    rotation-invariant; hole features dead. Classification between
+    6 and 9 is UNACHIEVABLE with current classical features regardless
+    of volume. Colour as a 6/9 tie-break was considered but not
+    implemented.
+    Phase 4 CNN recovers this via non-rotation-invariant learned
+    features + careful augmentation. Key narrative for DL report.
+
+L7  FEATURE OVERLAP - 4/9, 11/1, 2/5
+    These class pairs overlap in silhouette projection space. Volume
+    will not fix it. Classical ceiling.
+
+L8  492 vs 505 ROWS
+    13 crops lost between 4.4 (505) and 7.3 (492) due to mask
+    rejection at 6.1. Documented.
+
+L9  PROJECTION SUM-TO-1 INVARIANT BROKEN AFTER SCALING
+    The 16 projection bins sum to 1 in raw form. Post-StandardScaler,
+    they do not. The classifier is fine (treats features
+    independently). The interpretation is not (any figure displaying
+    scaled projections must note this). Documented in 9.2.
+
+L10 DISCRETE FEATURES BECOME NON-INTEGER AFTER SCALING
+    connected_component_count raw values {1..8} become continuous
+    floats. Mathematically valid. Document.
+
+L11 FOUR ROWS EXCEED |5| AFTER SCALING
+    proj_x_0 (6.52 train, 6.81 test), proj_y_5 (5.79 test),
+    proj_y_6 (6.75 train). Legitimate sparse signal amplified by
+    division by small std. Not outlier contamination. Accepted.
+    Documented in 9.2.
+
+L12 POSITIONAL SHORTCUT RISK
+    Crops may correlate numeral with position if all clips start at
+    same gameplay phase. Mitigated at recording time by staggering
+    start offsets (need to verify this was actually applied - flag
+    for 10.1). Feature selection at 8.3 partially mitigates (proj
+    bins carry position signal). Augmentation at Phase 4 will fully
+    break it.
+
+L13 CNOOCR / EXTERNAL OCR NOT AVAILABLE
+    Cannot use pretrained digit recognisers (broke env; also
+    circular - solves the module's own OCR task during data prep).
+    Sorting was fully manual.
+
+L14 POOL BALL CONVENTION ASSUMED
+    Standard pool: 1-8 solid, 9-15 striped, colour-number mapping
+    follows convention. Not verified against game build. Assumed.
+    Fine for classification task; note if report needs to justify.
+
+L15 SCREEN RECORDING ≠ PHYSICAL CAMERA
+    Angle, distance, lighting, background are constants, not axes.
+    Dataset does not reflect real deployment variation. Augmentation
+    must compensate. Explicit in §3.
+================================================================================
+
+
+================================================================================
+11. WORKING STYLE / INTERACTION RULES
+================================================================================
+
+The learner (user) has explicitly set these rules. They must be
+preserved across GPT context handoffs.
+
+FORMAT
+  - Terse. Short sentences. Tables and bullet lists over prose.
+  - Per-subsection only. One step at a time. Do not skip ahead.
+  - When a note is pasted: validate -> say VALID or NOT VALID with
+    reasons -> prompt for next subsection title.
+  - When producing code: copy-pasteable first, then skeletal
+    explanation with [PARAMS] and DESCRIPTION per function, matching
+    the format of IAI-gpt-designtracker-*.txt files.
+  - If a step needs a data artefact, ask for it explicitly. Do not
+    assume.
+  - Do not invent steps. Devtracker is the authority on ordering.
+  - Do not include report-writing steps (10.x) in progress-bar
+    computations unless asked. Pipeline only (0.x through 9.x).
+
+TWO-THREAD WORKFLOW
+  Thread A (teaching):  learner + GPT learns a concept, produces a
+                        .txt note.
+  Thread B (validation): note pasted here for review.
+  Rule: this thread (B) MUST NOT assume prior teaching. Wait for
+  signal words:
+    "teach"    -> B teaches this subtopic
+    "validate" -> note is pasted, B reviews
+  Signal words must be used, or the wrong mode may be entered.
+
+PRAGMATIC BAR
+  Module assessor (Jeroen Veen) grades a FUNCTIONAL program, not a
+  high-accuracy one. Design choices justified as "works", not
+  "optimal". Over-engineering is discouraged.
+  Accuracy target: "works".
+  Colour used only where it resolves specific ambiguity.
+  Time is a resource. Phase 4 CNN is where the big gains live; spend
+  there.
+
+APPLICABILITY PASS
+  Generic course material is generic. This subcomponent is specific.
+  Any inherited item must be checked: does it fit OCR on ball
+  numerals? Write down the answer before building.
+
+FILE HYGIENE
+  All source code in repo. All data, artefacts, logs, figures under
+  DATA_ROOT. Never commit data or models to Git.
+  One file per step: IAI-gpt-designtracker-<step>.txt or
+  IAI-gpt-devtracker-<step>.txt.
+
+NAMING CONVENTIONS
+  - Log files: <section>_<substep>_<name>.txt (or .csv)
+  - Figures: <name>.png
+  - Feature lists: retained_features_correlations.txt (human-written)
+  - Reject logs: rejects_<stage>.csv
+================================================================================
+
+
+================================================================================
+12. WHAT'S NEXT - SECTION 10 / 1.8
+================================================================================
+
+CURRENT TASK:  Section 10 of devtracker = Preliminary ML Report lifecycle.
+               Also referred to as 1.8 in the design numbering.
+
+WHY IT'S NEXT
+  All Sections 0-9 are complete. The Prelim ML report requires exactly
+  Sections 0-9 output: data + features + EDA + preprocessing, no model.
+  Report is due week 40. Submitting it unlocks Phase 2 (model training).
+
+SUBTASKS (per devtracker)
+  10.1  Draft Sections 1-3 of Preliminary ML Report.
+  10.2  Submit (deadline week 40).
+  10.3  Peer review another team's report (week 41).
+  10.4  Provide feedback via Excel template.
+  10.5  Review received feedback.
+  10.6  Incorporate feedback into report and/or model.
+
+CURRENT SUBTASK: 10.1 - Draft Sections 1-3.
+
+REPORT STRUCTURE (Preliminary ML Report - from the template)
+  Section 1: Introduction
+    - Introduce your ML portfolio
+    - Explain how it fits in the minor program
+    - Describe the importance of ML in your areas of interest
+    - Show how ML relates to your main project in the minor
+    - List your learning objectives
+    Size: max 1 A4.
+    Acceptance criteria:
+      - ML relation to the minor discussed
+      - ML portfolio relation to main project discussed
+
+  Section 2: Problem Statement
+    - Update the objective stated in your ML portfolio
+    - Update the requirements table and prioritize
+    - Think about how you would test or prove whether result meets
+      a requirement
+    Size: max 1 A4.
+    Acceptance criteria:
+      - Problem definition is specific and measurable [SMART]
+      - Functional and technical requirements are listed and
+        prioritized
+    Rubric hints from peer-review Excel:
+      - Performance criteria (accuracy, precision, false alarm rate)
+      - Basis for practical performance evaluation
+      - Technical requirements: framerate, camera angle, imaged
+        object size, lighting conditions
+      - Basis for practical testing of requirements
+
+  Section 3: Data Acquisition and Exploration
+    - Make an image set (controlled test area, take photos, label)
+    - Make visual representations of your data
+    - Assess data quality: representative, sufficient, balanced,
+      unbiased?
+    - Compute, visualize, check feature data (>=3 features)
+    - Assess feature quality: informative, discriminating,
+      explainable, independent
+    - Analyze feature relationships (correlations)
+    - Design and implement a preprocessing pipeline (calculate,
+      clean, scale)
+    - Explain each step in the pipeline
+    - Show how the pipeline makes data patterns clearer
+    Size: max 5 A4.
+    Acceptance criteria:
+      - Data collected, features engineered and argued
+      - Feature data visualized and explored, quality checked
+      - Preprocessing pipeline discussed and implemented
+    Rubric hints (Excel, scored 0-5):
+      - Data acquired AND appropriate features engineered and
+        computed
+      - Feature data visualization is appropriate
+      - Preprocessing is present (scaling or cleaning NOT missing)
+      - Level 3 requires code snippet for preprocessing
+      - Level 4: alternative preprocessing method
+      - Level 5: unit testing of pipeline
+
+  Section 4: Feedback FROM another team on your preliminary report
+    Insert the Excel sheet received. (Empty until 10.3/10.4.)
+
+  Section 5: Feedback TO another team on their preliminary report
+    Insert the Excel sheet sent. (Empty until 10.3/10.4.)
+
+  Section 6: References
+    Cite sources.
+
+  No code appendix in preliminary report. Only Full ML and DL have
+  code appendices.
+
+WHAT TO PUT WHERE (mapping)
+  Section 3 must draw from:
+    - 4.4 audit output (class counts, 505 crops)
+    - 5.3 stratification matrix (train=255/val=128/test=122)
+    - 8.1 class_balance.png, imbalance verdict
+    - 8.2 curated boxplots (5-10, not 23)
+    - 8.3 corr_heatmap.png + feature_label_relevance.csv
+    - 9.1 cleaning summary
+    - 9.2 scaling figures + parameters
+    - 9.3 pipeline description
+    - reject logs as supporting evidence
+
+  Deliverables:
+    - Word document (max 3 sections + references)
+    - Excel peer-review feedback (submitted separately at 10.4)
+
+WHAT TO WRITE ABOUT
+  Section 1: This is IAI subcomponent (OCR on ball numerals 1-15).
+    Not the whole S7 project. Explain the layering: S7 is the
+    full autonomous counter; OCR is one subcomponent; IAI assesses
+    the OCR subcomponent only.
+
+  Section 2:
+    SMART objective - e.g. "Given a ball crop of 30-60 px, identify
+    the numeral 1-15 with at least X% accuracy (target to be set
+    based on class coverage)." Requirements table with priority,
+    measurable criterion, and how each is tested.
+    Functional: recognise >= N classes, >= X% accuracy on covered
+    classes, real-time on target SBC.
+    Technical: 1080p input, 30 fps, overhead view, crop size
+    30-60 px, lighting fixed (screen recording).
+    Prioritization: P1 = pipeline works end-to-end, P2 = accuracy
+    on majority classes, P3 = minority class performance.
+
+  Section 3: The heart of the preliminary report. Must document:
+    - Data acquisition: 5 screen-recorded clips, motion-gated
+      extraction, 1438 crops -> 505 after manual cull. Uniform rule:
+      "when in doubt, delete." Post-4.2 cull breakdown as evidence
+      of uniformity.
+    - Image set quality: 505 crops / 15 classes, 8.6:1 imbalance,
+      14/15 below 50/class floor. Honest limitation.
+    - Features: 23 engineered, 5 dead (7.2 semantic failure -
+      documented), 15 retained after correlation filter. Feature
+      classes: geometry (blob_area_ratio), discrete
+      (connected_component_count), structural projections
+      (proj_x_*, proj_y_*).
+    - Feature quality (informative/discriminating/independent/
+      explainable):
+        Informative: 8.2 boxplots
+        Discriminating: 8.2 + 8.3 mutual info
+        Independent: 8.3 heatmap
+        Explainable: narrative
+    - Preprocessing: cleaning (IQR on train, clip not remove),
+      scaling (StandardScaler fit on train), pipeline
+      (sklearn Pipeline: [StandardScaler, Classifier] with per-fold
+      refit). Include a preprocessing code snippet (rubric L3).
+    - Rotation limitation, 6/9 ambiguity, 4/9 and 11/1 overlap -
+      these set up Phase 4 CNN narrative.
+
+  Section 4/5: Empty at 10.1. Filled at 10.3/10.4.
+
+  Section 6: References. Wikipedia SMART criteria, Geron Hands-On
+    ML, plus any project-specific references (course materials).
+
+AFTER 10.1 PASSES
+  Submit as Word document. Peer review at 10.3. Incorporate at 10.6.
+
+FIRST ACTION FOR NEXT GPT
+  Ask the learner: "Begin 10.1 draft. Which section - 1, 2, or 3?"
+  Then proceed per-section, subsection at a time.
+================================================================================
+
+
+================================================================================
+13. FILE PATHS AND ENVIRONMENT
+================================================================================
+
+REPO ROOT
+  D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI
+
+REPO STRUCTURE
+  IAI\
+  ├── Docs\          (scope, decisions, report drafts)
+  ├── GPT\           (all tracker and meta .txt notes)
+  ├── models\        (empty; will hold .pkl / .tflite in Phase 2/3)
+  ├── notebooks\     (empty; for EDA if needed)
+  ├── src\           (all .py code)
+  └── requirements.txt
+
+DATA ROOT
+  D:\HAN\Semester 7 Minor\billiards-game-clips
+  ├── game1\           raw clips
+  ├── unsorted_png\    crops (1\ ... 15\)
+  ├── mask_png\        masks (1\ ... 15\)
+  ├── logs\            diagnostic logs
+  ├── figures\         report figures
+  ├── splits.csv
+  ├── features.csv
+  ├── dataset.csv
+  ├── dataset_clean.csv
+  ├── dataset_train_scaled.csv
+  ├── dataset_val_scaled.csv
+  ├── dataset_test_scaled.csv
+  ├── retained_features_correlations.txt
+  └── feature_label_relevance.csv
+
+PYTHON
+  Base:   C:\dev\python311\python.exe  (3.11.9)
+  Venv:   C:\dev\envs\IAI-env\
+  Activate: C:\dev\envs\IAI-env\Scripts\Activate.ps1
+  Prompt shows (IAI-env) when active.
+
+ENV VAR
+  EVML_DATA = C:\dev\IAI-data (course convention).
+  NOT USED by this project (paths hardcoded in config.py).
+  Leave set for course compliance.
+
+GIT
+  Course mirror: https://github.com/Hossain-Abeer/HAN-S7Minor-
+                 EmbeddedVision-AI.git
+  Own project:   separate repo, cloned via VS Code.
+  Auth:          HTTPS + Personal Access Token (PAT). No SSH.
+  Identity:      Hossain Abeer / akm.h.abeer@gmail.com
+
+IDE
+  VS Code. Interpreter pinned via .vscode/settings.json.
+  Relevant extensions: ms-python.python, pylance, debugpy,
+  vscode-python-envs, github-pull-request, gitlens (optional),
+  jupyter (optional).
+
+SHELL
+  PowerShell. Note: `where` is an alias for Where-Object - use
+  `where.exe` or `Get-Command`.
+================================================================================
+
+
+================================================================================
+14. VERSION PINS AND DEPENDENCIES
+================================================================================
+
+requirements.txt from course repo. Installed successfully. All pins
+respected. Do NOT upgrade any of these without checking compatibility.
+
+numpy           1.26.4    <2.0    OK
+scipy           1.12.0    <1.13   OK
+pandas          2.1.4     <2.2    OK
+scikit-learn    1.4.2     <1.5    OK
+scikeras        0.12.0    <0.13   OK
+tensorflow      2.15.1    ~=2.15  OK
+torch           2.2.2+cpu ~=2.2.0 OK  (CPU only; use Colab for GPU)
+torchvision     0.17.2    ~=0.17  OK
+transformers    4.39.3    <4.40   OK
+Augmentor       0.2.12    ==0.2.12 OK
+opencv-python   4.11.0.86 unpinned OK  (backtracked from 5.x)
+python          3.11.9    pinned  OK
+tensorflow-intel 2.15.1           (implicit TF dep)
+tf-keras        2.15.1            (matches TF 2.15.1)
+
+WARNING - DO NOT INSTALL
+  CnOCR or similar OCR libs (rapidocr, ultralytics, wandb, shapely).
+  These break the pinned environment: CnOCR pulled numpy 2.4.6 and
+  opencv-python-headless 5.0.0, which broke TF 2.15, torch 2.2.2 and
+  cv2 4.11. Recovery required uninstall + re-pin + reinstall. See
+  devtracker 4.2 §2.
+
+KNOWN NON-BLOCKING WARNINGS
+  - oneDNN custom operations (Intel CPU acceleration, informational)
+  - tf.losses.sparse_softmax_cross_entropy deprecation (from
+    `import keras`; course code uses SparseCategoricalCrossentropy
+    class, not the deprecated symbol)
+  Both suppressible via env vars if noisy:
+    $env:TF_ENABLE_ONEDNN_OPTS = "0"
+    $env:TF_CPP_MIN_LOG_LEVEL = "3"
+================================================================================
+
+
+================================================================================
+15. GLOSSARY OF PROJECT-SPECIFIC TERMS
+================================================================================
+
+Term                 | Meaning
+---------------------|------------------------------------------------------
+Motion gate          | State machine in extract_crop.py that only triggers
+                     | extraction after >=3 consecutive still frames.
+                     | Yields ~1 crop per ball per shot-settle event.
+Fused stage          | build via extract_crop.py: extraction+filter+
+                     | detection+crop in one loop. Avoids disk dump of
+                     | intermediate frames.
+Cloth ring           | The 15% margin around each crop. Useful for
+                     | downstream masking (strip it out to get ball-only).
+Retained feature     | One of the 15 features that survived 8.3's
+                     | correlation filter. Written to
+                     | retained_features_correlations.txt.
+Dead feature         | One of the 5 features constant zero across all
+                     | samples (7.2 failure). Result of resolution ceiling.
+Semantic failure     | 7.2's finding: features computed mechanically but
+                     | return no information.
+Feature overlap      | Class pairs (4/9, 11/1, 2/5) whose silhouettes are
+                     | too similar in projection space. Unfixable by volume.
+Positional shortcut  | Risk that model learns numeral->position rather
+                     | than numeral->shape. Mitigated by staggering
+                     | recording start offsets + feature selection +
+                     | augmentation.
+Tee                  | Python helper in most scripts: sys.stdout is redirected
+                     | to both the console and a log file. Implemented
+                     | via a small _Tee class.
+Hard floor           | In split.py: train >= 5, val/test >= 1 per class.
+                     | FAILURE = split is broken.
+Soft miss            | In split.py: val/test < 3 per class. NON-BLOCKING.
+                     | Documented limitation.
+Two threads          | Thread A = teaching. Thread B = validation.
+                     | This file supports Thread B handoff.
+Designtracker        | "Why" document per step. Extends to Full ML + DL.
+Devtracker           | "What was done" document per step. Stops at 10.x.
+Phase 2              | Classical ML model training (SVM, k-NN, RF).
+                     | Begins after Prelim ML submission.
+Phase 3              | Full ML model report + deployment.
+Phase 4              | Custom CNN + transfer learning (DL report).
+Phase 5              | DL deployment + comparison.
+Phase 6              | Final DL report.
+SMART                | Specific, Measurable, Achievable, Relevant, Time-
+                     | bound. Used in Section 2 problem statement.
+F1, precision, recall| Phase 2 evaluation metrics. Also confusion matrix.
+================================================================================
+
+
+================================================================================
+END OF FILE
+================================================================================
+
+Snapshot: devtracker 9.4 COMPLETE. Next: 10.1 draft Sections 1-3 of the
+Preliminary ML report. Ask the learner which section to start with.
+================================================================================

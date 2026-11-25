@@ -1,0 +1,214 @@
+================================================================================
+IAI-GPT-EXPLAINS - PRE-FULL-ML-REPORT: JEROEN'S FEEDBACK ON PRELIMINARY
+================================================================================
+
+PURPOSE
+-------
+Record and interpret the instructor's feedback on the submitted
+Preliminary ML report (2120867_preliminary_ML_report.docx).
+This note is the input to 1.8.6 (incorporate feedback into report/model)
+and to the Full ML report lifecycle.
+
+FILES
+-----
+Submitted   : 2120867_preliminary_ML_report.docx
+Feedback    : FT-8_preliminary_ML_report feedback.xlsx
+Instructor  : Jeroen Veen
+Verdict     : "You are on the right track, Hossain."
+
+--------------------------------------------------------------------------------
+1. MARK BREAKDOWN (INFERRED FROM RUBRIC MATCH)
+--------------------------------------------------------------------------------
+
+  Criterion                              Level   Note
+  -------------------------------------  -----   --------------------------------
+  Problem statement - SMART              5       Argue why 0.50 macro-F1
+                                                 suffices
+  Problem statement - requirements       4       Add a test for Critical
+                                                 TR1-TR3; concrete test for FR4
+  Data acq - features engineered         4       Add example crops per class
+  Data acq - visualization/quality       5       Make Fig 3.2 legible; add
+                                                 scatter of top MI pair
+  Preprocessing                          2       BLOCKS level 3: no code
+                                                 snippets
+
+  FINAL (avg)                            ~4.0 / 5.0
+
+--------------------------------------------------------------------------------
+2. THE ONE BLOCKING DEFECT
+--------------------------------------------------------------------------------
+
+  PROBLEM
+    Section 3.7 (Data preparation) contains no code snippets.
+
+  WHY IT BLOCKS
+    Rubric level 3 for preprocessing reads:
+      "Preprocessing is appropriate, CODE SNIPPETS PRESENT."
+    No snippets -> level 2 regardless of how well the prose is argued.
+
+  CURRENT STATE
+    - Cleaning discussed (IQR K=1.5, train-only, blob_area_ratio only).
+    - Scaling discussed (StandardScaler, fit on train, applied to all).
+    - Pipeline discussed (sklearn.Pipeline, refit per CV fold).
+    All correct. None shown as code.
+
+  FIX (level 2 -> 3)
+    Paste three short excerpts into 3.7:
+      (a) clean.py - IQR clip block
+            train_df = df[df["role"] == "train"]
+            q1 = train_df[cleanable].quantile(0.25)
+            q3 = train_df[cleanable].quantile(0.75)
+            iqr = (q3 - q1).clip(lower=MIN_IQR_FLOOR)
+            lower = q1 - IQR_K * iqr
+            upper = q3 + IQR_K * iqr
+            df[cleanable] = df[cleanable].clip(lower=lower,
+                                               upper=upper, axis=1)
+      (b) scale.py - fit-on-train block
+            scaler = StandardScaler()
+            scaler.fit(X_train)          # TRAIN ONLY
+            X_train_s = scaler.transform(X_train)
+            X_val_s   = scaler.transform(X_val)
+            X_test_s  = scaler.transform(X_test)
+      (c) pipeline.py - two-step factory
+            return Pipeline([
+                ("scaler", StandardScaler()),
+                ("clf",    classifier),
+            ])
+
+  EFFORT
+    One evening. Highest-value single fix in the entire feedback.
+
+--------------------------------------------------------------------------------
+3. PATHS TO HIGHER LEVELS
+--------------------------------------------------------------------------------
+
+  PREPROCESSING 3 -> 4
+    Add at least one ALTERNATIVE preprocessing method with comparison.
+    Cheapest option: MinMaxScaler vs StandardScaler on the same split.
+    One figure + one paragraph. ~1 hour.
+
+  PREPROCESSING 4 -> 5
+    Add a unit test of the pipeline.
+    The DummyClassifier smoke test in pipeline.py already exists.
+    Reframe it as a test (assert two steps, correct order, correct names)
+    and cite it. No new code needed, only a narrative shift.
+
+  PROBLEM STATEMENT 4 -> 5 (requirements criterion)
+    For each Critical TR1-TR3, name the TEST that verifies it.
+    For FR4 (reject illegible crops), give a concrete test.
+    Current text lists requirements; it does not pair each with a test.
+
+  PROBLEM STATEMENT 5 (SMART criterion, already at 5)
+    Jeroen's note asks explicitly: "Argue why 0.50 macro-F1 suffices."
+    Add one paragraph:
+      - 15 classes, 505 samples, 34/class average.
+      - Per-class F1 exposes thin-class failure, which accuracy hides.
+      - 0.50 is a floor, not a target; ceiling is set by source
+        resolution (see 7.2 finding) and rotation ambiguity (6/9).
+    This is a written-argument fix, no new analysis.
+
+  DATA ACQ 4 -> 5 (features criterion)
+    Add example crops per class.
+    One montage figure, 15 small crops, one per class.
+    Sources already on disk: unsorted_png/1 .. 15.
+
+  DATA ACQ 5 (visualization criterion, already at 5)
+    Jeroen's notes:
+      - "Make Fig 3.2 legible."    -> 23-panel grid; regenerate at
+                                      higher DPI or split into two
+                                      figures (12 + 11).
+      - "Add a scatter of the top pair."
+        -> Top MI pair: blob_area_ratio (1.68) vs proj_y_2 (1.51).
+           Colour by class, 15 colours. One figure.
+
+--------------------------------------------------------------------------------
+4. ORDER OF WORK (RECOMMENDED)
+--------------------------------------------------------------------------------
+
+  Priority  Task                                        Est. effort
+  --------  ------------------------------------------  ------------
+  1         Paste 3 code snippets into 3.7              1 evening
+  2         Argue why 0.50 macro-F1 suffices             30 min
+  3         Regenerate Fig 3.2 (legible)                 30 min
+  4         Scatter plot of blob_area_ratio x proj_y_2   30 min
+  5         Example crops montage (15 per class)         30 min
+  6         TR1-TR3 tests; FR4 concrete test              1 hour
+  7         MinMaxScaler vs StandardScaler comparison     1 hour
+  8         Reframe DummyClassifier smoke as unit test    15 min
+
+  Cumulative effort: ~5-6 hours across the week.
+
+  Note: items 1-5 are report edits only. Items 6-8 touch the model or
+  the pipeline and must be reflected in the Full ML report as well.
+
+--------------------------------------------------------------------------------
+5. CONSISTENCY CHECK VS DEVTRACKER - NO CONTRADICTIONS
+--------------------------------------------------------------------------------
+
+  Report claim                            Source              Match
+  --------------------------------------  ------------------  -----
+  23 features -> 8 dead -> 15 retained    7.2 + 8.3           OK
+  5 dead hole features                    post-7.2 Sec D      OK
+  + 3 dead projection bins                post-7.2 + 9.2      OK
+  492 samples                             7.3 inner join      OK
+  245 / 128 / 119 split                   5.3 minus 6.1
+                                          mask rejections     OK
+  8.60 train max/min (C1=43, C5=C10=5)    8.1 SEVERE          OK
+  505 crops after audit                   4.4                 OK
+
+  The report is internally consistent with the devtracker record.
+  The feedback is about PRESENTATION and COMPLETENESS, not about
+  factual error.
+
+--------------------------------------------------------------------------------
+6. WHAT THE FEEDBACK IS NOT SAYING
+--------------------------------------------------------------------------------
+
+  NOT a data problem.
+    Jeroen does not ask for more data, re-recording, or rebalancing.
+    The 8.60 imbalance and the 5 dead hole features are accepted as
+    documented limitations.
+
+  NOT a modelling problem.
+    No comment on SVM / k-NN / RF choices, because those are not in
+    this report - they belong to the Full ML report (Section 6).
+
+  NOT a scope problem.
+    The OCR subcomponent scoping is accepted.
+
+  The feedback is:
+    - PREPROCESSING: fixable by showing code that already exists.
+    - EVERYTHING ELSE: fixable by making existing content more
+      legible or adding one small figure.
+
+--------------------------------------------------------------------------------
+7. CARRY-FORWARD TO FULL ML REPORT
+--------------------------------------------------------------------------------
+
+  Once items 1-8 above are incorporated, the following are ALREADY
+  written for reuse in the Full ML report:
+
+    3.7 code snippets                -> Full ML Sec 6 methodology
+    Alternative scaler comparison     -> Full ML Sec 6
+    Pipeline as unit test             -> Full ML Sec 6
+    Why 0.50 macro-F1 suffices        -> Full ML Sec 8 (goals vs results)
+    Sample crops montage              -> can be reused verbatim
+    Fig 3.2 (regenerated)             -> can be reused verbatim
+
+  Do not re-derive these in the Full ML report. Cite and extend.
+
+--------------------------------------------------------------------------------
+8. STATE AT END OF THIS NOTE
+--------------------------------------------------------------------------------
+
+  - Feedback interpreted: "on the right track", mark ~4.0/5.0.
+  - Single blocking defect: no code snippets in 3.7 (blocks level 3).
+  - Eight discrete fixes identified, prioritised, effort estimated.
+  - Cumulative effort ~5-6 hours.
+  - No devtracker contradictions found.
+  - Ready to execute 1.8.6 (incorporate feedback into report/model).
+  - Awaiting signal: "validate" or "teach" on the first fix.
+
+================================================================================
+END OF NOTE
+================================================================================
