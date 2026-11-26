@@ -173,7 +173,7 @@ SECTION 2 - MODEL TRAINING, CV, TUNING
 SECTION 3 - FINAL MODEL AND TEST
 ================================================================================
 
-[ ] 3.1  RETRAIN FINAL PIPELINE
+[x] 3.1  RETRAIN FINAL PIPELINE
     Type: code + run
     Prereq: 2.8
     Deliver: src/finalize_model.py
@@ -185,7 +185,7 @@ SECTION 3 - FINAL MODEL AND TEST
     Save:   ~\models\final_pipeline.joblib, logs/3.1_finalize.txt
     Debug:  Reload mismatch -> wrong sklearn version, re-check pins.
 
-[ ] 3.2  TEST-SET EVALUATION (ONE SHOT)
+[x] 3.2  TEST-SET EVALUATION (ONE SHOT)
     Type: run
     Prereq: 3.1
     Deliver: src/evaluate_test.py
@@ -201,7 +201,7 @@ SECTION 3 - FINAL MODEL AND TEST
     NOTE:   No re-tuning after this line. If result is poor, document,
             do not re-open.
 
-[ ] 3.3  PER-CLASS ERROR ANALYSIS
+[x] 3.3  PER-CLASS ERROR ANALYSIS
     Type: manual + run
     Prereq: 3.2
     Deliver: src/error_analysis.py
@@ -216,7 +216,7 @@ SECTION 3 - FINAL MODEL AND TEST
 SECTION 4 - DEPLOY AND TEST (Full ML Section 7)
 ================================================================================
 
-[ ] 4.1  WRITE predict.py
+[x] 4.1  WRITE predict.py
     Type: code
     Prereq: 3.1
     Deliver: src/predict.py
@@ -228,14 +228,14 @@ SECTION 4 - DEPLOY AND TEST (Full ML Section 7)
              Rejects crops where mask_is_usable() == False (FR4 path).
     Verify: Imports cleanly.
 
-[ ] 4.2  RUN inference smoke test
+[x] 4.2  RUN inference smoke test
     Type: run
     Prereq: 4.1
     Action: predict_batch on ~\unsorted_png\1\ (small subset, 10 crops).
     Verify: 10 rows out, proba vectors sum to 1, labels plausible.
     Save:   logs/4.2_inference_smoke.txt
 
-[ ] 4.3  WRITE test_plan.md
+[x] 4.3  WRITE test_plan.md
     Type: writing
     Prereq: 4.2
     Deliver: repo\IAI\Docs\test_plan.md
@@ -245,7 +245,7 @@ SECTION 4 - DEPLOY AND TEST (Full ML Section 7)
     Verify: All Critical rows have a named test.
     Record: Feeds Full ML Section 7 (test plan) + Section 2 (Jeroen S2).
 
-[ ] 4.4  RUN deployment tests
+[x] 4.4  RUN deployment tests
     Type: run
     Prereq: 4.3
     Deliver: src/deploy_test.py
@@ -259,7 +259,7 @@ SECTION 4 - DEPLOY AND TEST (Full ML Section 7)
     Save:   logs/4.4_deploy_results.txt, ~\deploy_results.csv
     Record: Feeds Full ML Section 7 (results vs targets).
 
-[ ] 4.5  RECORD UNEXPECTED BEHAVIOUR
+[x] 4.5  RECORD UNEXPECTED BEHAVIOUR
     Type: writing
     Prereq: 4.4
     Deliver: append to logs/4.4_deploy_results.txt

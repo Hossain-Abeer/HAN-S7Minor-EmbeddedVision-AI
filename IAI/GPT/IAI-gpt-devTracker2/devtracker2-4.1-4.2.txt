@@ -1,0 +1,289 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 4.1 WRITE predict.py (+ 4.2 INFERENCE SMOKE MERGED)
+================================================================================
+Step    : 4.1 (code + run) + 4.2 (smoke, merged into 4.1 run)
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : code + run
+Prereq  : 3.1 (persisted joblib), 3.2 (test baseline), 3.3 (error analysis)
+Status  : PASS (mechanical). FR4 reject path NOT exercised (deferred to 4.4).
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+SECTION A - STEP RECORD
+--------------------------------------------------------------------------------
+
+A.1 DELIVERABLE
+  src\predict.py
+
+A.2 CONTENT
+  load_model()                    -> loads 3.1 joblib + feature-names JSON
+  extract_features_from_crop()    -> crop_bgr -> 15-feature vector + status
+                                     (reuses mask.py + features.py)
+  predict_crop()                  -> single crop -> (label, proba, status)
+  predict_batch()                 -> folder of PNGs -> DataFrame + optional CSV
+  main()                          -> argv[1] = input dir; writes batch CSV
+
+  Constants consumed:
+    USE_FEATURES, PROJ_BINS, KEEP_HU_MOMENTS, MIN_HOLE_AREA_PX   (config.py)
+    MODEL_PATH = models/3.1-final_pipeline.joblib
+    FEAT_PATH  = models/3.1-final_feature_names.json
+
+  Reject statuses emitted:
+    ok | imread_failed | mask_unusable | missing_features:<names>
+
+  Design discipline:
+    - No re-training. Uses persisted pipeline only.
+    - No re-scaling. Scaler lives inside the pipeline.
+    - No re-derivation of feature order. Uses 3.1 JSON verbatim.
+    - Reject rows preserved in output (predicted_label = -1).
+
+A.3 COMMAND
+  cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI"
+  python src\predict.py "D:\HAN\Semester 7 Minor\
+    billiards-game-clips\IAI\unsorted_png\1" 2>&1 |
+    Tee-Object -FilePath "D:\HAN\Semester 7 Minor\
+      billiards-game-clips\IAI\logs\4.1-predict_console_out.txt"
+
+A.4 INPUTS CONSUMED
+  models\3.1-final_pipeline.joblib           (fitted [StandardScaler, RF])
+  models\3.1-final_feature_names.json        (15 names, training order)
+  config.py                                  (feature flags)
+  unsorted_png\1\*.png                       (82 crops, all TRUE class 1)
+
+A.5 OUTPUTS PRODUCED
+  4.1-batch_output.csv                       (82 rows x 18 cols)
+  logs\4.1-predict_console_out.txt           (console tee)
+
+A.6 OBSERVED OUTPUT (console)
+  loaded  : 3.1-final_pipeline.joblib
+  features: 15
+  processed: 82 crops  |  ok: 82  |  rejected: 0
+  wrote   : ...\4.1-batch_output.csv
+
+A.7 VERIFICATION LINE
+  Model loaded: 2 pipeline steps, 15 features, no assertion fired.
+  82/82 crops processed without imread failure or feature-missing failure.
+  All 15 proba columns populated per row; each row sums to 1.0.
+  Predictions align with plausible class-1 signal (see B.1).
+  Feature order confirmed by prediction plausibility (see B.2).
+  PASS mechanically.
+  FR4 reject path NOT exercised: 0 rejects because all 82 crops contain
+  legible numerals. Deferred to 4.4 (dedicated reject test).
+
+A.8 DEVIATIONS
+  D1. 4.2 (inference smoke test on 10 crops) is MERGED into 4.1.
+      Reason: 4.1 ran on 82 crops with 0 errors - a superset of the
+      intended 4.2 smoke test. No separate artefact produced for 4.2.
+  D2. FR4 (reject illegible crops) not exercised. All 82 crops are
+      legitimate numerals; mask_is_usable() returned True on all.
+      Action: 4.4 must add a dedicated reject-test batch (cue ball,
+      blank crops, blurred crops) and assert reject count > 0.
+  D3. Full test-set accuracy (0.2607) not reproduced here. This batch
+      is a single-class folder, not the 119-row test set. 4.4 will
+      feed the full test set through predict_batch() to confirm
+      reproduction of 3.2 numbers.
+
+A.9 CARRY-FORWARD
+  4.2 : MERGED. No separate step.
+  4.3 : test_plan.md must include a row for FR4 that specifies the
+        reject-test procedure and pass criterion.
+  4.4 : - Reproduce full-test-set accuracy via predict_batch() on the
+          119 test crops; assert matches 3.2 macro-F1 (0.2607).
+        - Add reject-test batch: >=5 non-numeral crops, assert
+          count(status=='mask_unusable') > 0.
+        - Timing loop: mean / median per-crop latency, TR5 target <=1 s.
+        - Batch accuracy must match 3.2 within 1e-3. Any higher value
+          indicates leakage into deploy path - investigate.
+  4.5 : record unexpected behaviours (0 rejects counts as "not exercised",
+        not "reject path verified").
+  5.1 : pipeline unit test uses same 3.1 joblib as fixture.
+
+--------------------------------------------------------------------------------
+SECTION B - RESULTS AND INTERPRETATION
+--------------------------------------------------------------------------------
+
+B.1 SINGLE-CLASS BATCH: WHAT THE 82 CROPS CONTAIN
+  All 82 crops in unsorted_png\1\ are TRUE class 1.
+  Breakdown by source clip (from filename prefixes):
+    clips 2, 3, 4  ->  40 crops   -> TRAIN (model memorised)
+    clip 1         ->  17 crops   -> TEST (unseen, honest)
+    clip 5         ->  25 crops   -> VAL (shifted, honest)
+
+B.2 PREDICTIONS ON CLASS-1 BATCH
+  | Group           | Crops | Correct (pred=1) | Wrong | Implied acc |
+  |-----------------|-------|------------------|-------|-------------|
+  | clips 2,3,4     | 40    | 40               | 0     | 100%        |
+  | clip 1 (test)   | 17    |  9               | 8     | 52.9%       |
+  | clip 5 (val)    | 25    | 18               | 7     | 72.0%       |
+  | TOTAL           | 82    | 67               | 15    | 81.7%       |
+
+  Headline accuracy 81.7% is INFLATED by train crops. Not comparable
+  to test macro-F1 (0.2607). Honest signal = error rate on unseen
+  crops (clip 1 + clip 5): 15/(17+25) = 35.7% error.
+
+B.3 CLIP-1 ERRORS: 1 -> 5 (8 of 17 crops)
+  All 8 test-set errors predict class 5. Zero scatter.
+  This is EXACTLY the 1<->5 mutual sink identified in 3.3 B.2
+  (from the 3.2 test confusion matrix).
+  Two independent code paths (evaluate_test.py at 3.2, predict.py at
+  4.1) produce identical sink behaviour. Reproducibility confirmed.
+
+B.4 CLIP-5 ERRORS: 1 -> {3, 2, 7}
+  | True | Predicted | Count |
+  |------|-----------|-------|
+  | 1    | 3         | 5     |
+  | 1    | 2         | 1     |
+  | 1    | 7         | 1     |
+  Scattered, not a single sink. Consistent with 3.3 B.6/B.7: clip-5
+  breaks different classes than clip-1. Multi-directional shift
+  confirmed independently.
+
+B.5 CONFIDENCE BY SOURCE CLIP
+  | Group          | Typical proba(class 1) | Mechanism                  |
+  |----------------|------------------------|----------------------------|
+  | clips 2,3,4    | 0.95 - 0.99            | RF leaf memorisation       |
+  | clip 1         | 0.72 - 0.91            | Some drift, sink into 5    |
+  | clip 5         | 0.72 - 0.80            | Different drift, scatter   |
+
+  Many train crops produce IDENTICAL probability vectors (e.g. all
+  clip-3 class-1 crops yield [0.999179, 0, 0, 0.000413, ...]).
+  This is RF leaf behaviour: multiple training crops land in the same
+  leaf, so identical leaf-frequency vector. Not a bug.
+
+B.6 SANITY ON ROW COUNTS
+  82 crops in unsorted_png\1\ matches 4.4 audit (C1 = 82 total).
+  Cross-checked: 40 train + 17 test + 25 val = 82. Consistent.
+
+B.7 WHAT THIS BATCH CANNOT TELL US
+  - Overall test accuracy: batch is class-1 only, not representative.
+  - Reject behaviour: 0 rejects, FR4 untested.
+  - Inference latency: no timing loop in this run.
+  These are all 4.4's responsibility.
+
+--------------------------------------------------------------------------------
+SECTION C - TEACHING RECORD
+--------------------------------------------------------------------------------
+
+C.1 WHAT predict.py IS
+  The deployment wrapper. Training started from a feature CSV; the 3.1
+  joblib consumes 15 features, not images. predict.py closes the gap
+  by re-running the training-time preprocessing chain (crop -> mask ->
+  features -> vector) on raw images and feeding the resulting vector
+  into the persisted pipeline.
+
+C.2 WHAT A SMOKE TEST IS
+  A minimal end-to-end run on a small batch to prove the plumbing
+  works before scaling to full deployment testing. It proves SHAPE
+  and ORDER, not ACCURACY.
+
+C.3 WHAT THE 4.1 RUN PROVED
+  1. Image -> label chain works without crash.
+  2. Feature order is correct (predictions would be garbage if wrong).
+  3. Probability outputs are well-formed (sum to 1, non-negative).
+  4. The 1<->5 sink reproduces across independent code paths.
+
+C.4 WHAT THE 4.1 RUN DID NOT PROVE
+  1. FR4 (reject illegible crops): 0 rejects because all 82 crops
+     had usable masks. Reject path is code-verified but not run-verified.
+  2. Inference latency (TR5): no timing.
+  3. Full test-set reproduction (0.2607): single-class batch, not
+     the 119-row test set.
+
+C.5 WHY THE HEADLINE 81.7% ACCURACY IS MISLEADING
+  Accuracy on a single-class batch is not model quality. It is
+  dominated by whichever class happens to be over-represented in the
+  source folder. Here, ~49% of crops come from the training set
+  (clips 2-4); those are memorised by construction, so they predict
+  at near-certainty. The 81.7% figure is inflated by the train share.
+  The honest number on unseen crops (clips 1 + 5) is ~64% on a single-
+  class batch. That is the class-1 local accuracy, not macro-F1.
+
+C.6 WHY "SAME PROBABILITY VECTOR ACROSS MULTIPLE ROWS" IS EXPECTED
+  RF gives each sample a probability vector based on which leaves it
+  falls into across the 300 trees. If multiple training crops fall in
+  the same set of leaves (common on 245 rows with 300 trees), they
+  receive identical vectors. This is not a reproducibility bug. It
+  is the RF ensemble geometry: leaf occupancy is coarse on small data.
+
+C.7 WHY FEATURE ORDER CANNOT BE VERIFIED DIRECTLY FROM CSV
+  A wrong feature order does not raise an error. It silently maps
+  proj_x_3 to the slot that trained for blob_area_ratio, and every
+  prediction is garbage. The only signal is behavioural: predictions
+  are below chance (chance = 1/15 = 6.7% per crop). Here, predictions
+  align with plausible class-1 signal ~82% of the time. That level
+  of plausibility only occurs when feature order is correct.
+  For a direct proof, we rely on 3.1's reload check: the loaded
+  pipeline is byte-identical to what 3.2 consumed, and 3.2 reproduced
+  expected predictions. Inherited verification.
+
+C.8 WHY FR4 MUST BE TESTED SEPARATELY
+  FR4 = "reject crops that do not contain a legible numeral."
+  The 82 class-1 crops all contain legible numerals. mask_is_usable()
+  returns True on all of them, so the reject branch is never executed.
+  A reject-path bug (e.g. silently returning a random label instead of
+  a reject status) would go undetected.
+  Proper test: feed 5+ non-numeral crops (cue ball, blank ball, blurred
+  patch). Assert count(status=='mask_unusable') > 0. This is a 4.4
+  action item, not a 4.1 re-run.
+
+C.9 WHAT COUNTS AS "SHAPE MISMATCH" AND WHY IT WOULD FAIL LOUDLY
+  If the pipeline expected 15 features and predict.py produced 16, or
+  if predict.py produced a 1-D array where predict() expected 2-D,
+  sklearn would raise ValueError immediately. The absence of that
+  error confirms shape correctness. Order correctness is the harder
+  property: no error fires, only degraded predictions. B.2's 82%
+  accuracy is the proof of order correctness.
+
+C.10 HOW THIS STEP FITS THE DEPLOYMENT STORY
+  Section 7 of the Full ML report must describe an end-to-end
+  deployment pipeline. 4.1 IS that pipeline. Without 4.1, Section 7
+  has no working artifact to report. With 4.1, the Section 7 claim
+  becomes: "The persisted [StandardScaler, RF] pipeline was wrapped
+  in predict.py, which rebuilds the exact 15-feature vector from raw
+  image input via the same preprocessing used in training. Feature
+  order is preserved via the persisted feature_names JSON. Reject
+  path returns 'mask_unusable' (FR4) rather than a spurious label."
+
+--------------------------------------------------------------------------------
+SECTION D - SECTION 7 CONTENT CHECKLIST (from 4.1)
+--------------------------------------------------------------------------------
+
+  - Deployment chain diagram: crop -> mask -> features -> pipeline -> label
+  - Reference to 4.1-batch_output.csv as smoke-test evidence
+  - Statement: feature order preserved from 3.1-final_feature_names.json
+  - Statement: reject statuses enumerated
+  - Statement: FR4 deferred to 4.4 for direct test (honest disclosure)
+  - Note on 1<->5 sink reproduction as evidence of determinism across
+    three independent code paths (2.5 val, 3.2 test, 4.1 predict)
+
+--------------------------------------------------------------------------------
+SECTION E - SECTION 8 CONTENT CHECKLIST (from 4.1)
+--------------------------------------------------------------------------------
+
+  - Small addition: the 1<->5 sink is not a single-run artefact. It
+    appears in val, test, AND deploy. Add to L18 (RF decision-region
+    sink) evidence list.
+
+--------------------------------------------------------------------------------
+SECTION F - ARTEFACTS PRODUCED
+--------------------------------------------------------------------------------
+
+  src\predict.py                              (new)
+  4.1-batch_output.csv                        (new, DATA_ROOT)
+  logs\4.1-predict_console_out.txt            (new, tee)
+
+--------------------------------------------------------------------------------
+SECTION G - PROGRESS
+--------------------------------------------------------------------------------
+
+  Sequence : 15/21 = 71%
+  Weight   : 61/81 = 75%
+  Remaining heavy: 4.3 (5), 4.4 (10), 5.1 (4), 6.1 (2), 4.5 (3), 3.3 (done).
+
+  Critical path from here:
+    4.3 (test plan) -> 4.4 (deploy results) -> 5.1 (unit test) -> 6.1 (index)
+  Deferrable: 4.5 (unexpected behaviour - can merge into 4.4 writeup).
+
+================================================================================
+END OF NOTE
+================================================================================

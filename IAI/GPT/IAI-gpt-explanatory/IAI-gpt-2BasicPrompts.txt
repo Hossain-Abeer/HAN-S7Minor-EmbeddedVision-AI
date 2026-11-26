@@ -27,11 +27,6 @@ validate. if not valid, prompt for data in order to complete this subsec. if val
 
 
 
-[1.7.3]
-sufficient discussion. do the txt writeup of all that's being discussed, including all that was explained as a part of teaching me
-
-
-
 [9.2] 
 validate. if not valid, ask. if valid - interpret & teach
 
