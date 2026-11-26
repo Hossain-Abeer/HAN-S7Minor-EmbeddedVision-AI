@@ -36,7 +36,7 @@ CONVENTIONS
 SECTION 1 - PREFLIGHT
 ================================================================================
 
-[ ] 1.1  VERIFY ARTEFACTS
+[x] 1.1  VERIFY ARTEFACTS
     Type: verification
     Prereq: none
     Action: Confirm presence:
@@ -47,7 +47,7 @@ SECTION 1 - PREFLIGHT
     Verify: All four present. retained list = 15 names.
     Debug:  Missing -> halt, resolve before Section 2.
 
-[ ] 1.2  WRITE load_dataset.py
+[x] 1.2  WRITE load_dataset.py
     Type: code
     Prereq: 1.1
     Deliver: src/load_dataset.py
@@ -59,7 +59,7 @@ SECTION 1 - PREFLIGHT
              Drops filename/label/role. Asserts role counts 245/128/119.
     Verify: Imports cleanly.
 
-[ ] 1.3  RUN loader sanity check
+[x] 1.3  RUN loader sanity check
     Type: run
     Prereq: 1.2
     Action: python src/load_dataset.py  (main prints shapes + class sets)
@@ -71,7 +71,7 @@ SECTION 1 - PREFLIGHT
 SECTION 2 - MODEL TRAINING, CV, TUNING
 ================================================================================
 
-[ ] 2.1  WRITE train_models.py
+[x] 2.1  WRITE train_models.py
     Type: code
     Prereq: 1.3
     Deliver: src/train_models.py
@@ -86,7 +86,7 @@ SECTION 2 - MODEL TRAINING, CV, TUNING
                StratifiedKFold, scoring='f1_macro' + 'accuracy'.
     Verify: Imports cleanly.
 
-[ ] 2.2  RUN baseline cross-validation
+[x] 2.2  RUN baseline cross-validation
     Type: run
     Prereq: 2.1
     Action: python src/train_models.py
@@ -95,7 +95,7 @@ SECTION 2 - MODEL TRAINING, CV, TUNING
     Save:   logs/2.2_cv_baseline.txt, figures/cv_baseline.png
     Record: Table feeds Full ML Section 6 (model comparison).
 
-[ ] 2.3  WRITE grid_search.py
+[x] 2.3  WRITE grid_search.py
     Type: code
     Prereq: 2.2
     Deliver: src/grid_search.py
@@ -109,7 +109,7 @@ SECTION 2 - MODEL TRAINING, CV, TUNING
              Saves best_params per model + full cv results CSV.
     Verify: Imports cleanly.
 
-[ ] 2.4  RUN grid search
+[x] 2.4  RUN grid search
     Type: run
     Prereq: 2.3
     Action: python src/grid_search.py
@@ -120,7 +120,7 @@ SECTION 2 - MODEL TRAINING, CV, TUNING
             ~\figures\grid_svc.png (parallel coords optional, skip if time)
     Debug:  f1_macro identical across all params -> param names wrong.
 
-[ ] 2.5  WRITE AND RUN evaluate_val.py
+[x] 2.5  WRITE AND RUN evaluate_val.py
     Type: code + run
     Prereq: 2.4
     Deliver: src/evaluate_val.py
@@ -137,7 +137,7 @@ SECTION 2 - MODEL TRAINING, CV, TUNING
             ~\val_summary.csv
     Record: Feeds Full ML Section 6 (model comparison + selection).
 
-[ ] 2.6  SELECT BEST MODEL
+[x] 2.6  SELECT BEST MODEL
     Type: decision
     Prereq: 2.5
     Action: Rank by val macro-F1. Tie-break order:
@@ -149,7 +149,7 @@ SECTION 2 - MODEL TRAINING, CV, TUNING
     Deliver: logs/2.6_selection_note.txt
     Record: Feeds Full ML Section 6 (argued choice).
 
-[ ] 2.7  OVERFIT / UNDERFIT CHECK
+[x] 2.7  OVERFIT / UNDERFIT CHECK
     Type: run
     Prereq: 2.6
     Deliver: src/learning_curve.py
@@ -159,7 +159,7 @@ SECTION 2 - MODEL TRAINING, CV, TUNING
     Save:   ~\figures\lc_<model>.png, logs/2.7_learning_curves.txt
     Record: Feeds Full ML Section 6 (overfitting discussion).
 
-[ ] 2.8  ALTERNATIVE SCALER COMPARISON
+[x] 2.8  ALTERNATIVE SCALER COMPARISON
     Type: run
     Prereq: 2.6
     Deliver: src/scaler_compare.py

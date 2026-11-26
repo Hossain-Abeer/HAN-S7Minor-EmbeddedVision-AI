@@ -1,0 +1,400 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 2.7 LEARNING CURVES (OVERFIT / UNDERFIT CHECK)
+================================================================================
+Step    : 2.7 (code + run)
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : code + run
+Prereq  : 2.6 (rf selected)
+Status  : PASS
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+SECTION A - STEP RECORD
+--------------------------------------------------------------------------------
+
+A.1 DELIVERABLE
+  src\learning_curve.py
+
+A.2 CONTENT
+  PAIRS        : ["rf", "svc"]   (selected + runner-up)
+  SIZES        : np.linspace(0.1, 1.0, 8)  -> 8 training-size points
+  CV           : StratifiedKFold(5, shuffle, seed=42)
+  SCORING      : f1_macro
+
+  Functions:
+    load_params(name)                -> reads models/best_params_<name>.json
+    rebuild(name)                    -> instantiates estimator with best params
+    curve_for(name, X, y)            -> sklearn learning_curve() wrapper
+                                        returns (sizes, tr_mean, tr_std,
+                                                 cv_mean, cv_std)
+    plot(name, ...)                  -> writes figures/2.7-lc_<name>.png
+    verdict(name, ...)               -> classifies into
+                                        OVERFITTING / UNDERFITTING /
+                                        CONVERGED / WELL-FIT
+    main()                           -> loops both models, plots, logs
+
+A.3 INPUTS CONSUMED
+  dataset_clean.csv             (via load_splits, train role only)
+  models/best_params_rf.json    (max_depth=10, min_samples_leaf=1,
+                                 n_estimators=300)
+  models/best_params_svc.json   (C=100, gamma='scale', kernel='rbf')
+  models/2.6_selected_model.json (confirms rf is the reference)
+
+  X_train (245, 15), y_train (245). Val and test NOT touched.
+
+A.4 OUTPUTS PRODUCED
+  figures/2.7-lc_rf.png                rf learning curve
+  figures/2.7-lc_svc.png               svc learning curve
+  logs/2.7-learning_curves.txt         numeric table + verdicts
+  logs/2.7-console.txt                 console tee
+
+A.5 COMMAND
+  cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI"
+  python src\learning_curve.py 2>&1 |
+    Tee-Object -FilePath "D:\HAN\Semester 7 Minor\
+                          billiards-game-clips\IAI\logs\2.7-console.txt"
+
+A.6 OBSERVED OUTPUT (numeric, from logs)
+
+  [rf]  verdict: OVERFITTING (gap persisted, CV plateaued)
+    n=  19  train=1.0000  cv=0.2757  gap=+0.7243
+    n=  44  train=1.0000  cv=0.5141  gap=+0.4859
+    n=  70  train=1.0000  cv=0.5810  gap=+0.4190
+    n=  95  train=1.0000  cv=0.6125  gap=+0.3875
+    n= 120  train=1.0000  cv=0.6618  gap=+0.3382
+    n= 145  train=1.0000  cv=0.6931  gap=+0.3069
+    n= 170  train=1.0000  cv=0.7123  gap=+0.2877
+    n= 196  train=1.0000  cv=0.7229  gap=+0.2771
+
+  [svc] verdict: OVERFITTING (gap persisted, CV plateaued)
+    n=  19  train=1.0000  cv=0.2645  gap=+0.7355
+    n=  44  train=0.9796  cv=0.4890  gap=+0.4906
+    n=  70  train=0.9745  cv=0.5480  gap=+0.4265
+    n=  95  train=0.9816  cv=0.5928  gap=+0.3888
+    n= 120  train=0.9857  cv=0.6603  gap=+0.3254
+    n= 145  train=0.9879  cv=0.6865  gap=+0.3014
+    n= 170  train=0.9896  cv=0.7038  gap=+0.2859
+    n= 196  train=0.9914  cv=0.7027  gap=+0.2887
+
+A.7 VERIFICATION LINE
+  2/2 models curve-generated without error.
+  2/2 figures rendered.
+  2/2 logs written.
+  CV end values match prior steps:
+    rf  cv@196 = 0.7229  matches 2.2 baseline 0.7191 within noise
+    svc cv@196 = 0.7027  matches 2.4 best 0.7027 exactly
+  Uses train/CV only. No val. No test.
+  PASS.
+
+A.8 DEVIATIONS
+  D1. The verdict label fires "CV plateaued" for both models. True
+      for svc (tail slope -0.001). Slightly pessimistic for rf
+      (tail slope +0.011). Rule cannot distinguish "+0.011/25" from
+      "+0.000/25"; both fit "<= 0.02". Section 6 prose must override:
+      RF CV curve is still rising at full training size.
+  D2. Filename convention changed from devtracker-spec "lc_<name>.png"
+      to "2.7-lc_<name>.png" for artefact traceability. Consistent
+      with later steps.
+
+A.9 CARRY-FORWARD
+  Section 6 must include:
+    - overfitting paragraph with train=1.0, CV=0.72, gap=0.28
+    - regularisation constraints and their measured effects
+    - bias/variance statement
+    - "more data, not more regularisation" recommendation
+  Section 8 must include:
+    - dataset-size limitation restated with learning-curve evidence
+  Selection reinforcement:
+    - RF has CV headroom (tail slope +0.011)
+    - SVC has hit ceiling (tail slope -0.001)
+    - Fourth signal reinforcing RF choice at 2.6
+
+
+--------------------------------------------------------------------------------
+SECTION B - INTERPRETATION (feeds Full ML Section 6 and 8)
+--------------------------------------------------------------------------------
+
+B.1 HEADLINE NUMBERS AT FULL TRAINING SIZE (n=196)
+
+  | Model | train | CV    | gap    | CV tail slope per 25 samples |
+  |-------|-------|-------|--------|------------------------------|
+  | rf    | 1.000 | 0.723 | +0.277 | +0.011 (rising)              |
+  | svc   | 0.991 | 0.703 | +0.289 | -0.001 (flat)                |
+
+B.2 BOTH MODELS OVERFIT - STRUCTURAL, NOT A DEFECT
+  Both produce near-perfect training fits:
+    rf  : max_depth=10, min_samples_leaf=1 -> on 245 samples trees can
+          effectively assign each row its own leaf. Perfect train fit
+          is a construction artefact, not a bug.
+    svc : C=100, gamma='scale' -> minimal regularisation, RBF kernel
+          carves tight boundaries. train=0.991 is expected.
+
+  The gap is a function of data size, not model pathology.
+  CV=0.72 clears the SMART macro-F1 >= 0.50 target by +0.22.
+
+B.3 CV CURVE SHAPE - THE CLASSIC SMALL-DATA PATTERN
+  At n=19 (~1.3 samples/class): CV=0.27
+  At n=196 (~13.1 samples/class): CV=0.72
+
+  Monotone rise. The model improves as it sees more samples per class.
+  CV score is a function of samples-per-class, not absolute sample
+  count, because 15 classes divide the budget.
+
+B.4 GAP SHRINKS MONOTONICALLY
+  rf gap: +0.724 -> +0.486 -> +0.419 -> +0.388 -> +0.338 -> +0.307
+          -> +0.288 -> +0.277
+  Every additional sample reduces the memorisation contribution.
+  This is the canonical signature of a correctly-configured model on
+  insufficient data - not of a broken model.
+
+B.5 RF vs SVC TAIL BEHAVIOUR - THE KEY DIFFERENCE
+  rf tail (n=145->170->196): cv 0.693 -> 0.712 -> 0.723
+                              slopes +0.019, +0.011   STILL RISING
+  svc tail:                  cv 0.687 -> 0.704 -> 0.703
+                              slopes +0.017, -0.001   FLAT
+
+  Interpretation:
+    - RF has not saturated the data. Additional samples would raise CV.
+    - SVC at C=100 has reached its operating ceiling on this dataset.
+    - More data helps RF, not SVC.
+
+  Consequence for Section 6:
+    RF is the correct pick going forward. Its headroom is a real
+    advantage over SVC's plateau, on top of higher CV and higher val.
+
+B.6 OVERFIT VS UNDERFIT DIAGNOSIS
+  | Symptom                     | Overfit | Underfit | This case |
+  |-----------------------------|---------|----------|-----------|
+  | train >= 0.95               | yes     | no       | yes (1.00) |
+  | CV notably lower than train | yes     | yes      | yes (0.72) |
+  | gap > 0.15                  | yes     | no       | yes (0.28) |
+  | CV improves with size       | no      | no       | yes       |
+
+  Verdict: overfitting, benign. CV clears SMART target.
+
+B.7 REGULARISATION CONSTRAINTS AND THEIR EFFECTS
+  | Constraint              | Where | Effect in this data         |
+  |-------------------------|-------|-----------------------------|
+  | max_depth=10            | rf    | Not binding (natural depth  |
+  |                         |       | ~7-9 on 245 rows). Barely   |
+  |                         |       | fires. Depth tuning was     |
+  |                         |       | flat (2.4 C.3).             |
+  | min_samples_leaf=1      | rf    | Permissive. Allows single-  |
+  |                         |       | sample leaves. Contributes  |
+  |                         |       | to overfit. leaf=2 cost     |
+  |                         |       | -0.025 CV; kept leaf=1.     |
+  | n_estimators=300        | rf    | Main defence against        |
+  |                         |       | variance. Bagging averages  |
+  |                         |       | out memorisation.           |
+  | class_weight='balanced' | rf    | Not a regulariser. Rebalances|
+  |                         |       | splits per tree.            |
+  | C=100                   | svc   | De-regulariser. Chosen      |
+  |                         |       | because CV wanted capacity. |
+  | gamma='scale'           | svc   | Adaptive smoothness.        |
+  |                         |       | Structural, not tuned.      |
+
+  RF's overfitting defence is the 300-tree ensemble, not depth.
+  Tuning depth found no gain (2.4 C.3) because depth never became the
+  binding constraint.
+
+B.8 BIAS-VARIANCE TRADE-OFF
+  Bias:    Low. CV=0.72, training fits perfectly. Model is expressive.
+  Variance: High. Gap=0.28. Predictions swing with training data.
+
+  The classical fix is MORE DATA, not more regularisation:
+    - Regularising harder would decrease CV further.
+    - The gap shrinks monotonically with n (B.4).
+    - RF CV curve is still rising at full training size (B.5).
+
+  Section 6 must frame this exactly: small-data overfitting regime,
+  structural, data-limited.
+
+B.9 REINFORCES 2.6 SELECTION
+  | Signal                  | rf               | svc              |
+  |-------------------------|------------------|------------------|
+  | CV macro-F1 @2.4        | 0.7193 (best)    | 0.7027           |
+  | Val macro-F1 @2.5       | 0.3425 (best)    | 0.3144           |
+  | Tuning stability        | +0.0002 (noise)  | +0.1004 (real)   |
+  | CV tail slope @2.7      | +0.011 (rising)  | -0.001 (flat)    |
+
+  RF wins on four independent signals. 2.6 override is now robust.
+
+B.10 WHAT THIS MEANS FOR 3.1 / 3.2
+  - 3.1: retrain rf on 245 train rows, save joblib. 2.7 confirms rf
+         is the right model to commit to.
+  - 3.2: expect test macro-F1 near CV 0.70, not val 0.34, because
+         test is clip 1 (matches train scale). L16 does not apply.
+         If test lands 0.55-0.70: confirms val anomaly is clip-5
+         specific. If test lands near 0.34: shift is broader;
+         document, do not retune.
+
+
+--------------------------------------------------------------------------------
+SECTION C - TEACHING RECORD (foundations explained during 2.7)
+--------------------------------------------------------------------------------
+
+C.1 WHAT A LEARNING CURVE IS
+  A plot of model performance vs training-set size.
+  Answers: is the model overfitting, underfitting, or well-fit?
+  Also: would more data help, or is the model at its ceiling?
+
+C.2 HOW IT IS COMPUTED
+  For each training size s in [0.1n, 0.2n, ..., 1.0n]:
+    For each of 5 stratified folds:
+      train on s samples from the fold's training portion
+      score on the fold's own training portion -> train_score(s)
+      score on the fold's held-out portion       -> cv_score(s)
+    average across folds -> mean_train(s), mean_cv(s)
+  Plot both curves vs s, with std bands.
+
+C.3 HOW TO READ THE CURVES
+  | Pattern                                   | Diagnosis    |
+  |-------------------------------------------|--------------|
+  | train high, CV low, large gap, CV flat    | OVERFITTING  |
+  | train low, CV low, both converge low      | UNDERFITTING |
+  | train high, CV high, small gap, CV rising | WELL-FIT     |
+  | train and CV converge at high value       | CONVERGED    |
+
+  Overfitting: memorises training. More data helps.
+  Underfitting: model too weak. More capacity helps.
+  Well-fit: generalises. More data still helps a little.
+  Converged: learned all it can. More data gives little.
+
+C.4 WHAT train_score AND cv_score MEAN
+  train_score = macro-F1 on rows the model was fitted on
+  cv_score    = macro-F1 on rows the model has never seen (within CV)
+  The gap = how much the model relies on memorisation.
+  Big gap = memoriser. Small gap = generaliser.
+
+C.5 WHY WE COMPUTE IT ON TRAIN/CV ONLY (not val)
+  L16: val is distribution-shifted (clip 5, ~2x crop scale).
+  A learning curve on a shifted val would measure the shift,
+  not the model's internal capacity.
+  CV is train-side only; it preserves the distribution assumption.
+  Therefore 2.7 uses train/CV exclusively.
+
+C.6 OVERFITTING IN PLAIN TERMS
+  The model has learned the training rows too well.
+  It predicts them perfectly (train=1.0) but cannot repeat that
+  performance on new rows (CV=0.72).
+  The gap of 0.28 is memorisation, not skill.
+
+C.7 WHY BOTH OUR MODELS HIT TRAIN=1.0
+  rf : depth=10 with leaf=1 on 245 rows. Each row gets a leaf.
+       Perfect memorisation by construction.
+  svc: C=100, gamma='scale'. Minimal regularisation. RBF kernel can
+       carve arbitrarily tight boundaries.
+  Neither is a bug. Both are predictable consequences of permissive
+  configuration on small data.
+
+C.8 WHY CV RISES FROM 0.27 TO 0.72
+  At n=19 (about 1.3 samples/class), the model cannot form usable
+  boundaries. At n=196 (about 13 samples/class), it starts to
+  generalise.
+  CV score tracks samples-per-class, not absolute sample count,
+  because 15 classes divide the training budget.
+
+C.9 WHY THE GAP SHRINKS WITH SIZE
+  Every additional sample gives the model more to learn from and
+  less to memorise per row.
+  Monotone gap shrinkage is the signature of a correctly-configured
+  model on insufficient data. A broken model would not shrink.
+
+C.10 WHY OVERFITTING IS NOT ALWAYS BAD
+  If CV still clears the SMART target, the overfitting is benign.
+  Our CV=0.72 vs target 0.50: benign.
+  Fixing overfit via stronger regularisation would LOWER CV, not
+  raise it. The right fix is more data.
+
+C.11 BIAS-VARIANCE TRADE-OFF IN THIS PROJECT
+  Bias  : low. Model is expressive enough to reach CV=0.72.
+  Variance : high. Gap=0.28. Predictions swing with training set.
+  Bias-variance trade-off in this data regime is dominated by
+  variance. The lever is MORE DATA, not more regularisation.
+
+C.12 WHY rf AND svc DIVERGE AT THE TAIL
+  rf CV tail still rising (+0.011 per 25 samples).
+  svc CV tail flat (-0.001).
+  Interpretation: rf has headroom; svc at C=100 has hit its ceiling.
+  More data would help rf. More data would not help svc.
+  This is a fourth independent argument for choosing rf, on top of
+  CV, val rank, and tuning stability.
+
+C.13 WHAT "BENIGN" MEANS
+  Benign overfitting: the model has a large train-CV gap, but its
+  CV score clears the target and is stable across folds.
+  Malignant overfitting: gap large AND CV unstable AND CV near
+  or below the target.
+  Ours is benign: gap=0.28, CV=0.72, fold std ~0.087, SMART target
+  cleared by +0.22.
+
+C.14 WHAT TO DO ABOUT IT
+  - Do not increase regularisation. It would lower CV.
+  - Do not reduce model capacity. Same reason.
+  - Recommend more data per class for future work (L1 restated).
+  - Document as a structural limitation in Section 8.
+  - Test set at 3.2 will confirm CV-level performance (clip 1 is
+    at train scale; not affected by L16).
+
+C.15 WHAT A BROKEN LEARNING CURVE WOULD LOOK LIKE
+  - train and CV both low, both flat -> underfitting
+  - train high, CV ZERO (not low, zero) -> distribution mismatch
+  - CV non-monotone with big swings -> unstable folds, data too thin
+  - train non-monotone -> bug in scoring (e.g. wrong y)
+  None observed. Curve is textbook-correct.
+
+C.16 WHY WE PLOT SHADED STD BANDS
+  Mean alone hides variance. A model with mean CV=0.72 and std=0.087
+  has folds spanning ~0.63-0.81. Section 6 must state the std to
+  qualify the mean.
+  The band widens at small n (fewer samples per fold) and narrows
+  at large n (more samples per fold) - visible in the figures.
+
+
+--------------------------------------------------------------------------------
+SECTION D - CARRY-FORWARD TO 2.8 / 3.1
+--------------------------------------------------------------------------------
+
+D.1 2.8 (alternative scaler comparison)
+  CV-only, same reasoning as 2.7: val is invalid.
+  Question to answer: does MinMaxScaler vs StandardScaler change
+  the CV result materially? Expected: no, because Random Forest
+  is scale-invariant (tree splits do not depend on feature scale).
+  If D.1 outcome is confirmed, 2.8 becomes a one-figure cosmetic
+  addition to satisfy Jeroen's S6 (alternative preprocessing).
+
+D.2 3.1 (finalise model)
+  Retrain rf with locked params on 245 train rows.
+  Save joblib to models/final_pipeline.joblib.
+  Save feature_names list.
+  Verify reload gives identical predictions on 5 sample rows.
+  Learning curve confirms rf is the correct model to commit to:
+  CV=0.72 with headroom; SVC at ceiling at 0.70.
+
+D.3 3.2 (test one-shot)
+  Load joblib, predict 119 test rows ONCE.
+  Expect macro-F1 near CV (0.55-0.72 range), NOT val (0.34).
+  Test is clip 1, matches train scale.
+  No re-tuning, no re-splitting. Document, do not reopen.
+
+D.4 Section 6 content checklist (from this note)
+  - Confusion matrix from 2.5 (val) + 3.2 (test)
+  - Model comparison table from 2.2, 2.4, 2.5, 2.6
+  - Learning curve figure (2.7-lc_rf.png, 2.7-lc_svc.png)
+  - Overfitting paragraph (B.2-B.5, B.8)
+  - Bias-variance discussion (B.8, C.11)
+  - Regularisation constraints table (B.7)
+  - Tail-slope evidence for RF upside (B.5, C.12)
+  - L16 disclosure (val anomaly, informational only)
+
+D.5 Section 8 content checklist (from this note)
+  - Restate L1 with learning-curve evidence: "the CV curve for RF
+    is still on its rising phase at full training size, indicating
+    additional data would improve performance; more regularisation
+    would not."
+  - Structural limitation of small-data regime.
+  - Consistent with original scoping (functional bar, not optimal).
+
+================================================================================
+END OF NOTE
+================================================================================

@@ -64,7 +64,7 @@ def main():
             json.dumps(best_params, indent=2))
 
         res_df = pd.DataFrame(gs.cv_results_)
-        res_df.to_csv(LOGS_DIR / f"cv_results_{name}.csv", index=False)
+        res_df.to_csv(LOGS_DIR / f"2.4_cv_results_{name}.csv", index=False)
 
         summary.append({
             "model":     name,

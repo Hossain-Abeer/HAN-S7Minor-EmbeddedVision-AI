@@ -1,0 +1,246 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 2.8 ALTERNATIVE SCALER COMPARISON
+================================================================================
+Step    : 2.8 (code + run)
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : code + run
+Prereq  : 2.6 (rf selected)
+Status  : PASS
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+A - STEP RECORD
+--------------------------------------------------------------------------------
+
+A.1 DELIVERABLE
+  src\scaler_compare.py
+
+A.2 CONTENT
+  SCALERS      : {"StandardScaler", "MinMaxScaler"}
+  SCORING      : {"f1_macro": "f1_macro", "accuracy": "accuracy"}
+  CV           : StratifiedKFold(5, shuffle, seed=42)
+
+  Functions:
+    load_rf()      -> reads models/best_params_rf.json, rebuilds unfitted
+                      RandomForestClassifier with those params.
+    compare(X,y)   -> per scaler, builds Pipeline([("scaler", s),
+                      ("clf", load_rf())]) and runs cross_validate.
+                      Returns DataFrame, 2 rows x 4 metric columns.
+    plot_bar(df)   -> grouped bar chart, error bars from per-fold std.
+    main()         -> loads train split, runs compare, prints table,
+                      computes delta, saves CSV + PNG.
+
+  Key design: fresh rf per scaler (load_rf() called inside the loop).
+  Scaler re-fits per fold inside the pipeline. No leakage.
+
+A.3 INPUTS CONSUMED
+  dataset_clean.csv               (via load_splits, train role only)
+  models\best_params_rf.json      (max_depth=10, min_samples_leaf=1,
+                                   n_estimators=300)
+  X_train (245, 15), y_train (245).
+  Val and test NOT touched.
+
+A.4 OUTPUTS PRODUCED
+  scaler_compare.csv                          (2 rows x 4 metric cols)
+  figures\2.8_scaler_compare.png              (bar chart, error bars)
+  logs\2.8_scaler_compare.txt                 (console tee)
+
+A.5 COMMAND
+  cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI"
+  python src\scaler_compare.py 2>&1 |
+    Tee-Object -FilePath $data\logs\2.8_scaler_compare.txt
+
+A.6 OBSERVED OUTPUT
+  train (245, 15)
+                  f1_macro_mean  f1_macro_std  accuracy_mean  accuracy_std
+  scaler
+  StandardScaler         0.7193        0.0865         0.8327        0.0746
+  MinMaxScaler           0.7193        0.0865         0.8327        0.0746
+
+  delta (Std - MinMax) on macro-F1: +0.000000
+
+A.7 VERIFICATION LINE
+  2/2 scalers evaluated without error.
+  All 4 metric columns populated.
+  delta = +0.000000 (identical to machine precision).
+  Bar chart rendered with per-fold std error bars.
+  CSV and PNG written.
+  PASS.
+
+A.8 DEVIATIONS
+  None.
+
+A.9 CARRY-FORWARD
+  3.1 (finalise) : retrain rf with StandardScaler inside build_pipeline.
+                   Scaler choice cannot explain any between-model
+                   difference in Section 6.
+  Section 6       : one sentence + one figure closes Jeroen's S6
+                    (preprocessing level 3 -> 4).
+
+
+--------------------------------------------------------------------------------
+B - RESULTS
+--------------------------------------------------------------------------------
+
+B.1 HEADLINE
+  StandardScaler : f1_macro 0.7193 +/- 0.0865, accuracy 0.8327 +/- 0.0746
+  MinMaxScaler   : f1_macro 0.7193 +/- 0.0865, accuracy 0.8327 +/- 0.0746
+  delta (macro-F1) = +0.000000
+  delta (accuracy) = +0.000000
+
+B.2 NOT "CLOSE" - IDENTICAL TO MACHINE PRECISION
+  Same folds, same seed, same predictions.
+  Numerical identity, not coincidence.
+
+B.3 JEROEN'S S6 SATISFIED BY ARTEFACT
+  Preprocessing criterion level 3 -> 4 requires "at least one
+  alternative preprocessing method" with comparison.
+  This step provides the alternative (MinMaxScaler) and the comparison
+  (identical CV) as one figure + one sentence.
+
+B.4 SCALING CANNOT EXPLAIN BETWEEN-MODEL GAPS
+  In Section 6, no gap between rf, svc, knn can be attributed to
+  scaler choice. SVC and k-NN are scale-sensitive but were trained
+  under the same StandardScaler throughout 2.2-2.7.
+  Scalers exonerated as a confound.
+
+
+--------------------------------------------------------------------------------
+C - INTERPRETATION
+--------------------------------------------------------------------------------
+
+C.1 THREE STATEMENTS THIS STEP PROVES
+  1. RF is empirically scale-invariant on this data. Theory predicts
+     it; measurement confirms it.
+  2. StandardScaler retention is justified by pipeline uniformity,
+     not by RF performance. Cost = 0 to RF. Benefit = one pipeline
+     shape for all 3 candidates, no double-scaling bug class.
+  3. Jeroen S6 (preprocessing level 3 -> 4) is satisfied with
+     evidence, not argument.
+
+C.2 ONE-LINE SECTION 6 SENTENCE (ready to use)
+  "Random Forest is invariant to monotone feature scaling by
+   construction: tree splits depend on feature ordering, not
+   magnitude. Comparison of StandardScaler against MinMaxScaler
+   under identical cross-validation produced identical macro-F1
+   (delta = 0.000), confirming this property empirically.
+   StandardScaler is retained for pipeline uniformity with the
+   SVM and k-NN candidates, at no cost to the Random Forest."
+
+
+--------------------------------------------------------------------------------
+D - TEACHING
+--------------------------------------------------------------------------------
+
+D.1 WHY TWO SCALERS PRODUCE IDENTICAL RF RESULTS - LAYER 1
+  What each scaler does to a feature:
+    Raw value  |  StandardScaler  |  MinMaxScaler
+    -----------+------------------+---------------
+    0.10       |       -2.5       |      0.00
+    0.15       |       -1.2       |      0.17
+    0.20       |        0.0       |      0.33
+    0.25       |       +1.2       |      0.50
+    0.30       |       +2.5       |      1.00
+  Ordering preserved column to column. 0.10 stays smallest, 0.30
+  stays largest. Both are monotone linear transforms.
+  They change the numbers, not the order.
+
+D.2 LAYER 2 - HOW A DECISION TREE SPLITS
+  A split is one rule:  feature <= threshold -> left, else right.
+  What matters is WHICH ROWS FALL ON EACH SIDE, not the numbers.
+  If scaler A and scaler B both preserve ordering, then for any
+  threshold t in scaler A there exists a t' in scaler B producing
+  the same partition.
+  The tree finds the same split either way.
+  Extend across all splits, all trees, all 300 trees:
+    same splits -> same tree -> same forest -> same predictions
+    -> same macro-F1, same accuracy, same std.
+  Numerical identity is the only possible outcome.
+
+D.3 LAYER 3 - WHY SVC AND K-NN ARE DIFFERENT
+  SVC (RBF) : kernel = exp(-gamma * ||x - x'||^2). Depends on actual
+              numeric distances. Scaling changes distances. Different
+              scalers -> different boundaries -> different results.
+  k-NN      : prediction depends on Euclidean distance to nearest
+              neighbours. Scaling changes distances. Different
+              scalers -> different neighbour sets -> different
+              predictions.
+  This is why 9.2 needed StandardScaler: SVC and k-NN would be broken
+  without it. RF was never affected either way. One shared pipeline
+  is simpler and avoids a class of bugs (scaler outside pipeline,
+  double-scaling, refitting across folds).
+
+D.4 WHAT DELTA = 0.000000 ACTUALLY PROVES
+  Not a coincidence. Not a rounding artefact.
+  Same input, same seed, same folds, monotone-preserving transform.
+  Identical scores are a numerical identity, not an empirical
+  observation.
+  Reporting it is not padding. It closes the loop on Jeroen's S6
+  feedback with evidence rather than assertion.
+
+D.5 WHAT WE NOW KNOW THAT WE DID NOT BEFORE 2.8
+  - Scaler choice cannot explain any between-model difference in
+    Section 6. If SVC had won, scaler could have been a confound.
+    It did not; RF won. Scaler is exonerated.
+  - 3.1 can commit to final_pipeline.joblib with StandardScaler
+    without a scaler debate in the report. One sentence, one
+    figure, closed.
+
+
+--------------------------------------------------------------------------------
+E - SECTION 6 CONTENT CHECKLIST (from this note)
+--------------------------------------------------------------------------------
+
+  - Bar chart figure: 2.8_scaler_compare.png
+  - One-sentence scaler statement (C.2)
+  - Delta = 0.000 stated explicitly
+  - Reference to Jeroen S6 as satisfied by artefact
+
+
+--------------------------------------------------------------------------------
+F - SECTION 8 CONTENT CHECKLIST (from this note)
+--------------------------------------------------------------------------------
+
+  - Nothing new. 2.8 does not raise a limitation.
+  - If mention needed: "scaler choice was shown to be
+    performance-neutral for the chosen model (2.8), so it
+    does not appear as a future-improvement item."
+
+
+--------------------------------------------------------------------------------
+G - ARTEFACTS PRODUCED
+--------------------------------------------------------------------------------
+
+  src\scaler_compare.py                        (new)
+  scaler_compare.csv                           (new, DATA_ROOT)
+  figures\2.8_scaler_compare.png               (new)
+  logs\2.8_scaler_compare.txt                  (new, console tee)
+
+
+--------------------------------------------------------------------------------
+H - CARRY-FORWARD TO 3.1
+--------------------------------------------------------------------------------
+
+H.1 FINALISE PROCEDURE
+  Retrain rf with locked params on the full 245-row train set.
+  StandardScaler stays inside build_pipeline().
+  Save as models\final_pipeline.joblib via joblib.
+  Save feature_names list alongside.
+  Reload check: identical predictions on 5 sample rows.
+  No rescaling using val/test statistics.
+
+H.2 WHY THIS IS SAFE
+  - Model selection (2.6) locked.
+  - Overfit diagnosis (2.7) confirmed benign.
+  - Scaler choice (2.8) proven neutral.
+  - 3.1 has no outstanding decisions. Pure execution.
+
+H.3 WHAT 3.2 EXPECTS
+  Test is clip 1, matches train scale (L16 does not apply).
+  Expected macro-F1 in 0.55-0.72 range (tracks CV, not val).
+  If test lands 0.55-0.70: confirms val anomaly is clip-5 specific.
+  If test lands near 0.34: shift is broader; document, do not retune.
+
+================================================================================
+END OF NOTE
+================================================================================

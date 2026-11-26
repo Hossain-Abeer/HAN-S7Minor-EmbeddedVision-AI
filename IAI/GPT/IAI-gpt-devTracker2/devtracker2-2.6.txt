@@ -1,0 +1,551 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 2.6 SELECT BEST MODEL
+================================================================================
+Step    : 2.6
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : decision + code + run
+Prereq  : 2.4, 2.5
+Status  : PASS (with documented override)
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+A - STEP RECORD
+--------------------------------------------------------------------------------
+
+A.1 DELIVERABLE
+  src\select_model.py
+
+A.2 PURPOSE
+  Decision step, not a scoring step. Takes 3 candidates from 2.4/2.5,
+  applies a formal ranking rule, emits ONE selected model name + a
+  written rationale + a JSON artefact that downstream steps (3.1, 3.2)
+  consume.
+
+  The report needs exactly one model carried forward. Rubric requires
+  "select best model, argued" - a defensible rule, not just "we picked
+  the highest number".
+
+A.3 THREE-LAYER RANKING DESIGN
+  Layer 1 - Primary : CV macro-F1 from grid search (2.4 mean_test_score).
+            In-distribution; unbiased; heaviest weight.
+
+  Layer 2 - Corroboration : Val rank preservation from 2.5.
+            Confirms or challenges primary ordering.
+            NOT an absolute score (val is distribution-shifted, L16).
+            Its VALUE is the ordering, not the magnitude.
+
+  Layer 3 - Tie-break : applies ONLY if primary top-2 gap < noise floor.
+            Ordered rules:
+              a. fewer val per-class F1 zeros
+              b. higher val min_class_f1
+              c. lower model complexity (knn=1 < svc=2 < rf=3)
+
+  Override clause : MANUAL_OVERRIDE + OVERRIDE_REASON.
+            Only mechanism to deviate from mechanical tie-break.
+            Must be documented in the note.
+
+A.4 NOISE FLOOR
+  NOISE_FLOOR = 0.087 (max baseline CV std from 2.2: rf 0.0865 -> 0.087).
+  Any CV gap below this triggers the tie-break chain.
+  Rationale: fold-to-fold swing of 0.087 is indistinguishable from noise
+  at 245 rows / 5 folds. Gaps smaller than this are not evidence.
+
+A.5 INPUTS CONSUMED
+  logs\2.4_cv_results_svc.csv          (or cv_results_svc.csv)
+  logs\2.4_cv_results_knn.csv
+  logs\2.4_cv_results_rf.csv
+  models\best_params_svc.json          (C=100, gamma=scale, kernel=rbf)
+  models\best_params_knn.json          (n_neighbors=5, weights=distance)
+  models\best_params_rf.json           (n_estimators=300, max_depth=10,
+                                        min_samples_leaf=1)
+  val_summary.csv                      (2.5 output, 3 rows)
+  logs\2.2_cv_baseline.txt             (source of noise floor)
+
+A.6 OUTPUTS PRODUCED
+  logs\2.6_selection_note.txt          (full audit trail + decision)
+  logs\2.6_run.txt                     (console copy)
+  models\2.6_selected_model.json       (consumed by 3.1)
+
+  JSON structure:
+    {step, model, params, cv_f1, val_f1, override}
+
+A.7 COMMAND
+  python src\select_model.py 2>&1 |
+    Tee-Object -FilePath $data\logs\2.6_run.txt
+
+A.8 OBSERVED OUTPUT (from 2.6_run.txt)
+  ============================================================================
+  2.6 - MODEL SELECTION NOTE
+  ============================================================================
+  CV noise floor          : 0.087
+  Primary metric          : CV macro-F1 (grid search best)
+  Corroboration           : val rank preservation
+  Rank preservation       : YES
+    CV rank  : ['rf', 'svc', 'knn']
+    Val rank : ['rf', 'svc', 'knn']
+
+  Decision table
+  ----------------------------------------------------------------------------
+  model     cv_f1   cv_std   val_f1  n_zero   min_f1
+  svc      0.7027   0.0792   0.3144       6   0.0000
+  knn      0.6576   0.0490   0.3061       6   0.0000
+  rf       0.7193   0.0865   0.3425       6   0.0000
+
+  Top-2 CV gap            : 0.0166
+  Noise-floor verdict     : TIE (gap < noise)
+  Decision mode           : tie-break
+  Tie-break trail:
+    Rule a (fewer val F1 zeros): min=6, survivors=['svc', 'knn', 'rf']
+    Rule b (higher val min_class_f1): max=0.0, survivors=['svc', 'knn', 'rf']
+    Rule c (lower complexity): min=1, survivors=['knn']
+
+  Mechanical winner       : knn
+  MANUAL OVERRIDE         : rf
+  Override rationale      : Val rank preservation (rf>svc>knn) corroborates
+                            the CV ordering. Tuning sensitivity differs:
+                            RF gain vs baseline = +0.0002 (default-robust);
+                            SVC gain = +0.1004 (tuning-dependent). At
+                            deployment, RF's default robustness and its
+                            leading val score under distribution shift (L16)
+                            outweigh the small 0.0166 CV gap. Complexity
+                            tie-break rule 3 is overridden with this
+                            rationale.
+  FINAL SELECTED MODEL    : rf
+  Locked hyperparameters  : {'max_depth': 10, 'min_samples_leaf': 1,
+                             'n_estimators': 300}
+  ============================================================================
+
+A.9 VERIFICATION LINE
+  CV scores match 2.4 exactly (rf 0.7193 / svc 0.7027 / knn 0.6576).
+  Val scores match 2.5 exactly (rf 0.3425 / svc 0.3144 / knn 0.3061).
+  Noise floor 0.087 matches 2.2 rf std.
+  Top-2 CV gap = 0.7193 - 0.7027 = 0.0166. Correct arithmetic.
+  Rank preservation detected correctly (CV order == Val order).
+  Tie-break trail complete: rules a -> b -> c all executed, all logged.
+  Override documented and written to JSON.
+  Outputs tagged 2.6_ per convention.
+  PASS.
+
+A.10 DEVIATIONS
+  D1. Mechanical winner was knn (via tie-break rule c), not rf.
+      Correct per design. Override applied and documented.
+      Behaviour is not a bug; it is the system working as designed.
+      The override corrects a design assumption that val would be
+      reliable for tie-breaks. 2.5 showed val is not reliable (L16).
+  D2. cv_results_*.csv filename mismatch initially triggered
+      FileNotFoundError at 2.6 run.
+      Fixed by reading both cv_results_<model>.csv and
+      2.4_cv_results_<model>.csv in read_cv_best().
+      grid_search.py should be patched to write 2.4_ prefix going
+      forward, but reader now handles both.
+  D3. Missing rationale for why override prefers rf over svc
+      (both above knn in CV). Override is set; paragraph exists;
+      but a two-sentence counter-example paragraph explaining
+      "why not knn" would strengthen the audit trail.
+      Recommended addition to note (see E.5). Non-blocking.
+
+
+--------------------------------------------------------------------------------
+B - RESULTS AND INTERPRETATION
+--------------------------------------------------------------------------------
+
+B.1 DECISION TABLE (from 2.6 output)
+  model  cv_f1   cv_std  val_f1  n_zero  min_f1
+  svc    0.7027  0.0792  0.3144  6       0.0000
+  knn    0.6576  0.0490  0.3061  6       0.0000
+  rf     0.7193  0.0865  0.3425  6       0.0000
+
+B.2 PRIMARY ORDERING
+  rf > svc > knn (CV macro-F1).
+  Top-2 gap rf-svc = 0.0166.
+  Gap < noise floor 0.087 -> TIE.
+
+B.3 CORROBORATION
+  Val ordering rf > svc > knn MATCHES CV ordering exactly.
+  Rank preservation = YES.
+  This is the strongest single signal in 2.6: the ranking is
+  stable across two very different data conditions
+  (in-distribution CV, shifted val).
+
+B.4 WHAT THE TIE-BREAK DID
+  Rule a (zeros): all 3 = 6 zeros -> no differentiation.
+                  Val is too shifted to expose model-specific
+                  differences in zero-F1 classes. Expected.
+  Rule b (min_f1): all 3 = 0.0000  -> no differentiation.
+                  Same cause.
+  Rule c (complexity): knn=1 < svc=2 < rf=3 -> knn wins.
+
+  Mechanical winner: knn.
+  This is the design's intended behaviour given the inputs.
+  It is not a defect. It is the rule chain doing exactly what
+  it was designed to do.
+
+B.5 WHY RULE C'S WINNER IS WRONG HERE
+  Rule c is designed for the case where models are genuinely
+  EQUIVALENT - i.e. equally good, so prefer simpler.
+  That precondition is false here:
+    - knn CV F1 is 0.06 BELOW rf. Not equivalent; ordered.
+    - knn val F1 is 0.036 BELOW rf. Not equivalent; ordered.
+  The "equivalent" reading was an artefact of the wide noise
+  band (~0.087) caused by thin data (245 rows, 5 folds of ~49).
+  Wide noise band = wide confidence intervals, not equivalence.
+  When point estimates are ordered inside a wide band, the
+  ordering is still a signal; treating it as noise discards
+  genuine information.
+
+B.6 WHY THE OVERRIDE TO RF IS DEFENSIBLE
+  Three arguments, priority order:
+    (1) RF is #1 on CV F1 (0.7193, best of 3).
+        Primary metric. In-distribution. Unbiased.
+    (2) RF is #1 on val F1 (0.3425, best of 3).
+        Corroboration. RF survives the clip-5 shift better than
+        svc or knn - resilience under distribution shift.
+    (3) RF is default-robust.
+        Grid search found NO meaningful tuning gain for rf
+        (delta +0.0002 = pure noise, 2.4 C.3).
+        This is not a weakness. It means rf at defaults is
+        already near-optimal for this data. At deployment, fewer
+        knobs means fewer failure modes.
+
+B.7 WHY NOT SVC (RUNNER-UP)
+  SVC tuned F1 = 0.7027. Close to rf. But:
+    SVC BASELINE F1 = 0.6023.
+    Tuning gain = +0.1004.
+    SVC's good score is ENTIRELY dependent on C=100 being correct.
+    C=1  -> 0.6023
+    C=10 -> 0.6619
+    C=100-> 0.7027
+  Sensitivity to C is ~0.10 across the grid. That is fragile.
+  Deployment: every small data change could swing SVC's score by
+  up to 0.10. Default-robust beats tuned-fragile for a project
+  where the model will be tested once, honestly, on 119 samples.
+
+B.8 WHY NOT KNN (MECHANICAL WINNER)
+  KNN trails rf on BOTH metrics:
+    CV F1  0.6576 vs 0.7193  (knn is 0.062 below)
+    Val F1 0.3061 vs 0.3425  (knn is 0.036 below)
+  Rule c promoted the WORST model to the top on complexity
+  grounds. That inversion is the direct evidence that rule c
+  should never fire when the val signal is unreliable.
+  Precondition for rule c (equivalent primary scores) was not
+  met, so rule c's output was not a valid selection.
+
+B.9 RANK PRESERVATION AS THE KEY INSIGHT
+  Even under a ~0.36 macro-F1 drop on val (2.5 B.1), the model
+  ORDERING is preserved.
+  Interpretation: RF's advantage over svc/knn is not a CV
+  artefact. It holds when inputs change distribution. That is
+  the strongest single piece of evidence for the RF selection.
+  If rank preservation had failed (e.g. val order svc > rf > knn),
+  the selection decision would have been genuinely contested and
+  should have been flagged as an open question in Section 6.
+  It did not fail. Rank preservation is a legitimate
+  corroboration signal, distinct from val's absolute scores.
+
+
+--------------------------------------------------------------------------------
+C - TEACHING - TIE-BREAK CHAIN AND OVERRIDE
+--------------------------------------------------------------------------------
+
+C.1 WHAT THE NOISE FLOOR IS AND IS NOT
+  IS : a threshold for "we cannot distinguish scores below this".
+       Derived empirically from fold-to-fold CV std (2.2).
+       Consistent with the actual behaviour of the data.
+  IS NOT : a claim that differences below it are MEANINGLESS.
+            Differences below it are not STATISTICALLY ROBUST at
+            this sample size. They are still POINT-ESTIMATE
+            ORDERINGS, which is exactly what we have.
+
+C.2 WHY WIDE NOISE FLOOR HERE
+  245 training rows / 5 folds = ~49 rows per fold.
+  Thin classes (C5, C10 = 5 samples) are sparsely represented
+  across folds. One fold losing both C10 samples swings the mean
+  by 0.05+. Thin data = wide noise. Not a defect; a sample-size
+  reality.
+
+C.3 THE THREE TIE-BREAK RULES IN THEIR ORIGINAL DESIGN
+  Rule a. "If one model handles thin classes better, prefer it."
+          Rationale: bad on thin classes = bad in deployment
+          (real pool games have all 15 balls present).
+          Evidence source: val per-class F1 zeros.
+  Rule b. "Higher min_class_f1 = better worst-case behaviour."
+          Rationale: deployment cares about the worst class,
+          not the average.
+          Evidence source: val per-class F1.
+  Rule c. "Lower complexity = fewer failure modes."
+          Rationale: when genuinely tied on performance,
+          prefer the simpler system.
+
+  The chain is ordered a -> b -> c. Each rule narrows the
+  candidate set; if one candidate remains, tie-break halts.
+
+C.4 WHAT WENT WRONG IN THE CHAIN HERE
+  Rules a and b both depend on val being a representative
+  secondary signal.
+  L16 (2.5) established val is distribution-shifted. Rules a
+  and b are dead.
+  Rule c fired without rule a or b having properly narrowed
+  the candidate set. Rule c then decided on complexity alone -
+  which selected the weakest candidate.
+
+C.5 THE OVERRIDE PRINCIPLE
+  When a mechanical rule produces a result that violates the
+  rule's own precondition, the rule's output is INVALID.
+  The correct behaviour is: fall back to the primary signal
+  (CV ordering), document the fallback, and record the
+  rationale.
+
+  This is not "fudging the result". This is "the rule was
+  applied outside its design envelope; correction is required".
+  The override is explicit, is in the code, is in the note,
+  is in the JSON, and is in this devtracker. Nothing hidden.
+
+C.6 WHAT MAKES AN OVERRIDE LEGITIMATE VS ILLEGITIMATE
+  LEGITIMATE:
+    - Explicitly declared in code (MANUAL_OVERRIDE variable).
+    - Rationale paragraph is required (OVERRIDE_REASON).
+    - Recorded in note + JSON + devtracker.
+    - Justified by evidence outside the mechanical rule.
+    - Does not contradict the primary metric.
+
+  ILLEGITIMATE:
+    - Silent - just changing the output without a trail.
+    - Contradicts the primary metric with no justification.
+    - Applied to a clear-cut decision (not a tie).
+    - Applied to save a failing result (post-test retuning).
+
+  This override is legitimate on all five criteria:
+    - Declared (MANUAL_OVERRIDE = "rf").
+    - Rationale present (OVERRIDE_REASON paragraph).
+    - Recorded in all 3 artefacts.
+    - Justified by rank preservation + default robustness,
+      which are independent of the tie-break rules.
+    - CV F1 also favours rf, so override does not contradict
+      primary metric - it honours it.
+
+C.7 WHAT THE OVERRIDE REVEALS (design finding, not fix)
+  The tie-break chain implicitly assumed val is a reliable
+  secondary signal. It is not, in this project (L16).
+  Consequence: rules a and b became inert, rule c decided
+  unilaterally, and rule c picked the weakest model.
+  Better design (for future work):
+    - Detect unreliable val before running tie-break.
+    - Fall back to CV ordering, not complexity, when val is
+      unreliable.
+    - Restrict rule c to cases where CV ties at the top of the
+      ranking, not cases where all candidates are inside the
+      noise band.
+
+C.8 REPORTING LANGUAGE FOR SECTION 6
+  "The tie-break chain was designed to prefer simpler models
+  when CV scores were indistinguishable. However, the val
+  signal at 2.5 revealed a distribution shift (clip 5, ~2x
+  crop scale), which rendered the val-based tie-break rules
+  (a, b) unusable. Rule c (lower complexity) then mechanically
+  selected k-NN, which scored lowest on both CV and val F1.
+  A documented override selected RF on three grounds:
+    (i) highest CV macro-F1,
+    (ii) highest val macro-F1 despite shift,
+    (iii) default-robust tuning behaviour.
+  This override and its rationale are recorded in
+  models/2.6_selected_model.json."
+
+C.9 REPORTING LANGUAGE FOR SECTION 8 (LIMITATIONS)
+  "The tie-break rule chain used val metrics (rules a, b) that
+  became invalid due to the distribution shift. Under
+  noise-band ties, the tie-break fell to complexity preference,
+  which selected the weakest model. Future work should
+  (i) check val distribution assumptions before relying on
+  val in selection, and (ii) fall back to CV-only ranking when
+  val is unreliable."
+
+
+--------------------------------------------------------------------------------
+D - DETAILED TEACHING - EVERY FOUNDATIONAL CONCEPT TOUCHED
+--------------------------------------------------------------------------------
+
+D.1 WHAT IS A "MODEL SELECTION" DECISION
+  Given N trained candidate models, pick exactly one to carry
+  forward to finalisation and test. Selection is a decision,
+  not a computation. It combines:
+    - quantitative evidence (CV scores, val scores, statistics)
+    - qualitative evidence (sensitivity, complexity, robustness)
+    - judgement (when the quantitative evidence is inconclusive)
+
+D.2 WHY THE PRIMARY METRIC IS CV, NOT VAL
+  CV trains and scores within the training distribution.
+  It is the CLEANEST measurement of generalisation quality
+  available on this dataset, because train rows come from
+  clips 2-4 (consistent scale) and folds are random subsets
+  of that consistent pool.
+
+  Val measures generalisation to new data. It is a purer test
+  of "works on unseen data" - BUT ONLY IF val comes from the
+  same distribution as train. In this project, val (clip 5)
+  does not (L16). Val's absolute score is therefore not a
+  valid measure of model quality. Its RANK is still useful,
+  because rank preservation is a weaker assumption than
+  score preservation.
+
+D.3 WHY RANK PRESERVATION IS WEAKER THAN SCORE PRESERVATION
+  Score preservation: model achieves same macro-F1 on val as
+    on CV. Strong assumption. Requires val = train distribution.
+  Rank preservation: model's ORDERING relative to other
+    models is preserved across data conditions. Weaker
+    assumption. Requires only that models' relative robustness
+    is consistent - which follows from architectural differences
+    (RF bagging vs SVC kernel vs kNN distance) being stable
+    across distributions.
+
+  Implication: even when val scores are garbage, val ranks can
+  still be used as corroboration. This is what 2.6 did.
+
+D.4 WHAT "DEFAULT-ROBUST" MEANS
+  Default-robust: model's performance is insensitive to
+  hyperparameter choice within a reasonable grid.
+  Default-fragile: model's performance varies a lot with
+  hyperparameter choice.
+
+  RF : default-robust (grid spread 0.0286, below noise floor).
+  SVC: default-fragile (grid spread 0.324, 11x noise floor).
+  KNN: moderately sensitive (grid spread 0.265, 9x noise floor).
+
+  Deployment implication: default-robust models are safer
+  because they do not depend on having found exactly the right
+  hyperparameter. In a one-shot test with 119 samples, SVC's
+  C=100 result could be a lucky fold draw; RF's result would
+  not be.
+
+D.5 WHY "LOWER COMPLEXITY" IS THE LAST RULE, NOT THE FIRST
+  Complexity preference is only valid when performance is
+  genuinely equivalent. Making it the first rule would always
+  pick the simplest model, regardless of quality.
+  Making it the last rule means: use performance evidence
+  (rules a, b) to narrow down first; only when performance is
+  genuinely tied does simplicity break the tie.
+
+  The design is correct. The behaviour was wrong because
+  rules a and b were dead, causing rule c to fire before the
+  candidate set was properly narrowed.
+
+D.6 WHAT A "LOCKED HYPERPARAMETER" IS
+  A hyperparameter whose value is fixed at selection time and
+  never changed during 3.1 or 3.2.
+  Locked here: rf with {max_depth=10, min_samples_leaf=1,
+  n_estimators=300}.
+  Locking prevents post-test retuning (which would be
+  dishonest) and prevents accidental divergence between
+  3.1 (finalise) and 3.2 (test).
+
+D.7 WHAT THE SELECTED_MODEL.JSON IS FOR
+  Downstream steps (3.1, 3.2) read it as the single source of
+  truth for "which model, which params".
+  3.1 refuses to run if the file is missing.
+  3.2 refuses to run if the file does not match the pipeline
+  that was built at 3.1.
+  This makes the selection traceable and non-silent. A model
+  swap would require editing the JSON, which would show in git.
+
+D.8 WHERE EACH NUMBER CAME FROM (audit chain)
+  cv_f1   0.7193 : grid_search.py, rf best row, mean_test_score
+                    (2.4 grid log, cv_results_rf.csv row 3)
+  cv_std  0.0865 : same row, std_test_score
+  val_f1  0.3425 : evaluate_val.py, rf row in val_summary.csv
+  n_zero  6      : same row, computed from per-class f1_score
+  min_f1  0.0    : same row, minimum per-class f1_score
+  noise   0.087  : max baseline cv_std from 2.2, rounded
+
+  Every number in the decision table traces to a file. No
+  number is invented, estimated, or hand-tuned.
+
+
+--------------------------------------------------------------------------------
+E - CARRY-FORWARD
+--------------------------------------------------------------------------------
+
+E.1 2.7 (learning curves)
+  Use selected model rf + runner-up svc.
+  Compute train vs CV score curves (macro-F1) vs training size.
+  Ignore val entirely (still shifted).
+  Purpose: demonstrate (a) whether rf is overfitting at 245 rows,
+           (b) whether svc has a steeper slope (suggesting it would
+           benefit more from additional data - useful for DL
+           comparison narrative later).
+
+E.2 2.8 (scaler comparison)
+  Use selected model rf only.
+  Compare StandardScaler vs MinMaxScaler on CV.
+  Purpose: (a) satisfy Jeroen S6 (alternative preprocessing
+           method), (b) check whether MinMaxScaler's bounded
+           range would have been more robust to clip-5 scale
+           shift. Even if it would, no re-tune end-to-end this
+           late; report as future work.
+
+E.3 3.1 (finalise)
+  Read models/2.6_selected_model.json.
+  Build pipeline with those exact params.
+  Fit on train (245 rows) only. NO val rows.
+  Save as models/final_pipeline.joblib.
+  Reload-verify on 5 sample rows.
+
+E.4 3.2 (test - ONE SHOT)
+  Load joblib. Predict on 119 test rows once.
+  Compute confusion matrix, per-class report, macro-F1.
+  Compare against SMART floor 0.50.
+  Compare against CV expectation 0.55-0.70 (per 2.5 E.5).
+  If test score is consistent with CV: confirms val anomaly
+  is clip-5 specific, not a general model weakness.
+  No retuning after this line.
+
+E.5 OPTIONAL NOTE STRENGTHENING
+  Add the "why not k-NN" paragraph to 2.6_selection_note.txt:
+    "Rule c selected k-NN on complexity. However, k-NN scored
+    last on both CV macro-F1 (0.6576 vs rf 0.7193) and val
+    macro-F1 (0.3061 vs rf 0.3425). Complexity preference is
+    only valid when primary scores are equivalent. Here they
+    are ordered, not equivalent. The 'equivalent' reading was
+    an artefact of the wide noise band (~0.087) caused by
+    thin data (245 rows, 5 folds of ~49)."
+  Non-blocking. Improves audit trail.
+
+E.6 FOR FULL ML SECTION 6
+  This note supplies:
+    - Full 3-model comparison table with CV + val metrics
+    - Justification for CV as primary metric (B.9, D.2, D.3)
+    - Rank preservation as corroboration (B.9)
+    - Default-robustness argument (B.7, D.4)
+    - Tie-break chain failure analysis (B.5, C.4)
+    - Documented override (C.5, C.6)
+    - Selection: rf, {max_depth=10, min_samples_leaf=1, n_estimators=300}
+
+E.7 FOR FULL ML SECTION 8 (LIMITATIONS)
+  Add two new limitation items:
+    L18 - TIE-BREAK CHAIN DEPENDS ON VALID VAL
+          (rules a, b invalidated by L16)
+    L19 - NOISE-BAND WIDTH (~0.087) LIMITS RESOLUTION
+          (thin data -> wide CV std -> overlap between models)
+  Both should be reported as design limitations, not defects.
+
+E.8 FOR CODE APPENDIX
+  select_model.py is a key-snippet candidate (selection logic
+  + override mechanism). Comments in the source document the
+  three-layer design and the override clause.
+
+
+--------------------------------------------------------------------------------
+F - ARTEFACTS PRODUCED
+--------------------------------------------------------------------------------
+
+  src\select_model.py                  (new)
+  logs\2.6_run.txt                     (console copy)
+  logs\2.6_selection_note.txt          (audit trail)
+  models\2.6_selected_model.json       (3.1 reads this)
+
+  Total new artefacts: 4.
+  No data artefacts modified.
+  No models retrained in this step (read-only on 2.4 outputs).
+
+
+================================================================================
+END OF NOTE
+================================================================================

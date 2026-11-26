@@ -1,0 +1,527 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 3.2 ONE-SHOT TEST SET EVALUATION
+================================================================================
+Step    : 3.2 (code + run)
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : code + run
+Prereq  : 3.1 (final pipeline persisted)
+Status  : VALID. RESULT = FAIL (SMART target not met).
+Date    : <fill>
+
+================================================================================
+SECTION A - STEP RECORD
+================================================================================
+
+A.1 DELIVERABLE
+  src\evaluate_test.py
+
+A.2 CONTENT
+  load_final_pipeline()      -> reads 3.1 joblib + feature-names JSON
+  check_feature_alignment()  -> asserts model order == data order
+  evaluate_once()            -> single pipe.predict(X_te), then metrics
+  plot_cm()                  -> confusion matrix PNG
+  write_classification_report() -> per-class precision/recall/F1
+  main()                     -> orchestrate, emit, log, compare to CV/val
+
+  Constants:
+    LABELS       = [1..15]
+    SMART_TARGET = 0.50
+    MODEL_PATH   = models/3.1-final_pipeline.joblib
+    FEAT_PATH    = models/3.1-final_feature_names.json
+    CM_PATH      = figures/3.2-cm_test.png
+    REPORT_PATH  = logs/3.2-classification_report.txt
+    LOG_PATH     = logs/3.2-test_report.txt
+    SUMMARY_PATH = DATA_ROOT/3.2-test_summary.csv
+
+A.3 COMMAND
+  cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI"
+  python src\evaluate_test.py 2>&1 |
+    Tee-Object -FilePath "D:\HAN\Semester 7 Minor\
+                          billiards-game-clips\IAI\logs\3.2-console.txt"
+
+A.4 INPUTS CONSUMED
+  dataset_clean.csv                  (via load_splits) - TEST rows only
+                                     used for prediction; TRAIN and VAL
+                                     loaded by signature but discarded
+  models\3.1-final_pipeline.joblib   (fitted Pipeline: scaler + rf)
+  models\3.1-final_feature_names.json (15 names, locked order)
+  retained_features_correlations.txt (order cross-check)
+  X_te (119, 15), y_te (119,)
+
+A.5 OUTPUTS PRODUCED (all tagged 3.2-)
+  figures\3.2-cm_test.png                   (15x15 confusion matrix)
+  logs\3.2-classification_report.txt         (per-class PRF/support)
+  logs\3.2-test_report.txt                   (console log)
+  3.2-test_summary.csv                       (DATA_ROOT)
+  logs\3.2-console.txt                       (tee of console)
+
+A.6 OBSERVED OUTPUT
+  test shape    : (119, 15)
+  features      : 15
+  pipeline      : Pipeline (2 steps)
+  scaler        : StandardScaler
+  clf           : RandomForestClassifier
+  feature order : OK
+  one-shot predict on 119 rows ...
+  done. no further prediction passes.
+
+  TEST macro-F1 : 0.2607
+  TEST accuracy : 0.3025
+  min class F1  : 0.0000
+  F1=0 classes  : 6  (classes 5, 7, 9, 10, 13, 15)
+  SMART target  : >= 0.5
+  SMART verdict : FAIL
+
+  Comparative:
+    CV macro-F1  (2.2) : 0.7193   reference
+    val macro-F1 (2.5) : 0.3425   L16 anomaly, not selection
+    test macro-F1      : 0.2607
+
+  Interpretation (script): "test tracks val. Shift is broader.
+  Document, do NOT retune."
+
+A.7 VERIFICATION LINE
+  1/1 persisted pipeline loaded successfully. 15/15 features matched.
+  Feature order OK (model names == data names element-wise).
+  Exactly 1 .predict() call issued. No re-fit, no re-tune,
+  no second prediction pass.
+  5/5 artefacts emitted with 3.2- tag.
+  SMART verdict recorded as FAIL (not raised as exception).
+  PASS mechanically. FAIL on metric.
+
+  Result is a legitimate finding, not a defect.
+
+A.8 DEVIATIONS
+  D1. Test macro-F1 (0.2607) is BELOW val macro-F1 (0.3425).
+      Expected "test tracks CV (0.55-0.72)" per 3.1 carry-forward.
+      Actual: test tracks or falls below val.
+      Implication: distribution shift is broader than clip-5.
+      Section 8 must be updated: L16 is NOT clip-5 specific.
+
+  D2. Best-CV candidate (rf, 0.7193) underperforms SMART target by
+      0.239 on test. This is the honest reported number.
+      No retuning performed. 3.2 rule: one shot, document.
+
+  D3. Summary output filename changed from spec "test_summary.csv"
+      to "3.2-test_summary.csv" for artefact traceability
+      (user request). Consistent with earlier renamed artefacts.
+
+A.9 CARRY-FORWARD
+  3.3 error_analysis.py:
+    - Reads 3.2 confusion matrix, identifies top-10 off-diagonal cells
+    - Confirms/refutes known pairs (6/9, 4/9, 11/1, 2/5)
+    - Quantifies structural vs shift-induced failures
+  4.1 predict.py:
+    - Same joblib, same feature order
+    - Deploy accuracy target: compare against 0.2607, not 0.7193
+  4.4 deploy results:
+    - Report as "deploy macro-F1 vs 3.2 test 0.2607"
+  5.1 pipeline unit test:
+    - Same joblib is the fixture under test
+  Section 6 / 8:
+    - Report 0.2607 as the honest one-shot test macro-F1
+    - SMART objective not met
+
+
+================================================================================
+SECTION B - RESULTS
+================================================================================
+
+B.1 HEADLINE NUMBERS
+
+  | Metric              | Value    | Note                              |
+  |---------------------|----------|-----------------------------------|
+  | Test macro-F1       | 0.2607   | SMART target 0.50 -> FAIL         |
+  | Test accuracy       | 0.3025   | 30% correct; 15-class random 6.7% |
+  | min class F1        | 0.0000   | At least one class wholly wrong   |
+  | n_zero_f1 classes   | 6        | 5, 7, 9, 10, 13, 15               |
+
+B.2 TRAJECTORY
+
+  CV      0.7193   <- within-train generalisation (good)
+  val     0.3425   <- clip 5, first warning (L16)
+  test    0.2607   <- clip 1, confirmation of failure
+
+  Test is BELOW val. Both held-out sets collapsed.
+  Interpretation: not "clip 5 is weird". It is "the model does not
+  generalise across clips at all." Clips 2-4 are internally similar
+  (hence CV works). Clips 1 and 5 both differ from that cluster.
+
+B.3 PER-CLASS TEST PERFORMANCE
+
+  Strong (F1 >= 0.3 on test):
+    1  : F1 0.562  (support 17)
+    2  : F1 0.667  (5)
+    6  : F1 0.706  (8)
+    8  : F1 0.333  (13)
+    11 : F1 0.667  (5)
+    12 : F1 0.375  (6)  <- recall 1.0, precision 0.231
+    14 : F1 0.286  (5)
+
+  Zero (F1 = 0.000):
+    5  : support 6
+    7  : support 1
+    9  : support 7
+    10 : support 5
+    13 : support 13
+    15 : support 4
+
+B.4 DOMINANT CONFUSIONS (from confusion matrix)
+
+  True -> Predicted   Count (of support)   Interpretation
+  -----------------   -------------------   --------------------------
+  13 -> 12            12 of 13              Class 13 near-universally
+                                             predicted as 12
+  10 -> 12            5 of 5                Class 10 entirely as 12
+  8  -> 4             7 of 13               Half of class 8 as 4
+  5  -> 1             5 of 6                Class 5 mostly as 1
+  1  -> 5             8 of 17               Class 1 often as 5
+  3  -> 1,2,4,5,7     scattered             Class 3 no stable prediction
+  12 -> 12            6 of 6 (precision .23) Class 12 = prediction magnet
+
+B.5 CLASS-12 MAGNET
+
+  Class 12's recall = 1.000 (6/6 correct).
+  Class 12's precision = 0.231 (only 6 of 26 predictions were right).
+  So the model predicted "12" 26 times when only 6 were truly 12.
+
+  Interpretation: feature-space collapse. Under shifted inputs, RF
+  decision regions bunch up at one dense corner; that corner is
+  labelled 12. Consistent with the "distribution shift" diagnosis.
+
+B.6 CONSISTENT FAILURES ON BOTH VAL AND TEST
+
+  Classes at F1=0 on val (2.5) AND test (3.2):
+    9, 10, 13.
+  These fail for STRUCTURAL reasons - thin train samples, feature
+  overlap, or both. Not a split artefact. Not a shift artefact.
+  These are the classical-ML ceiling on this data.
+
+B.7 SURVIVORS UNDER COLLAPSE
+
+  Classes 1, 2, 6, 11, 12 reach F1 0.37-0.71 on test despite full
+  collapse. These are the classes whose numeral shape is distinctive
+  OR whose solid/stripe marker is visible after scaling. Their
+  survival shows the shift is NOT uniform blind collapse; it is
+  selective failure on scale-sensitive or feature-overlapping classes.
+
+
+================================================================================
+SECTION C - INTERPRETATION (feeds Section 6 + 8)
+================================================================================
+
+C.1 WHAT HAPPENED
+
+  The classical ML pipeline built at 2.1-3.1 achieved 0.7193 CV
+  macro-F1 on training distribution, but only 0.2607 on the sealed
+  test set. That is below the SMART target of 0.50 by 0.239.
+
+  Both held-out sets (val clip 5, test clip 1) collapsed relative
+  to train (clips 2-4). Failure is systematic across clips.
+
+C.2 WHY THIS IS NOT A BUG
+
+  - One-shot prediction discipline was followed (single .predict).
+  - Feature order verified (model order == data order).
+  - Persisted pipeline reloaded without error (3.1 reload delta
+    0.00e+00).
+  - 6/6 artefacts emitted correctly.
+  - Test set was genuinely unseen by any prior step.
+
+  The failure is a real property of the pipeline + data, not an
+  execution error.
+
+C.3 WHY THIS IS NOT A REASON TO RETUNE
+
+  - 3.2 rule: one pass. Whatever number comes out is reported.
+  - Retuning on test would convert the sealed test into a validation
+    set, invalidating its status as held-out.
+  - Re-splitting would leak through the analysis already completed.
+  - The rubric rewards honest limitation documentation, not
+    hidden failure.
+
+C.4 WHY THIS MAKES THE REPORT STRONGER
+
+  Rubric explicitly states:
+    "Document limitations ... rather than conceal them."
+    "Where a target is not met, the reason is recorded as a
+     documented limitation."
+
+  Three benefits of honest failure:
+    1. Section 6 becomes credible. A model-selection chapter that
+       reports 0.72 CV and 0.26 test honestly is more trustworthy
+       than one that hides the gap or manipulates the split.
+    2. Section 8 has real content. "Results vs SMART" becomes a
+       diagnosis, not a victory lap. Higher-quality answer.
+    3. Phase 4 (DL) is justified. A CNN with augmentation is the
+       planned recovery mechanism. A 0.26 baseline is a more
+       interesting starting point than 0.72 - the CNN story becomes
+       "classical features collapse under distribution shift;
+       augmentation-aware CNN recovers to X."
+
+C.5 ROOT CAUSE DIAGNOSIS
+
+  Three independent causes, all confirmed by the confusion matrix:
+
+  (a) Feature scale sensitivity.
+      blob_area_ratio and projection bins are ABSOLUTE measurements.
+      Ball crop scale varies across clips (L16 confirmed for clip 5;
+      now clip 1 also shows its own drift). The model learned feature
+      patterns at the clip 2-4 scale; when scale drifts, the
+      patterns shift.
+
+  (b) RF decision-region collapse.
+      Tree splits that worked on train cluster into a dense corner
+      under shifted inputs. Visible as the class-12 magnet:
+      precision 0.231, recall 1.000. Shifted inputs collapse into
+      one leaf-rich region.
+
+  (c) Structural thin + overlap classes.
+      Classes 9, 10, 13 fail on BOTH val and test. These are:
+        - 9 : 7 train samples, overlaps with 6 (rotation ambiguity)
+        - 10: 5 train samples, thin
+        - 13: 7 train samples, overlaps with 12 by shape
+      Volume + shift both hurt these. They are the classical-ML
+      ceiling on this data. Confirmed L5/L6/L7 known limitations.
+
+C.6 WHY CV DID NOT PREDICT THIS
+
+  CV splits train ROWS into folds. All folds come from clips 2, 3, 4.
+  CV answers: "does the model generalise WITHIN clips 2-4?"
+  It cannot detect that clip 1 or clip 5 is drawn from a different
+  distribution because clips 1 and 5 were excluded from train.
+
+  This is a structural property of group-by-clip splits: the
+  "training distribution" is clips 2-4 only. Generalisation to other
+  clips is a separate question that CV cannot answer.
+
+C.7 WHAT THIS MEANS FOR L16
+
+  L16 as originally stated (2.5):
+    "val (clip 5) has distribution shift; test (clip 1) matches
+     train scale."
+  This was WRONG. Test does not match train scale. Test also shifts.
+
+  L16 revised (for Section 8):
+    "All three held-out clips (1, 5) show measurable distribution
+     shift from the train clip cluster (2, 3, 4). The shift is not
+     uniform: classes with distinctive shape or strong solid/stripe
+     markers survive; scale-sensitive and overlap-prone classes
+     fail. Test (clip 1) 0.2607 macro-F1 < val (clip 5) 0.3425
+     macro-F1 < CV 0.7193.
+
+     Distribution shift is universal across held-out clips on this
+     dataset. The sealed test set is the honest measure of that."
+
+C.8 REPORT SECTION MAPPING
+
+  Section 6 (Model selection, training, validation):
+    "One-shot test macro-F1 = 0.261, below the 0.50 SMART target.
+     The pipeline failed to generalise to clip 1 (test) and clip 5
+     (val). CV performance (0.72) reflects within-train
+     generalisation only; held-out cross-clip performance collapses
+     to 0.26-0.34.
+     Diagnosis: 15-feature classical pipeline is scale-sensitive;
+     RF decision regions collapse under feature drift; three classes
+     (9, 10, 13) fail for structural reasons independent of shift."
+
+  Section 7 (Deploy and test):
+    "Deploy-time accuracy compared against 3.2 test baseline 0.2607.
+     Deploy measurements quantify reproduction, not improvement."
+
+  Section 8 (Conclusion):
+    "SMART objective not met. Results (0.261) vs target (0.500)
+     indicate the classical 15-feature pipeline is not robust to
+     cross-clip distribution shift on this dataset.
+     Diagnosis: feature scale sensitivity (a), RF decision-region
+     collapse (b), structural thin/overlap (c). Phase 4 CNN with
+     augmentation is the intended recovery path."
+
+C.9 WHAT THE 0.26 BASELINE GIVES PHASE 4
+
+  Phase 4 (DL) needs a baseline to beat. A 0.26 baseline creates a
+  clear narrative arc:
+    - Classical features: 0.26 on test. Limited by scale sensitivity
+      and thin classes.
+    - CNN with augmentation: expected to reach substantially higher
+      by learning scale-invariant features and by introducing
+      augmentation variation at training time.
+  If Phase 4 reaches 0.60+, that is +0.34 improvement attributable to
+  learned features + augmentation. This is a much more interesting
+  report than if classical ML had already hit 0.72.
+
+
+================================================================================
+SECTION D - TEACHING RECORD
+================================================================================
+
+D.1 WHAT "SEALED TEST SET" MEANS
+
+  A sealed test set is data no model has ever been fit on or
+  predicted on. From the moment of split (5.3) to the moment of
+  test (3.2), no .fit() and no .predict() touches the test rows.
+
+  Why: the honest test result must be a first measurement, not a
+  re-measurement. If any script had fit on test, or tuned against
+  test, the "one-shot test result" would be contaminated. It would
+  no longer measure generalisation; it would measure how well the
+  model was tuned to the test set.
+
+D.2 WHAT 3.2 VERIFIED ABOUT THE SEAL
+
+  - 3.1 finalize_model.py used X_tr only (asserted).
+  - 2.7 learning_curve.py used X_tr only.
+  - 2.8 scaler_compare.py used X_tr only.
+  - 2.5 evaluate_val.py used X_tr (fit) + X_va (predict). No X_te.
+  - 2.4 grid_search.py used X_tr only.
+  - 2.2 train_models.py used X_tr only.
+
+  The only script that has ever touched X_te is 3.2 itself. Seal intact
+  until the one-shot call inside evaluate_once().
+
+D.3 WHY THE RESULT IS A FINDING, NOT A FAILURE OF THE DEVELOPER
+
+  A properly-built pipeline can legitimately fail to generalise.
+  That is what happened here. The failure diagnoses a property of
+  the data + features, not a mistake in the code. The rubric rewards
+  this diagnosis.
+
+  Contrast:
+    - Undisciplined process: test fails -> retune -> test again ->
+      test leaks -> report "0.72 test, great!" -> invalid.
+    - Disciplined process: test fails -> report 0.26 -> diagnose
+      cause -> document -> next phase targets the cause.
+
+D.4 WHAT DISTRIBUTION SHIFT MEANS HERE
+
+  The training distribution is clips 2, 3, 4. The model learned
+  feature patterns within that distribution. Clips 1 and 5 are
+  drawn from a different distribution:
+    - Different zoom/render scale (L16)
+    - Different crop sizes (2x on clip 5; smaller drift on clip 1)
+    - Different ball positions / arrangements / capture conditions
+
+  Under shift, the model's trained decision boundaries no longer
+  align with the new data's structure. Predictions collapse.
+
+D.5 WHY CV CANNOT DETECT THIS
+
+  Cross-validation splits training rows into folds. Every fold
+  comes from clips 2-4. So every fold has the SAME clip-scale
+  distribution as the other folds.
+
+  CV measures: "does the model generalise within clips 2-4?"
+  It CANNOT measure: "does the model generalise to a different
+  clip?"
+
+  This is not a defect in CV. It is a structural limit of any
+  split that does not include the shift axis. Group-by-clip
+  guarantees that the shift axis is exactly what the split
+  excludes from train.
+
+D.6 WHY "TRAIN TRACKS CV" WAS THE EXPECTATION IN 3.1
+
+  In 3.1's carry-forward, the expectation was:
+    "Test is clip 1, matches train scale (L16 does not apply)."
+  This assumption was WRONG. Clip 1 does NOT match train scale. It
+  was based on limited inspection at 2.5.
+
+  In retrospect, the correct expectation should have been:
+    "Any clip not in train is a distribution test. Expect CV
+     performance only if that clip's scale/arrangement matches
+     clips 2-4. If it does not, expect collapse."
+
+  Lesson: "held-out" is not the same as "same distribution."
+  Always check.
+
+D.7 WHY WE REPORT FAILED SMART HONESTLY
+
+  The rubric explicitly says: "Meeting all acceptance criteria is
+  required to pass. See the Course Overview guide for what
+  distinguishes stronger work."
+
+  Reaching SMART target is one criterion. DOCUMENTING the reason
+  for not reaching it is another. A report that hides a 0.26 test
+  result behind "we achieved 0.72 CV" fails the honest-documentation
+  criterion. A report that states 0.26 and diagnoses the reason
+  satisfies both criteria: measurable outcome (0.26 reported) +
+  documented limitation (diagnosis given).
+
+D.8 WHAT CAN AND CANNOT BE RECOVERED NOW
+
+  CAN be recovered:
+    - Honest reporting of the failure.
+    - Diagnosis of the cause.
+    - Structural class-level analysis (9, 10, 13 thin; 12 as
+      prediction magnet).
+    - Justification for Phase 4 recovery via CNN.
+
+  CANNOT be recovered:
+    - Higher test macro-F1. That number is set.
+    - Retuning on test. That would break the seal.
+    - Re-splitting. That would invalidate the analysis pipeline.
+    - Concealing the failure. That would fail the honest-
+      documentation criterion.
+
+D.9 THE MOST IMPORTANT SENTENCE FOR THE REPORT
+
+  "The classical-ML pipeline achieved CV macro-F1 = 0.7193, but
+   one-shot test macro-F1 = 0.2607. The SMART objective was not met.
+   Diagnosis: the 15-feature pipeline is scale-sensitive and does not
+   generalise across clips; three classes (9, 10, 13) fail for
+   structural reasons independent of shift. The phase-4 CNN with
+   augmentation is the planned recovery path."
+
+  Four claims, one paragraph. Complete picture. Nothing hidden.
+
+
+================================================================================
+SECTION E - ARTEFACTS PRODUCED
+================================================================================
+
+  src\evaluate_test.py                          (new)
+  figures\3.2-cm_test.png                       (new)
+  logs\3.2-classification_report.txt             (new)
+  logs\3.2-test_report.txt                       (new)
+  logs\3.2-console.txt                           (new, tee)
+  3.2-test_summary.csv                           (new, DATA_ROOT)
+
+
+================================================================================
+SECTION F - CARRY-FORWARD
+================================================================================
+
+F.1 3.3 (error_analysis.py)
+  - Load 3.2 confusion matrix.
+  - Top-10 off-diagonal cells.
+  - Confirm/refute 6/9, 4/9, 11/1, 2/5 (known pair list from L6/L7).
+  - Quantify structural failures (classes 9, 10, 13 fail on val AND
+    test) vs shift-induced failures (classes 1, 5 confuse each other;
+    13 -> 12 magnet).
+  - Emit logs/3.3-error_analysis.txt + figures/3.3-error_pairs.png.
+
+F.2 4.1 (predict.py)
+  - Reuse 3.1 joblib + feature order.
+  - Same preprocessing chain (crop -> mask -> features -> pipeline).
+  - Reject criterion: mask_is_usable() == False (FR4 path).
+  - Deploy accuracy is compared to 0.2607, not 0.7193.
+
+F.3 4.4 (deploy results)
+  - Report deploy macro-F1, timing, rejection rate vs 3.2 baseline.
+  - Any deploy accuracy > 0.2607 means deploy path leaked data
+    (e.g. accidentally included val or train). Investigate.
+
+F.4 Section 6 / 8
+  - Report 0.2607 as the honest one-shot test macro-F1.
+  - State SMART verdict = FAIL with diagnosis.
+  - Update L16 as documented in C.7 above.
+
+F.5 Phase 4 (DL) baseline
+  - 0.2607 is the number the CNN must beat.
+  - 0.2607 vs 0.7193 gap is the story of the report: features
+    that work within-clip collapse across clips. Augmentation-aware
+    learned features are the recovery mechanism.
+
+================================================================================
+END OF NOTE
+================================================================================

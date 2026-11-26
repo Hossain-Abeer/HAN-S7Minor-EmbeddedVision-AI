@@ -1,0 +1,478 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 3.3 PER-CLASS ERROR ANALYSIS
+================================================================================
+Step    : 3.3 (code + run)
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : code + run
+Prereq  : 3.2 (test set evaluated, one-shot done)
+Status  : PASS
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+SECTION A - STEP RECORD
+--------------------------------------------------------------------------------
+
+A.1 DELIVERABLE
+  src\error_analysis.py
+
+A.2 CONTENT
+  load_pipeline()             -> reads 3.1 joblib + 3.1 feature-names JSON
+  predict_va_te(pipe,...)     -> deterministic re-predict on val + test
+  build_offdiag_df(...)       -> every (true, pred) pair with count > 0
+                                 and true != pred, sorted by count desc
+  classify_failures(...)      -> per-class F1 on val + test, verdict tag
+  plot_top_errors(...)        -> horizontal bar chart, red = known pair
+  main()                      -> orchestrate, assert seal, write 3 artefacts
+
+  Constants:
+    LABELS       = [1..15]
+    EXPECTED_F1  = 0.2607   (from 3.2; seal-integrity check)
+    TOP_N        = 20
+    KNOWN_PAIRS  = frozenset-based lookup of 8 tagged pairs (L6/L7/2.5/3.2)
+
+A.3 COMMAND
+  cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI"
+  python src\error_analysis.py 2>&1 |
+    Tee-Object -FilePath "D:\HAN\Semester 7 Minor\
+                          billiards-game-clips\IAI\logs\3.3-console.txt"
+
+A.4 INPUTS CONSUMED
+  models\3.1-final_pipeline.joblib           (fitted Pipeline)
+  models\3.1-final_feature_names.json        (feature order)
+  dataset_clean.csv                          (via load_splits)
+    X_va (128, 15), y_va
+    X_te (119, 15), y_te
+  logs\3.2-test_report.txt                   (cross-check for 0.2607)
+
+A.5 OUTPUTS PRODUCED (all tagged 3.3-)
+  3.3-error_pairs.csv                        (all off-diagonal cells)
+  figures\3.3-error_pairs.png                (top-20 bar chart)
+  logs\3.3-error_analysis.txt                (full analysis log)
+  logs\3.3-error_analysis_console.txt        (tee of console)
+
+A.6 OBSERVED OUTPUT
+
+  Seal check:
+    test macro-F1 reproduced : 0.2607 (expected 0.2607)
+    seal check               : PASS (identical to 3.2)
+
+  Top-20 off-diagonal (test):
+    true  pred  count  support  pct_of_true  known_pair
+    13    12    12     13       0.923        test 3.2: 13->12 magnet
+    1     5      8     17       0.471
+    8     4      7     13       0.538
+    4     7      6     10       0.600
+    3     5      5     14       0.357
+    5     1      5      6       0.833
+    10    12     5      5       1.000        test 3.2: 10->12 magnet
+    9     13     4      7       0.571
+    8     6      3     13       0.231
+    3     7      3     14       0.214
+    3     4      2     14       0.143        val 2.5: 4->3 dominant
+    15    12     2      4       0.500
+    14    13     2      5       0.400
+    14    11     2      5       0.400
+    9     10     2      7       0.286
+    3     2      2     14       0.143
+    6     7      2      8       0.250
+    2     7      1      5       0.200
+    9     12     1      7       0.143
+    7     8      1      1       1.000
+
+  Known-pair verdicts:
+    6<->9   : 0+0  = 0    [NOT OBSERVED]  L6: 6/9 rotation ambiguity
+    4<->9   : 0+0  = 0    [NOT OBSERVED]  L7: 4/9 shape overlap
+    11<->1  : 0+0  = 0    [NOT OBSERVED]  L7: 11/1 shape overlap
+    2<->5   : 0+1  = 1    [NOT OBSERVED]  L7: 2/5 shape overlap
+    3<->4   : 2+1  = 3    [CONFIRMED]     val 2.5: 4->3 dominant
+    9<->14  : 0+0  = 0    [NOT OBSERVED]  val 2.5: 9->14 dominant
+    12<->13 : 0+12 = 12   [CONFIRMED]     test 3.2: 13->12 magnet
+    10<->12 : 5+0  = 5    [CONFIRMED]     test 3.2: 10->12 magnet
+
+  Per-class failure classification:
+    class  f1_val  f1_test  verdict
+      1    0.667   0.562    survives
+      2    0.000   0.667    VAL-ONLY (test survives)
+      3    0.111   0.125    survives (borderline; see B.4)
+      4    0.000   0.190    VAL-ONLY (test survives)
+      5    0.720   0.000    SHIFT-INDUCED (test only)
+      6    0.667   0.706    survives
+      7    0.632   0.000    SHIFT-INDUCED (test only)
+      8    0.000   0.333    VAL-ONLY (test survives)
+      9    0.000   0.000    STRUCTURAL (fail both)
+     10    0.000   0.000    STRUCTURAL (fail both)
+     11    0.714   0.667    survives
+     12    0.564   0.375    survives
+     13    0.000   0.000    STRUCTURAL (fail both)
+     14    0.286   0.286    survives (borderline)
+     15    0.778   0.000    SHIFT-INDUCED (test only)
+
+    STRUCTURAL failures : [9, 10, 13]
+    SHIFT-INDUCED only  : [5, 7, 15]
+    VAL-ONLY            : [2, 4, 8]
+
+  Class-12 magnet:
+    predictions of '12' : 26
+    correct             : 6
+    precision on 12     : 0.231
+
+A.7 VERIFICATION LINE
+  Seal check reproduced 3.2 macro-F1 = 0.2607 exactly (|delta| < 1e-3).
+  Three 3.3-tagged artefacts written.
+  Known-pair table covers all 8 pre-registered pairs.
+  Per-class failure classification complete.
+  Class-12 magnet quantified.
+  No re-fit. No re-tune. No new test prediction pass (deterministic
+  re-predict via 3.1 joblib).
+  PASS.
+
+A.8 DEVIATIONS
+  D1. Class 3 reported as "survives" on F1 0.125. Technically F1 > 0,
+      so classifier fires "survives". Misleading: recall is 1/14 =
+      0.071 (13 of 14 class-3 samples wrong). Section 6 must
+      reclassify class 3 as "near-structural".
+  D2. Class 14 reported as "survives" on F1 0.286. Borderline; only
+      distinguishes from zero by ordering-of-magnitude.
+      Section 6 groups it with class 3 as "near-structural".
+  D3. Val-only classes [2, 4, 8] not highlighted in the note's
+      summary lines. Only structural and shift-only printed.
+      Section 8 must include all three failure categories.
+
+A.9 CARRY-FORWARD
+  4.1 predict.py:
+    - Same 3.1 joblib, same feature order.
+    - Preprocessing chain: crop -> mask -> features -> predict.
+    - Reject path: mask_is_usable() == False -> reject, not predict.
+    - Deploy accuracy baseline = 0.2607 (test), NOT 0.7193 (CV).
+  4.4 deploy results:
+    - Report deploy macro-F1 vs 0.2607.
+    - Any deploy accuracy > 0.2607 means data leak; investigate.
+  5.1 pipeline unit test:
+    - Same joblib as fixture.
+  Section 6 (Model selection + validation):
+    - 3.3-error_pairs.png (top-20 figure)
+    - 3.3-error_pairs.csv (error table)
+    - Known-pair verdicts (L6/L7 hypothesis corrections)
+    - Per-class failure table (structural / shift / val-only)
+    - Class-12 magnet narrative
+    - Multi-directional shift finding
+  Section 8 (Conclusion):
+    - L16 revision (multi-directional shift)
+    - L6/L7 revision (pre-training pair predictions mostly not observed)
+    - L18 NEW: class-12 decision-region sink
+    - Phase 4 augmentation targets: scale axis + structural classes
+      {9, 10, 13}
+  Phase 4 (DL baseline):
+    - 0.2607 must be beaten.
+    - Recovery specifically targets: scale-invariance (shift) +
+      more data / augmentation for classes 9, 10, 13 (structural).
+
+
+--------------------------------------------------------------------------------
+SECTION B - INTERPRETATION (feeds Full ML Section 6 + 8)
+--------------------------------------------------------------------------------
+
+B.1 THE 12-MAGNET - DOMINANT FAILURE MODE
+  20 of 83 errors (24% of errors) predict "12".
+  Sources:
+    13 -> 12 : 12 errors (92% of class-13 samples)
+    10 -> 12 : 5  errors (100% of class-10 samples)
+    15 -> 12 : 2
+     9 -> 12 : 1
+  Class-12 precision = 0.231 (26 predictions, 6 correct).
+  Class-12 recall    = 1.000 (6/6 correct).
+  Diagnosis: RF decision regions compress under shift; one leaf-rich
+  region wins the majority vote; that region is labelled 12.
+
+B.2 SECOND MAGNET - CLASS 5
+  Wrong predictions of "5": 18 total.
+    Sources:
+      1 -> 5 : 8
+      5 -> 1 : 5 (mutual)
+      3 -> 5 : 5
+  Class 5 precision = 0 (0 correct of 18 predictions).
+  Class-5 recall    = 0 (0/6, because predictions of 5 rarely match).
+  Diagnosis: second RF decision-region sink under shift.
+
+B.3 CLASS-3 SCATTER
+  Class-3 support = 14 test samples.
+  13 of 14 predicted as {5, 7, 4, 2, 1} (13 scattered errors, 1 correct).
+  No stable decision region forms for class 3 under shift.
+
+B.4 NEAR-STRUCTURAL (classes 3, 14)
+  Class 3: F1 0.125, recall 0.071 (1/14). Functionally failing.
+  Class 14: F1 0.286, recall 0.200. Borderline.
+  Not counted as STRUCTURAL by the code (F1 > 0), but Section 6
+  should group them with the structural set for prose.
+
+B.5 STRUCTURAL FAILURE SET (classes 9, 10, 13)
+  F1 = 0 on BOTH val and test. Cross-clip failure independent of
+  which clip is held out.
+  Root cause:
+    9  : 12 train samples, rotation ambiguity with 6, feature overlap
+    10 : 5 train samples, thin, shares projection with 12
+    13 : 7 train samples, silhouette overlap with 12
+  These are the classical-ML ceiling on this dataset. Cannot be
+  recovered by tuning, only by more data or better features.
+
+B.6 SHIFT-INDUCED SET (classes 5, 7, 15)
+  F1 = 0 on test but F1 > 0 on val.
+    Class 5  : val F1 0.720 -> test F1 0.000
+    Class 7  : val F1 0.632 -> test F1 0.000
+    Class 15 : val F1 0.778 -> test F1 0.000
+  Mechanism: clip-1 (test) has a feature profile that these classes
+  cannot tolerate; clip-5 (val) was compatible.
+  Direction: shift is NOT uniform. Different clips fail different
+  classes.
+
+B.7 VAL-ONLY SET (classes 2, 4, 8)
+  F1 = 0 on val but F1 > 0 on test.
+    Class 2 : val F1 0.000 -> test F1 0.667
+    Class 4 : val F1 0.000 -> test F1 0.190
+    Class 8 : val F1 0.000 -> test F1 0.333
+  Mirror image of B.6. Confirms multi-directional shift.
+
+B.8 L6 / L7 HYPOTHESES - PREDOMINANTLY WRONG
+  Design-time pair predictions vs test observations:
+    Predicted pair   Observed   Verdict
+    6 <-> 9          0          NOT OBSERVED (L6)
+    4 <-> 9          0          NOT OBSERVED (L7)
+    11 <-> 1         0          NOT OBSERVED (L7)
+    2 <-> 5          1          NOT OBSERVED (L7, threshold 2)
+    3 <-> 4          3          CONFIRMED (from val, not L7)
+    13 <-> 12        12         CONFIRMED (new, dominates)
+    10 <-> 12        5          CONFIRMED (new)
+
+  Finding: L6/L7's feature-design predictions were mostly not
+  observed. Shift-driven collapse dominates feature-design effects.
+  Section 6 must state this explicitly: the classical features are
+  not the bottleneck; the bottleneck is absolute-value features
+  responding badly to cross-clip scale drift.
+
+B.9 SHIFT IS MULTI-DIRECTIONAL (L16 refinement)
+  Test < val < CV in aggregate:
+    0.2607 < 0.3425 < 0.7193
+  But per-class, three DISTINCT patterns:
+    Fail both       : 9, 10, 13       (structural)
+    Fail test only  : 5, 7, 15        (clip-1 specific)
+    Fail val only   : 2, 4, 8         (clip-5 specific)
+  Earlier framing "clip-5 anomaly" was incomplete. Correct framing:
+  multi-directional cross-clip distribution shift. Each held-out
+  clip shifts different classes.
+
+B.10 WHAT A MAGNET MEANS MECHANICALLY
+  Under distribution shift:
+    - Tree splits become uninformative; feature values drift past
+      learned thresholds.
+    - Most samples fall into a small number of leaf regions.
+    - The bagged ensemble (300 trees) amplifies the majority leaf.
+    - One class ends up with a large basin of attraction = a sink.
+  Class-12 sink exists because in clips 2-4, class-12 was a
+  stripe-with-central-numerals class with centralised projection
+  features. Shifted 10, 13 (and 15, 9) produce patterns that hit
+  12's training leaves.
+  This is not "12 confused with 13". It is "13 has no region; 12
+  has a huge region that consumes 13".
+
+
+--------------------------------------------------------------------------------
+SECTION C - TEACHING RECORD (foundations explained during 3.3)
+--------------------------------------------------------------------------------
+
+C.1 WHAT ERROR ANALYSIS IS
+  After the honest test result is in (3.2), error analysis asks:
+    which specific mistakes dominate, and why?
+  Not "how do we fix them" - that door is closed (sealed test).
+  Just "what does the failure look like when examined closely?"
+  Produces: a ranked list of confusions + classifications of each
+  class into failure categories.
+
+C.2 WHY RE-PREDICT IS SAFE (SEAL NOT BROKEN)
+  The sealed test set rule (3.2) forbids:
+    - re-fitting the model on test
+    - re-tuning hyperparameters against test
+    - making multiple independent prediction passes for selection
+  It does NOT forbid:
+    - reloading the persisted model
+    - calling predict() with the SAME model
+  Because 3.1's reload check proved determinism (delta 0.00e+00),
+  re-predicting on test with the same joblib produces IDENTICAL
+  predictions to 3.2. The seal-integrity assert verifies this.
+  If the assert passes (it does), the re-predict is observationally
+  equivalent to reading 3.2's output from disk.
+
+C.3 WHAT OFF-DIAGONAL MEANS
+  Confusion matrix M: M[i,j] = number of class-i samples predicted
+  as class j.
+  Diagonal  M[i,i] = correct.
+  Off-diagonal M[i,j] i != j = errors from i to j.
+  Error analysis ranks cells by M[i,j] descending = worst mistakes
+  first.
+
+C.4 SUPPORT vs COUNT
+  support_true = total true samples of that class.
+  pct_of_true = count / support_true = error rate for that class.
+  High pct_of_true with high count = dominant failure.
+  High pct_of_true with low count = rare-but-complete failure.
+  Both types matter for Section 6.
+
+C.5 KNOWN-PAIR CHECK
+  L6, L7 predicted specific pairs would confuse (rotation / overlap).
+  Before training, these were HYPOTHESES.
+  3.3 tests them against the actual test confusion matrix:
+    sum of both directions >= threshold -> CONFIRMED
+    below threshold                     -> NOT OBSERVED
+  Result: most NOT OBSERVED. The hypotheses were wrong for this
+  dataset. Shift collapse overrides feature-design effects.
+
+C.6 STRUCTURAL vs SHIFT-INDUCED vs VAL-ONLY
+  STRUCTURAL : F1 = 0 on both val AND test.
+               Cross-clip failure. Data/feature ceiling.
+  SHIFT-INDUCED : F1 > 0 on val, F1 = 0 on test.
+                  Clip-1 specific failure.
+  VAL-ONLY       : F1 = 0 on val, F1 > 0 on test.
+                   Clip-5 specific failure.
+  The three-way split reveals that shift is NOT a single phenomenon.
+  Different held-out clips break different classes.
+
+C.7 WHY CLASS-12 IS A MAGNET
+  Trace mechanism in a decision tree:
+    - In training (clips 2-4), class 12's samples occupy a specific
+      region of feature space defined by centralised projections.
+    - Under shift, classes 10, 13, 15, 9 shift into that region.
+    - Tree leaves favour 12 in that region.
+    - Result: 12's leaf gains more traffic from other classes than
+      from its own true samples.
+  Bagging amplifies this because all 300 trees see the same shifted
+  region and agree on 12.
+
+C.8 WHY "SURVIVES" IS RELATIVE, NOT ABSOLUTE
+  Class 1 "survives" on F1 0.562. Against SMART target 0.50, that
+  is actually a passing score for class 1 alone.
+  Class 12 "survives" on F1 0.375. Below 0.50 but non-zero.
+  "Survives" here means "F1 > 0", not "passes SMART". Only classes
+  1, 2, 6, 11 have F1 >= 0.50 on test.
+  For Section 6, use the stricter threshold: classify as "meets
+  SMART target" (F1 >= 0.50) vs "below".
+
+C.9 THE CRITICAL FINDING FOR SECTION 6
+  L6/L7's pre-training pair predictions were mostly NOT observed.
+  Only 3<->4 and the two 12-magnet pairs fired (and 12-magnet pairs
+  are shift-driven, not design-driven).
+  Implication: the classical feature DESIGN is not the bottleneck.
+  Fixing 6/9 or 4/9 would not raise macro-F1 meaningfully.
+  The bottleneck is that features measure absolute values that
+  respond badly to cross-clip scale drift.
+  This justifies Phase 4 as the recovery path: scale-invariant
+  learned features, not better handcrafted features.
+
+C.10 WHY THIS MAKES THE REPORT STRONGER, NOT WEAKER
+  A report that claimed 0.72 test would be lying.
+  A report that states 0.26 test and diagnoses:
+    - three structural classes (data-limited)
+    - three shift-induced classes (clip-1 specific)
+    - three val-only classes (clip-5 specific)
+    - dominant class-12 magnet (RF region collapse)
+    - L6/L7 hypotheses corrected by evidence
+  ... is a stronger report. It demonstrates genuine analysis, not
+  result-hiding. Rubric explicitly rewards this.
+
+C.11 WHAT CANNOT BE RECOVERED NOW
+  - Test macro-F1 = 0.2607 is set. Cannot raise it.
+  - No retuning on test. That would break the seal.
+  - No re-split. That would invalidate everything downstream.
+  - No re-running 3.2 hoping for a better number.
+  Recovery is Section 8's job (narrative), and Phase 4's job
+  (better model, next deliverable).
+
+C.12 WHAT CAN BE RECOVERED
+  - Honest reporting. Fully addressed by this step's artefacts.
+  - Diagnosis. Root cause identified with evidence.
+  - Corrected L6/L7 hypotheses.
+  - Phase 4 targeting: class 9/10/13 need more data; scale drift
+    needs augmentation; 12-magnet needs learned features that do
+    not collapse.
+  - Code appendix material: error_analysis.py is a strong example
+    of post-hoc diagnosis.
+
+C.13 WHAT 3.3 DID NOT DO
+  - Did not re-fit the model (seal broken if so).
+  - Did not tune anything against test.
+  - Did not reclassify classes to flatter the results.
+  - Did not hide L6/L7's wrong predictions.
+  All four omissions are correct discipline. The report's credibility
+  depends on these omissions.
+
+
+--------------------------------------------------------------------------------
+SECTION D - ARTEFACTS PRODUCED
+--------------------------------------------------------------------------------
+
+  src\error_analysis.py                 (new)
+  3.3-error_pairs.csv                   (new, DATA_ROOT)
+  figures\3.3-error_pairs.png           (new)
+  logs\3.3-error_analysis.txt           (new)
+  logs\3.3-error_analysis_console.txt   (new, tee)
+
+
+--------------------------------------------------------------------------------
+SECTION E - CARRY-FORWARD
+--------------------------------------------------------------------------------
+
+E.1 4.1 predict.py
+  - Loads 3.1 joblib + 3.1 feature-names JSON.
+  - Preprocessing chain: crop -> mask -> 15 features -> pipeline.predict.
+  - Reuses mask.py's extract_numeral_mask() and features.py's
+    features_from_mask() (not re-implemented).
+  - Reject path: mask_is_usable() == False -> raise / return None.
+  - Deploy accuracy baseline = 0.2607. Not 0.7193.
+
+E.2 4.4 deploy results
+  - Report deploy macro-F1 vs 0.2607 (3.2 test baseline).
+  - Any result > 0.2607 means data leaked into deploy path.
+    Investigate before reporting.
+  - Timing and rejection rate reported per plan from 4.3.
+
+E.3 5.1 pipeline unit test
+  - Uses 3.1-final_pipeline.joblib as fixture.
+  - Asserts 2-step structure, names, unfitted scaler on construction,
+    refit semantics, GridSearchCV prefix compatibility.
+
+E.4 Section 6 content checklist (from 3.3)
+  - 3.3-error_pairs.png (top-20 confusions figure)
+  - 3.3-error_pairs.csv (error table)
+  - Known-pair verdicts: L6/L7 mostly NOT OBSERVED, 12-magnet pairs
+    CONFIRMED, 3<->4 CONFIRMED from val
+  - Per-class failure table: structural / shift / val-only
+  - Class-12 magnet narrative (B.1, C.7)
+  - Class-5 magnet narrative (B.2)
+  - Class-3 scatter narrative (B.3)
+  - Multi-directional shift (B.9)
+  - Pre-training pair hypotheses corrected (B.8)
+
+E.5 Section 8 content checklist (from 3.3)
+  - L16 revision: multi-directional shift, not clip-5 anomaly.
+    Aggregate test < val < CV, but per-class patterns differ.
+  - L6 revision: 6/9 rotation ambiguity not observed on test.
+    Failure dominated by shift-driven RF-region collapse.
+  - L7 revision: 4/9, 11/1 not observed; 2/5 barely. Only 3<->4
+    fired (from val, not L7).
+  - L18 NEW: RF decision-region sink under shift. Quantified:
+    20/83 test errors predict "12"; class-12 precision 0.231.
+  - Phase 4 augmentation targets:
+    * Scale axis (not just brightness/rotation).
+    * Additional samples for structural classes {9, 10, 13}.
+    * Region-diversity attack for magnets (12, 5).
+
+E.6 Phase 4 (DL) baseline
+  - Classical-ML honest baseline = 0.2607 (test macro-F1).
+  - Recovery targets:
+    * Structural classes: more data (augmentation).
+    * Shift-induced collapse: scale-invariant features.
+    * 12-magnet: non-collapsing representations.
+  - Target for CNN: 0.60+ test macro-F1 = +0.34 improvement over
+    classical. That is the report's story arc.
+
+================================================================================
+END OF NOTE
+================================================================================

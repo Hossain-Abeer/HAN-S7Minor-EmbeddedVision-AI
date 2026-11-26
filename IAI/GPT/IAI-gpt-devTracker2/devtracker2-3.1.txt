@@ -1,0 +1,428 @@
+================================================================================
+IAI-GPT-DEVTRACKER - 3.1 RETRAIN FINAL PIPELINE AND PERSIST
+================================================================================
+Step    : 3.1
+Parent  : Devtracker 2.0 - Phase 2 (Full ML report development)
+Type    : code + run
+Prereq  : 2.6 (rf selected), 2.7 (overfit benign), 2.8 (scaler neutral)
+Status  : PASS
+Date    : <fill>
+
+--------------------------------------------------------------------------------
+A - STEP RECORD
+--------------------------------------------------------------------------------
+
+A.1 DELIVERABLE
+  src\finalize_model.py
+
+A.2 CONTENT
+  load_locked_params()          -> reads models\2.6_selected_model.json
+  build_final_estimator(params) -> RF with locked params + seed + class_weight
+  main()                        -> load, build, fit, persist, reload-check,
+                                   log
+
+  Constants:
+    SEED       = 42
+    MODEL_PATH = models\3.1-final_pipeline.joblib
+    FEAT_PATH  = models\3.1-final_feature_names.json
+    LOG_PATH   = logs\3.1-finalize.txt
+
+A.3 COMMAND
+  cd "D:\HAN\Semester 7 Minor\HAN-S7Minor-EmbeddedVision-AI\IAI"
+  python src\finalize_model.py 2>&1 |
+    Tee-Object -FilePath "D:\HAN\Semester 7 Minor\
+                          billiards-game-clips\IAI\logs\3.1-console.txt"
+
+A.4 INPUTS CONSUMED
+  dataset_clean.csv                   (via load_splits, train role only)
+  retained_features_correlations.txt  (via load_retained_features)
+  models\2.6_selected_model.json      (model name + locked params)
+  X_train (245, 15), y_train (245)
+  Val and test NOT touched.
+
+A.5 OUTPUTS PRODUCED
+  models\3.1-final_pipeline.joblib           (binary, ~1 MB)
+  models\3.1-final_feature_names.json        (15 names, retained order)
+  logs\3.1-finalize.txt
+  logs\3.1-console.txt                       (tee of console)
+
+A.6 OBSERVED OUTPUT
+  train shape  : (245, 15)
+  features     : 15
+  locked model : rf
+  locked params: {'max_depth': 10, 'min_samples_leaf': 1,
+                  'n_estimators': 300}
+  pipeline fit : OK
+  wrote        : ...\models\3.1-final_pipeline.joblib
+  wrote        : ...\models\3.1-final_feature_names.json
+  reload delta : 0.00e+00
+  reload check : PASS
+  train f1     : 1.0000  (expected near 1.0, per 2.7)
+
+A.7 VERIFICATION LINE
+  245/245 train rows consumed. 15/15 features consumed.
+  Locked params match 2.6 JSON exactly.
+  Pipeline built = [StandardScaler, RF] (2 steps).
+  joblib persisted and reloaded.
+  Reload delta = 0.00e+00 (machine-precision identity).
+  Train macro-F1 = 1.0000 (consistent with 2.7 overfit-benign finding).
+  Feature names JSON matches retained_features_correlations.txt order.
+  PASS.
+
+A.8 DEVIATIONS
+  None.
+
+A.9 CARRY-FORWARD
+  3.2 (evaluate_test.py):
+    loads models\3.1-final_pipeline.joblib + 3.1-final_feature_names.json
+    predicts on 119 test rows ONCE
+    expects macro-F1 near CV (0.55-0.72), NOT val (0.34)
+  4.1 (predict.py):
+    loads same joblib
+    builds X from raw crops using the same feature names in the same order
+  4.4 (deploy tests):
+    same joblib, same feature order
+
+
+--------------------------------------------------------------------------------
+B - ESSENCE (what this step is)
+--------------------------------------------------------------------------------
+
+B.1 ONE-LINE
+  Fit RF (locked params) on the full 245-row train set, save as one
+  binary file, prove it reloads identically.
+
+B.2 WHY PERSIST AT ALL
+  Every step from 2.1 to 2.8 trained fresh. No single run saw all
+  245 rows. Every script re-fit from scratch.
+  From 3.2 onward, multiple scripts need THE SAME model object:
+    - 3.2 must produce the test result
+    - 4.1 must produce deploy predictions
+    - 4.4 must measure deploy behaviour
+  If each script re-trains, each produces a slightly different RF
+  (same seed, but RF is stochastic across parallel jobs in some
+  configurations; more importantly, re-fit = new thresholds on
+  ties, new bootstrap order, etc). Deploy results would not match
+  test results. TR7 (reproducibility) fails.
+
+  Persisting ONCE breaks this: one file, consumed N times, all
+  downstream numbers traceable to the same object.
+
+B.3 WHAT GETS SAVED
+  A single sklearn Pipeline object containing:
+    ("scaler", StandardScaler())  <- fitted to train mean/std
+    ("clf",    RandomForestClassifier)  <- 300 trees, thresholds,
+                                            class weights, structure
+  Serialised with joblib (pickle-based, faster for numpy-heavy objects).
+  compress=3 keeps it ~1 MB.
+
+  Alongside:
+    feature names, ordered. Deploy scripts need this to arrange
+    columns identically. Do not re-derive at consumption time -
+    the model file should be self-contained.
+
+B.4 THE RELOAD CHECK
+  After save, load back into a new variable, predict 5 fixed rows,
+  compare probability vectors elementwise.
+  Assert max absolute difference < 1e-12.
+  Failure => joblib wrote a corrupted or partial object.
+  Success => save is byte-accurate, model is deployable.
+
+  Why predict_proba not predict?
+    predict returns 1 label. Two different models can agree on the
+    label for a row by chance.
+    predict_proba returns 15 probabilities per row. Matching all 15
+    across 5 rows = 75 numbers. Far tighter test.
+
+B.5 WHY train_f1 IS PRINTED AND EXPECTED AT 1.0
+  Per 2.7, both candidates memorise the 245 training rows
+  (rf train=1.000, svc train=0.991).
+  So train macro-F1 = 1.0 after this fit is EXPECTED, not a surprise.
+  It is a smoke check: if it drops below 0.95, something is wrong
+  (wrong params, wrong data, wrong feature order). Real performance
+  comes from test at 3.2, not from this number.
+
+
+--------------------------------------------------------------------------------
+C - POSITION IN THE PIPELINE
+--------------------------------------------------------------------------------
+
+  Upstream (all complete):
+    2.6 selected rf + locked params
+    2.7 confirmed overfit is benign, rf CV still rising
+    2.8 confirmed scaler choice is neutral
+
+  This step:
+    3.1 fit + persist
+
+  Downstream (blocked until 3.1 passes):
+    3.2 evaluate_test.py
+    3.3 error analysis
+    4.1 predict.py
+    4.2 inference smoke
+    4.3 test plan doc
+    4.4 deploy results
+    4.5 unexpected behaviour log
+
+  Bridge character:
+    Before 3.1: all analytical, no committed artefact.
+    After  3.1: one committed artefact, all downstream consumes it.
+
+  Skip risk:
+    Skipping 3.1 means 3.2 and 4.x each re-train on their own.
+    Test and deploy results then come from different model objects.
+    Rubric TR7 (reproducibility) fails. TR5 (determinism) unprovable.
+
+
+--------------------------------------------------------------------------------
+D - CODE (full listing, as produced)
+--------------------------------------------------------------------------------
+
+"""3.1 - Retrain final RF pipeline on full train set, persist to joblib."""
+
+import sys, json
+from pathlib import Path
+import numpy as np
+import joblib
+from sklearn.ensemble import RandomForestClassifier
+
+sys.path.insert(0, str(Path(__file__).parent))
+import config
+from pipeline import build_pipeline
+from load_dataset import load_splits, load_retained_features
+
+DATA_ROOT  = Path(config.DATA_ROOT)
+MODELS_DIR = DATA_ROOT / "models"
+LOGS_DIR   = Path(config.LOGS_DIR)
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+SEED = 42
+
+MODEL_PATH  = MODELS_DIR / "3.1-final_pipeline.joblib"
+FEAT_PATH   = MODELS_DIR / "3.1-final_feature_names.json"
+LOG_PATH    = LOGS_DIR   / "3.1-finalize.txt"
+
+
+def load_locked_params():
+    p = MODELS_DIR / "2.6_selected_model.json"
+    data = json.loads(p.read_text())
+    return data["model"], data["params"]
+
+
+def build_final_estimator(params):
+    return RandomForestClassifier(
+        n_estimators=params["n_estimators"],
+        max_depth=params["max_depth"],
+        min_samples_leaf=params["min_samples_leaf"],
+        class_weight="balanced",
+        random_state=SEED,
+        n_jobs=-1,
+    )
+
+
+def main():
+    log = []
+    def emit(s):
+        print(s)
+        log.append(s)
+
+    X_tr, y_tr, *_ = load_splits()
+    feat_names = list(load_retained_features())
+    emit(f"train shape  : {X_tr.shape}")
+    emit(f"features     : {len(feat_names)}")
+
+    name, params = load_locked_params()
+    emit(f"locked model : {name}")
+    emit(f"locked params: {params}")
+    assert name == "rf", f"expected rf, got {name}"
+
+    pipe = build_pipeline(build_final_estimator(params))
+    pipe.fit(X_tr, y_tr)
+    emit(f"pipeline fit : OK")
+
+    probe = X_tr[:5]
+    pred_before = pipe.predict_proba(probe)
+
+    joblib.dump(pipe, MODEL_PATH, compress=3)
+    FEAT_PATH.write_text(json.dumps(feat_names, indent=2))
+    emit(f"wrote        : {MODEL_PATH}")
+    emit(f"wrote        : {FEAT_PATH}")
+
+    pipe2 = joblib.load(MODEL_PATH)
+    pred_after = pipe2.predict_proba(probe)
+    diff = float(np.max(np.abs(pred_before - pred_after)))
+    emit(f"reload delta : {diff:.2e}")
+    assert diff < 1e-12, f"reload mismatch: {diff}"
+    emit("reload check : PASS")
+
+    from sklearn.metrics import f1_score
+    train_f1 = f1_score(y_tr, pipe.predict(X_tr), average="macro")
+    emit(f"train f1     : {train_f1:.4f}  (expected near 1.0, per 2.7)")
+
+    LOG_PATH.write_text("\n".join(log))
+    print(f"\nwrote        : {LOG_PATH}")
+
+
+if __name__ == "__main__":
+    main()
+
+
+--------------------------------------------------------------------------------
+E - SKELETAL EXPLANATION
+--------------------------------------------------------------------------------
+
+load_locked_params() -> (name: str, params: dict)
+  [PARAM] none
+  [DESC]  Reads models/2.6_selected_model.json.
+          Returns ('rf', {'max_depth':10, 'min_samples_leaf':1,
+                          'n_estimators':300}).
+          Single source of truth. No hard-coding, no re-derivation.
+
+build_final_estimator(params: dict) -> RandomForestClassifier
+  [PARAM] params : dict with max_depth, min_samples_leaf, n_estimators
+  [DESC]  Instantiates RF with locked params + class_weight='balanced'
+          + seed=42 + n_jobs=-1.
+          class_weight and seed match 2.1/2.4 exactly. The fitted
+          forest is therefore the same class of object that was
+          scored in CV - no silent drift between tuning and
+          deployment.
+
+main():
+  [PARAM] none
+  [DESC]  Sequence:
+            1. Load X_train (245x15), y_train (245), feature_names.
+            2. Read locked model + params from 2.6 JSON.
+            3. Assert model name == 'rf'.
+            4. build_pipeline(RF) -> Pipeline([StandardScaler, RF]).
+            5. Fit on full 245 rows.
+            6. Save pipeline via joblib(compress=3).
+            7. Save feature names JSON.
+            8. Reload pipeline, re-predict 5 fixed rows,
+               assert max abs diff < 1e-12.
+            9. Compute train macro-F1 (expected ~1.0 per 2.7).
+           10. Write log.
+
+DESIGN CHOICES
+  joblib.compress=3
+    300-tree RF on 15 features ~ few MB raw. compress=3 shrinks to
+    <1 MB with no measurable load cost. Cheap win for repo hygiene.
+
+  Separate feature_names JSON
+    Deploy scripts must build X with the EXACT same column order that
+    training used. Re-deriving from retained_features_correlations.txt
+    at deploy time risks drift if that file is ever touched. The
+    model file should be self-contained: joblib + this JSON is one
+    consumable unit.
+
+  Reload check via predict_proba not predict
+    predict returns 1 label per row - too coarse, could match by
+    chance. predict_proba returns 15 probabilities x 5 rows = 75
+    numbers. Identity across 75 floats is a real test.
+
+  Threshold 1e-12
+    Machine precision. Anything larger means joblib corrupted the
+    object on write. This is the tightest defensible assertion.
+
+  train_f1 printed but not asserted to a tight bound
+    Per 2.7, train macro-F1 = 1.0 is expected, not a quality metric.
+    A loose sanity floor (implicit: if it drops below ~0.9, params
+    or feature order is wrong). Real number comes at 3.2.
+
+
+--------------------------------------------------------------------------------
+F - WHAT TO EXPECT (verification targets)
+--------------------------------------------------------------------------------
+
+| Check               | Expected           | Observed |
+|---------------------|--------------------|----------|
+| train shape         | (245, 15)          | (245, 15) |
+| features            | 15                 | 15 |
+| locked model        | rf                 | rf |
+| locked params       | max_depth=10,      | match |
+|                     | min_samples_leaf=1,| |
+|                     | n_estimators=300   | |
+| pipeline fit        | OK                 | OK |
+| reload delta        | 0.00e+00 / <1e-12  | 0.00e+00 |
+| reload check        | PASS               | PASS |
+| train f1            | ~0.99 - 1.00       | 1.0000 |
+| MODELS joblib       | written            | written |
+| MODELS feature json | written, 15 lines  | written |
+| LOG                 | written            | written |
+
+Runtime: 5-10 s (one RF fit on 245 rows).
+
+Failure modes:
+  AssertionError 'expected rf, got X'   -> 2.6 JSON corrupted
+  reload mismatch (delta >= 1e-12)      -> joblib write failure,
+                                           disk full, permissions
+  train f1 < 0.95                       -> wrong params loaded, or
+                                           wrong feature order
+
+
+--------------------------------------------------------------------------------
+G - ARTEFACTS PRODUCED
+--------------------------------------------------------------------------------
+
+  src\finalize_model.py                             (new)
+  models\3.1-final_pipeline.joblib                  (new, binary ~1MB)
+  models\3.1-final_feature_names.json               (new, 15 names)
+  logs\3.1-finalize.txt                             (new)
+  logs\3.1-console.txt                              (new, tee)
+
+
+--------------------------------------------------------------------------------
+H - CONTENT CHECKLIST FOR FULL ML REPORT
+--------------------------------------------------------------------------------
+
+  Section 6 (model selection, training, validation):
+    - "the final model was retrained on the full training set with
+       locked hyperparameters from the grid search (max_depth=10,
+       min_samples_leaf=1, n_estimators=300), wrapped in a
+       [StandardScaler, RandomForestClassifier] pipeline, and
+       persisted for deployment."
+    - reference: 3.1-final_pipeline.joblib
+    - reproducibility evidence: reload delta 0.00e+00 (TR7)
+
+  Section 7 (deploy and test):
+    - "the persisted pipeline (3.1-final_pipeline.joblib) was loaded
+       by the deployment wrapper at step 4.1 without re-training,
+       ensuring test-time and deploy-time predictions originate from
+       identical model objects."
+    - reference: TR7 (reproducibility)
+
+  Code appendix:
+    - finalize_model.py is a key-snippet candidate (training process
+      + persistence).
+
+
+--------------------------------------------------------------------------------
+I - CARRY-FORWARD TO 3.2
+--------------------------------------------------------------------------------
+
+I.1 PATHS LOCKED
+  3.2 must consume:
+    models\3.1-final_pipeline.joblib
+    models\3.1-final_feature_names.json
+  Not the raw dataset, not the train split. The persisted pipeline
+  already contains the fitted scaler.
+
+I.2 TEST SET UNTOUCHED
+  3.1 did NOT load X_test or y_test. The test set remains unseen
+  by any model to this point. 3.2 will load it for the first time.
+
+I.3 EXPECTED TEST RANGE
+  Test is clip 1, matches train scale (L16 does not apply).
+  Expected macro-F1: 0.55-0.72, tracking CV, NOT val (0.34).
+  If test lands in that range: confirms val anomaly is clip-5
+  specific, not broader distribution shift.
+  If test lands near 0.34: shift is broader than suspected; document,
+  do not retune (3.2 rule).
+
+I.4 HARD RULE FOR 3.2
+  One prediction pass. No re-open, no re-tune, no re-fit.
+  Whatever number comes out is the reported number.
+
+================================================================================
+END OF NOTE
+================================================================================
